@@ -98,10 +98,20 @@ object TvSystem {
         )
     }.isSuccess
 
+    /**
+     * Plays the trailer. YouTube for TV only starts a video from a watch URL sent to its own
+     * package; "vnd.youtube:" just brings the app to its home screen.
+     */
     fun trailer(context: Context, youtubeKey: String): Boolean {
-        val app = Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$youtubeKey")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        val web = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$youtubeKey")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return runCatching { context.startActivity(app) }.recoverCatching { context.startActivity(web) }.isSuccess
+        val url = Uri.parse("https://www.youtube.com/watch?v=$youtubeKey")
+        val flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        val attempts = listOf(
+            Intent(Intent.ACTION_VIEW, url).setPackage("com.google.android.youtube.tv"),
+            Intent(Intent.ACTION_VIEW, url).setPackage("com.google.android.youtube"),
+            Intent(Intent.ACTION_VIEW, Uri.parse("vnd.youtube:$youtubeKey")),
+            Intent(Intent.ACTION_VIEW, url),
+        )
+        return attempts.any { intent -> runCatching { context.startActivity(intent.addFlags(flags)) }.isSuccess }
     }
 
 }
