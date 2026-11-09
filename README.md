@@ -16,14 +16,14 @@ Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e 
 | **Página do título**: IMDb com votos, onde assistir, elenco e parecidos | **Filmografia**: o selo mostra em qual dos seus apps cada filme está |
 | ![O que assistir agora?](docs/img/o-que-assistir.jpg) | ![Roleta de filmes e séries](docs/img/roleta.jpg) |
 | **O que assistir agora?**: tempo + clima → três sugestões | **Roleta**: três títulos sorteados com IMDb 6,5+ |
-| ![Busca em português](docs/img/busca.jpg) | ![Roleta de filmes e séries](docs/img/roleta.jpg) |
-| **Busca**: "comédia curta na Netflix com nota alta" | **Roleta** |
 | ![Match: QR code na TV](docs/img/match-qr.jpg) | ![Match: deu match!](docs/img/match.jpg) |
 | **Match**: cada um entra pelo QR code no celular | **Deu match!**: o título que todos curtiram |
-| ![Trailer tocando no fundo](docs/img/trailer.jpg) | ![Explorar com filtros](docs/img/explorar.jpg) |
-| **Trailer no fundo**, sem som (🔇) | **Explorar** |
-| ![Central com as entradas HDMI](docs/img/central.jpg) | ![Protetor de tela com os aéreos da Apple](docs/img/protetor.jpg) |
-| **Central** (tecla MENU): entradas HDMI e ajustes | **Protetor de tela** com os aéreos da Apple (Aerial Views) |
+| ![Trailer tocando no fundo](docs/img/trailer.jpg) | ![Busca em português](docs/img/busca.jpg) |
+| **Trailer no fundo**, sem som (🔇) | **Busca**: "comédia curta na Netflix com nota alta" |
+| ![Explorar com filtros](docs/img/explorar.jpg) | ![Central com as entradas HDMI](docs/img/central.jpg) |
+| **Explorar**: filtros por app, gênero, nota e época | **Central** (tecla MENU): entradas HDMI e ajustes |
+| ![Protetor de tela com os aéreos da Apple](docs/img/protetor.jpg) | |
+| **Protetor de tela** com os aéreos da Apple (Aerial Views) | |
 
 ---
 
