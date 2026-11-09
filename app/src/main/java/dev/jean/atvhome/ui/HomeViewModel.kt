@@ -47,8 +47,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     var highImdb by mutableStateOf<List<Item>>(emptyList()); private set
     /** "Esta semana": new on the user's services, with the reason as a badge. */
     var thisWeek by mutableStateOf<List<Pair<Item, String?>>>(emptyList()); private set
-    /** Colour of the Top Shelf artwork, tinting every screen (see Accent). */
-    var accent by mutableStateOf(dev.jean.atvhome.ui.theme.Accent.Neutral)
+
     var watchNext by mutableStateOf<List<WatchNextItem>>(emptyList()); private set
     var fromApps by mutableStateOf<List<WatchNextItem>>(emptyList()); private set
     var problem by mutableStateOf<String?>(null); private set
@@ -103,7 +102,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val imdbId = item.details.imdbId
         if (provider != null && imdbId != null) {
             val ids = app.deepLinks.ids(imdbId)
-            val intent = app.deepLinks.intent(packageName, provider.name, item.title.type, ids)
+            val intent = app.deepLinks.intent(packageName, provider.name, item.title.type, ids, item.title.name)
             if (intent != null && app.deepLinks.open(app, intent)) return null
         }
         val label = tvApp?.label ?: provider?.name ?: "o app"

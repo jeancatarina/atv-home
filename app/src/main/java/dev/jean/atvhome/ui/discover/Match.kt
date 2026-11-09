@@ -109,9 +109,10 @@ fun MatchScreen(vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> U
     }
     DisposableEffect(Unit) { onDispose { server?.stop() } }
 
-    val matched = state.match?.let { key -> deck?.firstOrNull { it.title.key == key } }
-    if (matched != null) {
-        MatchReveal(matched, vm, onOpen, toast, onAgain = { server?.next() })
+    val result = state.result
+    val matched = result?.let { r -> deck?.firstOrNull { it.title.key == r.key } }
+    if (result != null && matched != null) {
+        MatchReveal(matched, result, vm, onOpen, toast, onAgain = { server?.next() })
         return
     }
 
@@ -133,7 +134,7 @@ fun MatchScreen(vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> U
                         when (state.people.size) {
                             0 -> "Esperando a primeira pessoa…"
                             1 -> "${state.people.first()} entrou. Falta pelo menos mais uma pessoa."
-                            else -> "${state.people.size} pessoas votando"
+                            else -> "${state.people.size} pessoas votando: vale o que todos curtirem, ou o mais votado no fim"
                         },
                         style = Tv.Headline, color = Tv.Primary,
                     )
@@ -179,7 +180,7 @@ fun MatchScreen(vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> U
 }
 
 @Composable
-private fun MatchReveal(item: Item, vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> Unit, onAgain: () -> Unit) {
+private fun MatchReveal(item: Item, result: dev.jean.atvhome.data.MatchOutcome, vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> Unit, onAgain: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val pop = remember { Animatable(0.6f) }
@@ -193,8 +194,12 @@ private fun MatchReveal(item: Item, vm: HomeViewModel, onOpen: (Title) -> Unit, 
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.92f), 0.6f to Color.Black.copy(alpha = 0.35f), 1f to Color.Transparent)))
         Column(Modifier.padding(start = Tv.Edge, top = 70.dp)) {
             Text(
-                "♥ Deu match!", style = Tv.Display, color = Color(0xFFFF375F),
+                if (result.unanimous) "♥ Deu match!" else "★ O mais votado", style = Tv.Display, color = Color(0xFFFF375F),
                 modifier = Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f) },
+            )
+            Text(
+                if (result.unanimous) "Todos os ${result.people} curtiram" else "${result.likes} de ${result.people} curtiram",
+                style = Tv.Headline, color = Tv.Secondary,
             )
             Spacer(Modifier.height(18.dp))
             TitleArt(item, maxHeight = 86.dp)

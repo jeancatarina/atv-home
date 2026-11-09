@@ -72,6 +72,5 @@ dependencies {
     implementation(libs.youtube.player)
     implementation(libs.nanohttpd)
     implementation(libs.zxing.core)
-    implementation(libs.androidx.palette)
     testImplementation(libs.junit)
 }

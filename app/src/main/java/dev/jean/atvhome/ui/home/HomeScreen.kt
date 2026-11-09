@@ -38,7 +38,6 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
-import dev.jean.atvhome.ui.theme.Accent
 import dev.jean.atvhome.ui.theme.LocalAccent
 import dev.jean.atvhome.ui.theme.screen
 import androidx.compose.runtime.mutableStateOf
@@ -221,7 +220,7 @@ fun HomeScreen(
             onAlpha = { trailerAlpha = it },
             onEnded = { sound = false; if (override == null) step(1) },
         )
-        HeroBackdrop(hero, onColor = { vm.accent = it }) { (1f - trailerAlpha) * (1f - dim.value) }
+        HeroBackdrop(hero) { (1f - trailerAlpha) * (1f - dim.value) }
 
         LazyColumn(
             state = listState,
@@ -382,8 +381,7 @@ private fun Section(title: String, content: @Composable () -> Unit) {
  * redrew the whole screen every frame and the TV's GPU missed most frame deadlines.
  */
 @Composable
-private fun HeroBackdrop(item: Item?, onColor: (Color) -> Unit, alpha: () -> Float) {
-    val scope = rememberCoroutineScope()
+private fun HeroBackdrop(item: Item?, alpha: () -> Float) {
     val context = LocalContext.current
     val url = TmdbClient.image(item?.title?.backdrop, "w1280")
     // The scrim is baked into the bitmap (see Scrim) and dimming is the image's own alpha over the
@@ -394,10 +392,6 @@ private fun HeroBackdrop(item: Item?, onColor: (Color) -> Unit, alpha: () -> Flo
         },
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        onSuccess = { state ->
-            val bitmap = (state.result.image as? coil3.BitmapImage)?.bitmap
-            if (bitmap != null && url != null) scope.launch { onColor(Accent.of(url, bitmap)) }
-        },
         modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha() },
     )
 }

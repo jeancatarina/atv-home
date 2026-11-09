@@ -28,22 +28,18 @@ data class Card(
 data class MatchState(
     val people: List<String> = emptyList(),
     val votes: Int = 0,
-    val match: String? = null,
+    val result: MatchOutcome? = null,
 )
 
 /**
  * "Match": the TV serves a small page on the home Wi-Fi; everyone opens it from a QR code, swipes
  * the same deck, and the first title everyone likes is the match. No accounts, no cloud: phones
- * talk straight to the TV.
+ * talk straight to the TV. Who wins is decided by [MatchRules].
  */
 class MatchServer(private val context: Context, private val deck: List<Card>) : NanoHTTPD(PORT) {
 
     private val json = Json { ignoreUnknownKeys = true }
-    private val people = LinkedHashMap<String, String>() // id → name
-    private val likes = HashMap<String, MutableSet<String>>() // card key → ids that liked it
-    private var voteCount = 0
-    private var matched: String? = null
-    private val seen = HashSet<String>() // matches already shown; "Outro match" moves past them
+    private val rules = MatchRules(deck.map { it.key })
     private val state = MutableStateFlow(MatchState())
     val updates: StateFlow<MatchState> = state
 
@@ -71,43 +67,32 @@ class MatchServer(private val context: Context, private val deck: List<Card>) : 
     }
 
     @Synchronized
-    private fun join(name: String): String {
-        val id = "p${people.size + 1}"
-        people[id] = name.trim().take(20).ifBlank { "Pessoa ${people.size + 1}" }
-        publish()
-        return id
-    }
+    private fun join(name: String): String = rules.join(name).also { publish() }
 
     @Synchronized
     private fun vote(id: String, key: String, like: Boolean) {
-        if (id !in people || deck.none { it.key == key }) return
-        voteCount++
-        if (like) likes.getOrPut(key) { mutableSetOf() }.add(id) else likes[key]?.remove(id)
-        if (matched == null) matched = nextMatch()
+        rules.vote(id, key, like)
         publish()
     }
 
     private fun publish() {
-        state.value = MatchState(people.values.toList(), voteCount, matched)
+        state.value = MatchState(rules.people, rules.votes, rules.result)
     }
 
-    /** A match needs everyone in the room: two or more people who all liked the same title. */
-    private fun nextMatch(): String? = deck.map { it.key }.firstOrNull { key ->
-        key !in seen && people.size >= 2 && likes[key]?.containsAll(people.keys) == true
-    }
-
-    /** "Outro match": keep every vote and move to the next title the whole room liked, if any. */
+    /** "Outro match": keep every vote and move to the next result, if any. */
     @Synchronized
     fun next() {
-        matched?.let(seen::add)
-        matched = nextMatch()
+        rules.next()
         publish()
     }
 
     private fun statusJson() = synchronized(this) {
+        val r = rules.result
         buildJsonObject {
-            put("people", people.size)
-            put("match", matched)
+            put("people", rules.people.size)
+            put("match", r?.key)
+            put("unanimous", r?.unanimous ?: false)
+            put("likes", r?.likes ?: 0)
         }
     }
 

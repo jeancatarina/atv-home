@@ -57,7 +57,8 @@
 </div>
 
 <div class="screen" id="match">
-  <div class="big">Deu match!</div>
+  <div class="big" id="mlabel">Deu match!</div>
+  <div class="sub" id="mcount" style="color:rgba(255,255,255,.7)"></div>
   <img id="mimg" alt="">
   <div class="card-title" id="mtitle" style="font-size:24px;font-weight:700;text-align:center"></div>
   <p class="sub" style="margin-top:10px">Olhe para a TV 🍿</p>
@@ -148,6 +149,8 @@ function show(s) {
     const c = byKey[s.match];
     $('mimg').src = c.poster || '';
     $('mtitle').textContent = c.title;
+    $('mlabel').textContent = s.unanimous ? 'Deu match!' : 'O mais votado';
+    $('mcount').textContent = s.unanimous ? 'Todo mundo curtiu' : s.likes + ' de ' + s.people + ' curtiram';
     $('play').style.display = 'none';
     $('match').style.display = 'flex';
     if (navigator.vibrate) navigator.vibrate([80, 60, 120]);

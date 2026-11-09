@@ -40,9 +40,6 @@ import dev.jean.atvhome.ui.discover.SearchScreen
 import dev.jean.atvhome.ui.discover.WhatToWatchScreen
 import dev.jean.atvhome.ui.discover.RouletteScreen
 import dev.jean.atvhome.ui.discover.MatchScreen
-import dev.jean.atvhome.ui.theme.LocalAccent
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import dev.jean.atvhome.ui.home.HomeScreen
 import dev.jean.atvhome.ui.panel.QuickPanel
 import dev.jean.atvhome.ui.theme.InicioTheme
@@ -69,8 +66,7 @@ class HomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             InicioTheme {
-              val accent by animateColorAsState(vm.accent, tween(900), label = "accent")
-              CompositionLocalProvider(LocalBringIntoViewSpec provides TvScroll, LocalAccent provides accent) {
+              CompositionLocalProvider(LocalBringIntoViewSpec provides TvScroll) {
                 var restoreSignal by remember { mutableIntStateOf(0) }
                 val top = stack.lastOrNull()
                 val toast: (String) -> Unit = { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() }

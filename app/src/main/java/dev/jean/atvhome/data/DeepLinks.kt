@@ -65,8 +65,9 @@ class DeepLinks(cacheDir: File) {
      * The intent that opens [type] title on its own page in [packageName], or null when we don't
      * know that service's id for it (the caller then just opens the app).
      */
-    fun intent(packageName: String, providerName: String, type: MediaType, ids: Map<String, String>): Intent? {
+    fun intent(packageName: String, providerName: String, type: MediaType, ids: Map<String, String>, name: String): Intent? {
         val p = ProviderMatch.normalize(providerName)
+        val q = Uri.encode(name)
         val uri = when {
             "netflix" in p -> ids["P1874"]?.let { "https://www.netflix.com/title/$it" }
             "prime" in p || "amazon" in p -> ids["P8055"]?.let { "https://app.primevideo.com/detail?gti=$it" }
@@ -78,6 +79,10 @@ class DeepLinks(cacheDir: File) {
                 MediaType.MOVIE -> ids["P9586"]?.let { "https://tv.apple.com/movie/_/$it" }
                 MediaType.TV -> ids["P9751"]?.let { "https://tv.apple.com/show/_/$it" }
             }
+            // No public ids for these two, but both open their search from a link
+            "globo" in p -> "https://globoplay.globo.com/busca/$q/"
+            "hbo" in p || p == "max" -> "https://play.max.com/search?q=$q"
+            // Claro tv+ ships its deep links switched off (only Claro's own remote uses them)
             else -> null
         } ?: return null
         return Intent(Intent.ACTION_VIEW, Uri.parse(uri))
