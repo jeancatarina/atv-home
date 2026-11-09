@@ -87,6 +87,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun launch(app: TvApp) = this.app.apps.launch(app.packageName)
 
+    /**
+     * "Assistir no {app}": opens [item] on its own page in the app when Wikidata knows that
+     * service's id; otherwise opens the app. Returns a message for the user, or null on a direct hit.
+     */
+    suspend fun watch(item: Item, packageName: String): String? {
+        val tvApp = appFor(packageName) ?: (apps + hiddenApps).firstOrNull { it.packageName == packageName }
+        val provider = appProvider[packageName]
+            ?: item.details.providers.firstOrNull { packageFor(it) == packageName }
+        val imdbId = item.details.imdbId
+        if (provider != null && imdbId != null) {
+            val ids = app.deepLinks.ids(imdbId)
+            val intent = app.deepLinks.intent(packageName, provider.name, item.title.type, ids)
+            if (intent != null && app.deepLinks.open(app, intent)) return null
+        }
+        val label = tvApp?.label ?: provider?.name ?: "o app"
+        return if (this.app.apps.launch(packageName)) "Abri o $label. Procure por: ${item.title.name}"
+        else "Não consegui abrir $label"
+    }
+
     fun move(packageName: String, delta: Int) {
         val list = apps.toMutableList()
         val from = list.indexOfFirst { it.packageName == packageName }

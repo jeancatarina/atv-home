@@ -350,6 +350,7 @@ private fun HeroInfo(
     toast: (String) -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val myList by vm.myList.entries.collectAsState()
     Column(Modifier.fillMaxWidth().height(330.dp).padding(start = Tv.Edge, top = 20.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -362,13 +363,16 @@ private fun HeroInfo(
             Text(if (vm.problem != null) "" else "Carregando o que está em alta…", style = Tv.Meta, color = Tv.Tertiary)
             return@Column
         }
-        if (label != null) Text(label.uppercase(), style = Tv.Caption, color = Tv.Secondary)
-        Spacer(Modifier.height(8.dp))
         val shown = item
         val fade = remember { androidx.compose.animation.core.Animatable(1f) }
         LaunchedEffect(shown.title.key) { fade.snapTo(0f); fade.animateTo(1f, tween(450)) }
-        run {
+        // Text grows upward from a fixed baseline, so the buttons below never move between titles
+        Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomStart) {
             Column(Modifier.widthIn(max = 440.dp).graphicsLayer { alpha = fade.value }) {
+                if (label != null) {
+                    Text(label.uppercase(), style = Tv.Caption, color = Tv.Secondary)
+                    Spacer(Modifier.height(8.dp))
+                }
                 TitleArt(shown, maxHeight = 78.dp)
                 Spacer(Modifier.height(12.dp))
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -388,7 +392,9 @@ private fun HeroInfo(
             val watchPackage = providerPackage ?: vm.myProvidersOf(item).firstOrNull()?.let(vm::packageFor)
             val watchApp = watchPackage?.let(vm::appFor)
             if (watchApp != null) {
-                PillButton("Assistir no ${watchApp.label}", { vm.launch(watchApp) }, icon = "▶", onFocus = onButtonsFocus)
+                PillButton("Assistir no ${watchApp.label}", {
+                    scope.launch { vm.watch(item, watchApp.packageName)?.let(toast) }
+                }, icon = "▶", onFocus = onButtonsFocus)
             }
             PillButton("Detalhes", { onOpen(item.title) }, onFocus = onButtonsFocus)
             item.details.trailerKey?.let { key ->

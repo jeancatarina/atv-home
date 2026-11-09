@@ -40,6 +40,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import dev.jean.atvhome.data.Catalog
@@ -71,6 +72,7 @@ fun DetailScreen(
     toast: (String) -> Unit,
 ) {
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
     var item by remember(title.key) { mutableStateOf<Item?>(null) }
     var failed by remember(title.key) { mutableStateOf(false) }
     val myList by vm.myList.entries.collectAsState()
@@ -124,7 +126,9 @@ fun DetailScreen(
                             val app = vm.packageFor(provider)?.let(vm::appFor)
                             val mod = if (index == 0) Modifier.focusRequester(firstButton) else Modifier
                             PillButton("Assistir no ${app?.label ?: provider.name}", {
-                                if (app == null || !vm.launch(app)) toast("Não consegui abrir ${provider.name}")
+                                val pkg = app?.packageName
+                                if (pkg == null) toast("Não achei o app de ${provider.name}")
+                                else scope.launch { vm.watch(loaded, pkg)?.let(toast) }
                             }, icon = "▶", modifier = mod)
                         }
                         d.trailerKey?.let { key ->

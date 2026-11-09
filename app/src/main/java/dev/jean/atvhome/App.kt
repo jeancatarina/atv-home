@@ -25,12 +25,14 @@ class App : Application(), SingletonImageLoader.Factory {
     lateinit var catalog: Catalog private set
     lateinit var apps: Apps private set
     lateinit var myList: MyList private set
+    lateinit var deepLinks: dev.jean.atvhome.data.DeepLinks private set
 
     override fun onCreate() {
         super.onCreate()
         catalog = Catalog(TmdbClient(BuildConfig.TMDB_TOKEN, cacheDir))
         apps = Apps(this)
         myList = MyList(this)
+        deepLinks = dev.jean.atvhome.data.DeepLinks(cacheDir)
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "daily",
             ExistingPeriodicWorkPolicy.KEEP,
