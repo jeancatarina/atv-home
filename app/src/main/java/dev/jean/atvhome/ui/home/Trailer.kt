@@ -34,8 +34,7 @@ private const val PREVIEW_MS = 30_000L
  */
 @Composable
 fun TrailerBackdrop(
-    videoKey: String?,
-    play: Boolean,
+    videoKey: String,
     sound: Boolean,
     dim: () -> Float,
     onAlpha: (Float) -> Unit,
@@ -47,20 +46,16 @@ fun TrailerBackdrop(
     val fade = remember { Animatable(0f) }
     val scrim = remember { Scrim.overlay().asImageBitmap() }
 
-    // Start the trailer once the title has rested, stop it as soon as anything changes
-    LaunchedEffect(videoKey, play, player) {
+    // The caller composes this only while the remote rests, and drops it at the first key press:
+    // even an invisible WebView costs ~6 ms of GPU per frame on this TV
+    LaunchedEffect(videoKey, player) {
         val p = player ?: return@LaunchedEffect
-        if (!play || videoKey == null) {
-            fade.animateTo(0f, tween(300))
-            onAlpha(0f)
-            p.pause()
-            playing = false
-            return@LaunchedEffect
-        }
-        delay(3_500)
+        fade.snapTo(0f)
+        onAlpha(0f)
         p.mute()
         p.loadVideo(videoKey, 4f)
     }
+    DisposableEffect(Unit) { onDispose { onAlpha(0f) } }
     // The video shows only after it has really started, past YouTube's own loading frames
     LaunchedEffect(playing) {
         if (playing) {
@@ -116,6 +111,7 @@ fun TrailerBackdrop(
                 )
             }
         },
+        onRelease = { view -> lifecycle.removeObserver(view); view.release() },
         // Scaled past the screen edges: hides YouTube's title bar, its corner logo and the black bars of 2.39:1 trailers
         modifier = Modifier.fillMaxSize().graphicsLayer {
             val a = fade.value * (1f - dim())
@@ -130,5 +126,4 @@ fun TrailerBackdrop(
             modifier = Modifier.fillMaxSize().graphicsLayer { alpha = fade.value * (1f - dim()) },
         )
     }
-    DisposableEffect(Unit) { onDispose { player = null } }
 }

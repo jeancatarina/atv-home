@@ -60,6 +60,8 @@ class HomeActivity : ComponentActivity() {
     private val stack = mutableStateListOf<Screen>()
     private var panelOpen by mutableStateOf(false)
     private var resetSignal by mutableIntStateOf(0)
+    /** Bumps on every key: trailers wait for the remote to rest, and stop when nobody is around. */
+    private var inputTick by mutableIntStateOf(0)
 
     @OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -96,6 +98,7 @@ class HomeActivity : ComponentActivity() {
                             active = top == null && !panelOpen,
                             restoreSignal = restoreSignal,
                             resetSignal = resetSignal,
+                            inputTick = inputTick,
                             onOpen = onOpen,
                             onSearch = { open(Screen.Search) },
                             onWhatToWatch = { open(Screen.WhatToWatch) },
@@ -131,6 +134,7 @@ class HomeActivity : ComponentActivity() {
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.action == KeyEvent.ACTION_DOWN) {
+            inputTick++
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> LastKey.dx = -1
                 KeyEvent.KEYCODE_DPAD_RIGHT -> LastKey.dx = 1

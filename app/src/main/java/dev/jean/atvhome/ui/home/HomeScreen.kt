@@ -73,6 +73,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
 import coil3.request.transformations
+import coil3.request.crossfade
 import dev.jean.atvhome.data.Format
 import dev.jean.atvhome.data.Item
 import dev.jean.atvhome.data.TmdbClient
@@ -103,6 +104,7 @@ fun HomeScreen(
     active: Boolean,
     restoreSignal: Int,
     resetSignal: Int,
+    inputTick: Int,
     onOpen: (Title) -> Unit,
     onSearch: () -> Unit,
     onWhatToWatch: () -> Unit,
@@ -141,6 +143,18 @@ fun HomeScreen(
     val heroProviderPackage = if (override == null) shelf.appPackage else null
 
     // The Top Shelf moves on every 8 s, unless the user is reading it (buttons focused) or away
+    // Trailers only play while the remote rests (like tvOS), and stop for good after two minutes
+    // with nobody touching it: a playing video keeps the screen awake and the screensaver away
+    var resting by remember { mutableStateOf(false) }
+    var away by remember { mutableStateOf(false) }
+    LaunchedEffect(inputTick) {
+        resting = false
+        away = false
+        delay(3_000)
+        resting = true
+        delay(120_000)
+        away = true
+    }
     var trailerAlpha by remember { mutableFloatStateOf(0f) }
     var sound by remember { mutableStateOf(false) }
     val trailerOn = trailerAlpha > 0.05f
@@ -152,8 +166,8 @@ fun HomeScreen(
             manualTick++
         }
     }
-    LaunchedEffect(heroLabel, heroItems.size, heroButtonsFocused, override, active, manualTick, trailerOn) {
-        if (heroButtonsFocused || override != null || !active || trailerOn) return@LaunchedEffect
+    LaunchedEffect(heroLabel, heroItems.size, heroButtonsFocused, override, active, manualTick, trailerOn, away) {
+        if (heroButtonsFocused || override != null || !active || trailerOn || away) return@LaunchedEffect
         while (true) {
             delay(8_000)
             heroIndex++
@@ -212,14 +226,16 @@ fun HomeScreen(
     ) {
         // Scrolled down, the page takes the artwork's colour; at the top the artwork covers it
         if (dim.value > 0f) Box(Modifier.fillMaxSize().background(LocalAccent.current.screen()))
-        TrailerBackdrop(
-            videoKey = hero?.details?.trailerKey,
-            play = active && !scrolled && editing == null && hero != null,
-            sound = sound,
-            dim = { dim.value },
-            onAlpha = { trailerAlpha = it },
-            onEnded = { sound = false; if (override == null) step(1) },
-        )
+        val trailerKey = hero?.details?.trailerKey
+        if (trailerKey != null && active && resting && !away && !scrolled && editing == null) {
+            TrailerBackdrop(
+                videoKey = trailerKey,
+                sound = sound,
+                dim = { dim.value },
+                onAlpha = { trailerAlpha = it },
+                onEnded = { sound = false; if (override == null) step(1) },
+            )
+        }
         HeroBackdrop(hero) { (1f - trailerAlpha) * (1f - dim.value) }
 
         LazyColumn(
@@ -388,7 +404,8 @@ private fun HeroBackdrop(item: Item?, alpha: () -> Float) {
     // black window: one full-screen pass per frame instead of five
     AsyncImage(
         model = remember(url) {
-            coil3.request.ImageRequest.Builder(context).data(url).transformations(Scrim).build()
+            // A short crossfade: two full-screen bitmaps blending is the heaviest frame on this GPU
+            coil3.request.ImageRequest.Builder(context).data(url).transformations(Scrim).crossfade(220).build()
         },
         contentDescription = null,
         contentScale = ContentScale.Crop,
