@@ -38,6 +38,7 @@ import dev.jean.atvhome.ui.detail.PersonScreen
 import dev.jean.atvhome.ui.discover.ExploreScreen
 import dev.jean.atvhome.ui.discover.SearchScreen
 import dev.jean.atvhome.ui.discover.WhatToWatchScreen
+import dev.jean.atvhome.ui.discover.RouletteScreen
 import dev.jean.atvhome.ui.home.HomeScreen
 import dev.jean.atvhome.ui.panel.QuickPanel
 import dev.jean.atvhome.ui.theme.InicioTheme
@@ -48,6 +49,7 @@ sealed interface Screen {
     data object Search : Screen
     data object Explore : Screen
     data object WhatToWatch : Screen
+    data object Roulette : Screen
 }
 
 class HomeActivity : ComponentActivity() {
@@ -96,6 +98,7 @@ class HomeActivity : ComponentActivity() {
                             onSearch = { open(Screen.Search) },
                             onWhatToWatch = { open(Screen.WhatToWatch) },
                             onExplore = { open(Screen.Explore) },
+                            onRoulette = { open(Screen.Roulette) },
                             toast = toast,
                         )
                     }
@@ -107,6 +110,7 @@ class HomeActivity : ComponentActivity() {
                                 Screen.Search -> SearchScreen(vm, onOpen, toast)
                                 Screen.Explore -> ExploreScreen(vm, onOpen)
                                 Screen.WhatToWatch -> WhatToWatchScreen(vm, onOpen)
+                                Screen.Roulette -> RouletteScreen(vm, onOpen)
                             }
                         }
                     }

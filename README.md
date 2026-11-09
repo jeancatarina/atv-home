@@ -14,6 +14,8 @@ Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e 
 |---|---|
 | **Top Shelf em tela cheia** | Ao focar a Netflix, o topo mostra o que está em alta **na Netflix Brasil**; o mesmo para Prime Video, Disney+, Max, Globoplay, Apple TV e Claro tv+. Logotipo do título, nota do IMDb, classificação, duração, gêneros e sinopse. |
 | **Assistir direto no título** | "Assistir no Netflix" abre a **página da série/filme** dentro do app (Netflix, Prime Video, Disney+, Apple TV), usando os códigos abertos do Wikidata. Quando o título não tem código, abre o app e diz o que procurar. |
+| **Trocar o título na mão** | Do app, **▲** seleciona o título do topo; aí **◀ ▶** passam para o anterior/próximo e **OK** assiste. As teclas ◀◀ ▶▶ do controle também trocam. |
+| **Roleta** | Escolha **Filme** ou **Série** e gire: três rolos estilo caça-níquel param em três títulos dos seus streamings (de apps diferentes), sempre com IMDb 6,5 ou mais. |
 | **Fileira de apps com o foco do tvOS** | O cartão cresce, inclina na direção do controle e recebe um brilho. Segure OK para reorganizar: ◀ ▶ move, ▼ oculta, OK conclui. |
 | **O que assistir agora?** | Duas perguntas (quanto tempo você tem e o que está a fim) e três sugestões dos **seus** streamings, todas com IMDb 7 ou mais. |
 | **Busca por voz e em português** | "comédia curta na Netflix com nota alta", "suspense dos anos 90", "série de terror na max", "filmes com o Wagner Moura". Ele mostra o que entendeu: *Filmes · Comédia · Netflix · até 1 h 40 min · IMDb ≥ 7,5*. |
@@ -131,8 +133,10 @@ adb shell settings put secure screensaver_components com.neilturner.aerialviews/
 
 ## Como usar
 
-- **◀ ▶** na fileira de apps troca o Top Shelf para o app focado. **▲** chega aos botões
-  (Assistir, Detalhes, Trailer, Minha Lista) e, mais acima, a **Buscar**, **O que assistir agora?** e **Explorar**.
+- **◀ ▶** na fileira de apps troca o Top Shelf para o app focado.
+- **▲** a partir de um app seleciona o título do topo: **◀ ▶** trocam o filme, **OK** assiste no app.
+- **▼** do título chega aos botões (Assistir, Detalhes, Trailer, Minha Lista). Lá em cima ficam
+  **Buscar**, **O que assistir agora?**, **Roleta** e **Explorar**.
 - **Segurar OK** num app: modo de edição (◀ ▶ mover, ▼ ocultar, OK concluir). Apps ocultos ficam no fim da tela; segure OK para mostrar de novo.
 - **MENU**: Central com as entradas HDMI. **VOLTAR** fecha qualquer tela.
 

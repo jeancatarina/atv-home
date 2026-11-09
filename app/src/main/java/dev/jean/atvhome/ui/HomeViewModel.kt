@@ -272,6 +272,36 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         return List(minOf(3, suggestionPool.size)) { suggestionPool.removeAt(0) }
     }
 
+    // --- Roleta ---------------------------------------------------------------------------------
+
+    /** What a spin shows: the three winners and the posters that flash past on the reels. */
+    data class Spin(val picks: List<Item>, val reel: List<String>)
+
+    /**
+     * A random spin over the user's services: any genre, any year, IMDb ≥ 6.5 with enough votes
+     * that the rating means something, three different titles.
+     */
+    suspend fun spin(type: MediaType): Spin {
+        val ids = myProviders.map { it.id }.toSet()
+        val filters = Filters(type = type, minImdb = 6.5)
+        val titles = coroutineScope {
+            listOf(
+                async { catalog.discover(filters, ids, page = 1 + Random.nextInt(15)) },
+                async { catalog.discover(filters, ids, page = 1 + Random.nextInt(15)) },
+                async { catalog.discover(filters, ids, page = 1 + Random.nextInt(8), sortByRating = true) },
+            ).awaitAll().flatten().distinctBy { it.key }
+        }
+        val reel = titles.mapNotNull { dev.jean.atvhome.data.TmdbClient.image(it.poster, "w342") }.shuffled()
+        val minVotes = if (type == MediaType.MOVIE) 3_000 else 1_500
+        val picks = catalog.items(titles.shuffled().take(15))
+            .filter { catalog.passes(it, filters, minVotes) && myProvidersOf(it).isNotEmpty() }
+            .shuffled()
+        // One per service first, so a spin doesn't land on three Prime titles
+        val spread = picks.groupBy { myProvidersOf(it).first().id }.values.flatMap { it.withIndex() }
+            .sortedBy { it.index }.map { it.value }.take(3)
+        return Spin(spread, reel)
+    }
+
     // --- Search and Explore ---------------------------------------------------------------------
 
     data class SearchResult(val understood: String?, val items: List<Item>)

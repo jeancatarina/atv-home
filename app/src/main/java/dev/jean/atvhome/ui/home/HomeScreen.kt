@@ -46,6 +46,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -98,6 +104,7 @@ fun HomeScreen(
     onSearch: () -> Unit,
     onWhatToWatch: () -> Unit,
     onExplore: () -> Unit,
+    onRoulette: () -> Unit,
     toast: (String) -> Unit,
 ) {
     val context = LocalContext.current
@@ -105,6 +112,7 @@ fun HomeScreen(
     val listState = rememberLazyListState()
     val myList by vm.myList.entries.collectAsState()
     val firstAppFocus = remember { FocusRequester() }
+    val titleFocus = remember { FocusRequester() }
     val memory = remember { FocusMemory() }
 
     // Focus writes the pending choice; the Top Shelf follows once focus rests for 300 ms, like
@@ -125,11 +133,18 @@ fun HomeScreen(
     val shelf = vm.heroFor(focusedPackage)
     val heroLabel = shelf.label
     val heroItems = shelf.items
-    val hero: Item? = override ?: heroItems.takeIf { it.isNotEmpty() }?.let { it[heroIndex % it.size] }
+    val hero: Item? = override ?: heroItems.takeIf { it.isNotEmpty() }?.let { it[heroIndex.mod(it.size)] }
     val heroProviderPackage = if (override == null) shelf.appPackage else null
 
     // The Top Shelf moves on every 8 s, unless the user is reading it (buttons focused) or away
-    LaunchedEffect(heroLabel, heroItems.size, heroButtonsFocused, override, active) {
+    var manualTick by remember { mutableIntStateOf(0) }
+    val step: (Int) -> Unit = { d ->
+        if (heroItems.size > 1 && override == null) {
+            heroIndex = (heroIndex + d).mod(heroItems.size)
+            manualTick++
+        }
+    }
+    LaunchedEffect(heroLabel, heroItems.size, heroButtonsFocused, override, active, manualTick) {
         if (heroButtonsFocused || override != null || !active) return@LaunchedEffect
         while (true) {
             delay(8_000)
@@ -174,7 +189,17 @@ fun HomeScreen(
 
     CompositionLocalProvider(LocalFocusMemory provides memory) {
     // No background here: the window is already black, and every full-screen fill costs a frame budget
-    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier.fillMaxSize().onPreviewKeyEvent { e ->
+            // The remote's ◀◀ ▶▶ switch the Top Shelf title from anywhere on Home
+            if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+            when (e.key) {
+                Key.MediaFastForward, Key.MediaNext -> { step(1); true }
+                Key.MediaRewind, Key.MediaPrevious -> { step(-1); true }
+                else -> false
+            }
+        },
+    ) {
         HeroBackdrop(hero) { dim.value }
 
         LazyColumn(
@@ -193,7 +218,10 @@ fun HomeScreen(
                     onSearch = onSearch,
                     onWhatToWatch = onWhatToWatch,
                     onExplore = onExplore,
+                    onRoulette = onRoulette,
                     onOpen = onOpen,
+                    onStep = step,
+                    titleFocus = titleFocus,
                     onButtonsFocus = { heroButtonsFocused = it; if (it) scope.launch { listState.animateScrollToItem(0) } },
                     toast = toast,
                 )
@@ -202,6 +230,7 @@ fun HomeScreen(
                 Dock(
                     apps = vm.apps,
                     firstFocus = firstAppFocus,
+                    upTo = if (hero != null) titleFocus else null,
                     editing = editing,
                     onFocus = { app ->
                         memory.lastInDock = true
@@ -345,17 +374,22 @@ private fun HeroInfo(
     onSearch: () -> Unit,
     onWhatToWatch: () -> Unit,
     onExplore: () -> Unit,
+    onRoulette: () -> Unit,
     onOpen: (Title) -> Unit,
     onButtonsFocus: (Boolean) -> Unit,
+    onStep: (Int) -> Unit,
+    titleFocus: FocusRequester,
     toast: (String) -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    var titleFocused by remember { mutableStateOf(false) }
     val myList by vm.myList.entries.collectAsState()
     Column(Modifier.fillMaxWidth().height(330.dp).padding(start = Tv.Edge, top = 20.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             PillButton("Buscar", onSearch, icon = "⌕", onFocus = onButtonsFocus)
             PillButton("O que assistir agora?", onWhatToWatch, icon = "✦", onFocus = onButtonsFocus)
+            PillButton("Roleta", onRoulette, icon = "🎲", onFocus = onButtonsFocus)
             PillButton("Explorar", onExplore, onFocus = onButtonsFocus)
         }
         Spacer(Modifier.height(30.dp))
@@ -367,7 +401,34 @@ private fun HeroInfo(
         val fade = remember { androidx.compose.animation.core.Animatable(1f) }
         LaunchedEffect(shown.title.key) { fade.snapTo(0f); fade.animateTo(1f, tween(450)) }
         // Text grows upward from a fixed baseline, so the buttons below never move between titles
+        val watchPackage = providerPackage ?: vm.myProvidersOf(item).firstOrNull()?.let(vm::packageFor)
+        val watchApp = watchPackage?.let(vm::appFor)
+        val ring by animateFloatAsState(if (titleFocused) 1f else 0f, tween(200), label = "ring")
         Box(Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.BottomStart) {
+            // The title itself is the carousel: focus it and ◀ ▶ switch titles, OK watches
+            Box(
+                Modifier
+                    .focusRequester(titleFocus)
+                    .onFocusChanged { titleFocused = it.isFocused; onButtonsFocus(it.isFocused) }
+                    .onPreviewKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (e.key) {
+                            Key.DirectionLeft -> { onStep(-1); true }
+                            Key.DirectionRight -> { onStep(1); true }
+                            Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> {
+                                if (watchApp != null) scope.launch { vm.watch(item, watchApp.packageName)?.let(toast) }
+                                else onOpen(item.title)
+                                true
+                            }
+                            else -> false
+                        }
+                    }
+                    .focusable()
+                    .offset(x = (-14).dp)
+                    .background(Color.White.copy(alpha = 0.08f * ring), RoundedCornerShape(16.dp))
+                    .border(2.dp, Color.White.copy(alpha = 0.7f * ring), RoundedCornerShape(16.dp))
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            ) {
             Column(Modifier.widthIn(max = 440.dp).graphicsLayer { alpha = fade.value }) {
                 if (label != null) {
                     Text(label.uppercase(), style = Tv.Caption, color = Tv.Secondary)
@@ -386,11 +447,10 @@ private fun HeroInfo(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+            }
         }
         Spacer(Modifier.height(14.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            val watchPackage = providerPackage ?: vm.myProvidersOf(item).firstOrNull()?.let(vm::packageFor)
-            val watchApp = watchPackage?.let(vm::appFor)
             if (watchApp != null) {
                 PillButton("Assistir no ${watchApp.label}", {
                     scope.launch { vm.watch(item, watchApp.packageName)?.let(toast) }
@@ -412,11 +472,19 @@ private fun HeroInfo(
             )
             if (count > 1) {
                 Spacer(Modifier.width(8.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                    repeat(minOf(count, 12)) { i ->
-                        val on = i == index % count
-                        Box(Modifier.size(if (on) 7.dp else 5.dp).background(if (on) Color.White else Tv.Tertiary, CircleShape))
+                Column {
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        repeat(minOf(count, 12)) { i ->
+                            val on = i == index.mod(count) % 12
+                            Box(Modifier.size(if (on) 7.dp else 5.dp).background(if (on) Color.White else Tv.Tertiary, CircleShape))
+                        }
                     }
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        if (titleFocused) "${index.mod(count) + 1} de $count  ·  ◀ ▶ trocam  ·  OK assiste"
+                        else "${index.mod(count) + 1} de $count  ·  ▲ no título e ◀ ▶ para trocar",
+                        style = Tv.Caption, color = if (titleFocused) Tv.Primary else Tv.Tertiary,
+                    )
                 }
             }
         }
@@ -444,6 +512,7 @@ fun TitleArt(item: Item, maxHeight: androidx.compose.ui.unit.Dp) {
 private fun Dock(
     apps: List<TvApp>,
     firstFocus: FocusRequester,
+    upTo: FocusRequester?,
     editing: String?,
     onFocus: (TvApp) -> Unit,
     onClick: (TvApp) -> Unit,
@@ -464,6 +533,8 @@ private fun Dock(
                     app = app,
                     editing = isEditing,
                     modifier = (if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
+                        // ▲ from any app lands on the Top Shelf title, where ◀ ▶ browse it
+                        .focusProperties { if (upTo != null) up = upTo }
                         .onPreviewKeyEvent { event ->
                             if (!isEditing || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                             when (event.key) {
