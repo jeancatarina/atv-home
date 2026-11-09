@@ -54,10 +54,11 @@ import dev.jean.atvhome.ui.components.ContentCard
 import dev.jean.atvhome.ui.components.PillButton
 import dev.jean.atvhome.ui.detail.ItemGrid
 import dev.jean.atvhome.ui.theme.Tv
+import dev.jean.atvhome.ui.theme.LocalAccent
+import dev.jean.atvhome.ui.theme.screen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-private val Backdrop = Color(0xFF0B0B0C)
 
 @Composable
 private fun Header(title: String, subtitle: String) {
@@ -90,7 +91,7 @@ fun SearchScreen(vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> 
         result = vm.search(query)
         loading = false
     }
-    Column(Modifier.fillMaxSize().background(Backdrop)) {
+    Column(Modifier.fillMaxSize().background(LocalAccent.current.screen())) {
         Header("Buscar", "Títulos, pessoas ou do seu jeito: \"comédia curta na Netflix com nota alta\"")
         Spacer(Modifier.height(16.dp))
         Row(Modifier.padding(horizontal = Tv.Edge), verticalAlignment = Alignment.CenterVertically) {
@@ -176,7 +177,7 @@ fun ExploreScreen(vm: HomeViewModel, onOpen: (Title) -> Unit) {
         val ids = providerIds.ifEmpty { vm.myProviders.map { it.id }.toSet() }
         items = vm.explore(filters, ids)
     }
-    Column(Modifier.fillMaxSize().background(Backdrop)) {
+    Column(Modifier.fillMaxSize().background(LocalAccent.current.screen())) {
         Header("Explorar", "Combine os filtros; só aparece o que está nos seus streamings, pela nota do IMDb")
         Spacer(Modifier.height(10.dp))
         ChipRow {
@@ -254,7 +255,7 @@ fun WhatToWatchScreen(vm: HomeViewModel, onOpen: (Title) -> Unit) {
             loading = false
         }
     }
-    Column(Modifier.fillMaxSize().background(Backdrop)) {
+    Column(Modifier.fillMaxSize().background(LocalAccent.current.screen())) {
         Header("O que assistir agora?", "Duas perguntas e três sugestões dos seus streamings, todas com IMDb 7 ou mais")
         Spacer(Modifier.height(14.dp))
         Text("Quanto tempo você tem?", style = Tv.Meta, color = Tv.Secondary, modifier = Modifier.padding(start = Tv.Edge))

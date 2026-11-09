@@ -53,6 +53,8 @@ import coil3.compose.AsyncImage
 import dev.jean.atvhome.data.Format
 import dev.jean.atvhome.data.ImdbRating
 import dev.jean.atvhome.ui.theme.Tv
+import dev.jean.atvhome.ui.theme.LocalAccent
+import dev.jean.atvhome.ui.theme.pill
 
 /** Remembers the last focused control of a screen, so coming back lands exactly there. */
 class FocusMemory {
@@ -160,7 +162,7 @@ fun PillButton(
         },
         shape = ClickableSurfaceDefaults.shape(shape = RoundedCornerShape(50)),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = if (selected) Color.White.copy(alpha = 0.32f) else Tv.Pill,
+            containerColor = if (selected) Color.White.copy(alpha = 0.32f) else LocalAccent.current.pill(),
             contentColor = Color.White,
             focusedContainerColor = Color.White,
             focusedContentColor = Color.Black,

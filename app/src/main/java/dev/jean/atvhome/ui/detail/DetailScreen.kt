@@ -62,6 +62,8 @@ import dev.jean.atvhome.ui.components.RowTitle
 import dev.jean.atvhome.ui.home.TitleArt
 import dev.jean.atvhome.ui.home.TitleCard
 import dev.jean.atvhome.ui.theme.Tv
+import dev.jean.atvhome.ui.theme.LocalAccent
+import dev.jean.atvhome.ui.theme.screen
 
 @Composable
 fun DetailScreen(
@@ -196,7 +198,7 @@ fun PersonScreen(id: Int, vm: HomeViewModel, onOpen: (Title) -> Unit) {
     LaunchedEffect(id) { person = vm.catalog.person(id); failed = person == null }
     LaunchedEffect(person != null) { if (person != null) runCatching { firstPoster.requestFocus() } }
     val p = person
-    Box(Modifier.fillMaxSize().background(Color(0xFF0B0B0C))) {
+    Box(Modifier.fillMaxSize().background(LocalAccent.current.screen())) {
         if (p == null) {
             Text(if (failed) "Não consegui carregar." else "Carregando…", style = Tv.Meta, color = Tv.Secondary, modifier = Modifier.padding(Tv.Edge))
             return@Box

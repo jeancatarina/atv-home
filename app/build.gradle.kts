@@ -50,6 +50,8 @@ android {
         buildConfig = true
     }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
+    // androidx.lifecycle's lint check crashes on this Kotlin version; it guards LiveData, which we don't use
+    lint { disable += "NullSafeMutableLiveData" }
 }
 
 dependencies {
@@ -67,5 +69,9 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.work.runtime)
+    implementation(libs.youtube.player)
+    implementation(libs.nanohttpd)
+    implementation(libs.zxing.core)
+    implementation(libs.androidx.palette)
     testImplementation(libs.junit)
 }

@@ -19,9 +19,15 @@ object Scrim : Transformation() {
 
     override suspend fun transform(input: Bitmap, size: Size): Bitmap {
         val out = input.copy(Bitmap.Config.ARGB_8888, true)
-        val canvas = Canvas(out)
-        val w = out.width.toFloat()
-        val h = out.height.toFloat()
+        paint(Canvas(out), out.width.toFloat(), out.height.toFloat())
+        return out
+    }
+
+    /** The same scrim on a transparent bitmap, laid over the trailer video as a single texture. */
+    fun overlay(width: Int = 960, height: Int = 540): Bitmap =
+        Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { paint(Canvas(it), width.toFloat(), height.toFloat()) }
+
+    private fun paint(canvas: Canvas, w: Float, h: Float) {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)
         paint.shader = LinearGradient(
             0f, 0f, w * 0.75f, 0f,
@@ -37,6 +43,5 @@ object Scrim : Transformation() {
             Shader.TileMode.CLAMP,
         )
         canvas.drawRect(0f, h * 0.35f, w, h, paint)
-        return out
     }
 }

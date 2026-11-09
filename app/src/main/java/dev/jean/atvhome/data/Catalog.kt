@@ -153,6 +153,49 @@ class Catalog(val tmdb: TmdbClient) {
             .onFailure { Log.w(TAG, "discover", it) }.getOrDefault(emptyList())
     }
 
+    /**
+     * What's new this week on the user's services: series with an episode airing in the next
+     * seven days, and movies that reached streaming in Brazil in the last two weeks.
+     */
+    suspend fun thisWeek(providerIds: Set<Int>): List<Title> = coroutineScope {
+        if (providerIds.isEmpty()) return@coroutineScope emptyList()
+        val today = LocalDate.now()
+        val base = mapOf(
+            "watch_region" to "BR",
+            "with_watch_providers" to providerIds.joinToString("|"),
+            "with_watch_monetization_types" to "flatrate",
+            "sort_by" to "popularity.desc",
+        )
+        val series = async {
+            runCatching {
+                Parse.titles(
+                    tmdb.get("discover/tv", base + mapOf(
+                        "air_date.gte" to today.toString(),
+                        "air_date.lte" to today.plusDays(7).toString(),
+                        "vote_count.gte" to "30",
+                    )),
+                    MediaType.TV,
+                )
+            }.getOrDefault(emptyList())
+        }
+        val movies = async {
+            runCatching {
+                Parse.titles(
+                    tmdb.get("discover/movie", base + mapOf(
+                        "region" to "BR",
+                        "with_release_type" to "4|6",
+                        "release_date.gte" to today.minusDays(14).toString(),
+                        "release_date.lte" to today.plusDays(7).toString(),
+                    )),
+                    MediaType.MOVIE,
+                )
+            }.getOrDefault(emptyList())
+        }
+        val s = series.await().filter { it.backdrop != null }
+        val m = movies.await().filter { it.backdrop != null }
+        (s.zip(m).flatMap { listOf(it.first, it.second) } + s.drop(m.size) + m.drop(s.size)).take(18)
+    }
+
     /** Keeps items whose IMDb rating and vote count clear the bar (and, for movies, the runtime). */
     fun passes(item: Item, filters: Filters, minVotes: Int = 3000): Boolean {
         val min = filters.minImdb

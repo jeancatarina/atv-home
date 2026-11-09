@@ -16,8 +16,12 @@ Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e 
 | **Página do título**: IMDb com votos, onde assistir, elenco e parecidos | **Filmografia**: o selo mostra em qual dos seus apps cada filme está |
 | ![O que assistir agora?](docs/img/o-que-assistir.jpg) | ![Roleta de filmes e séries](docs/img/roleta.jpg) |
 | **O que assistir agora?**: tempo + clima → três sugestões | **Roleta**: três títulos sorteados com IMDb 6,5+ |
-| ![Busca em português](docs/img/busca.jpg) | ![Explorar com filtros](docs/img/explorar.jpg) |
-| **Busca**: "comédia curta na Netflix com nota alta" | **Explorar**: filtros por app, gênero, nota e época |
+| ![Busca em português](docs/img/busca.jpg) | ![Roleta de filmes e séries](docs/img/roleta.jpg) |
+| **Busca**: "comédia curta na Netflix com nota alta" | **Roleta** |
+| ![Match: QR code na TV](docs/img/match-qr.jpg) | ![Match: deu match!](docs/img/match.jpg) |
+| **Match**: cada um entra pelo QR code no celular | **Deu match!**: o título que todos curtiram |
+| ![Trailer tocando no fundo](docs/img/trailer.jpg) | ![Explorar com filtros](docs/img/explorar.jpg) |
+| **Trailer no fundo**, sem som (🔇) | **Explorar** |
 | ![Central com as entradas HDMI](docs/img/central.jpg) | ![Protetor de tela com os aéreos da Apple](docs/img/protetor.jpg) |
 | **Central** (tecla MENU): entradas HDMI e ajustes | **Protetor de tela** com os aéreos da Apple (Aerial Views) |
 
@@ -30,6 +34,10 @@ Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e 
 | **Top Shelf em tela cheia** | Ao focar a Netflix, o topo mostra o que está em alta **na Netflix Brasil**; o mesmo para Prime Video, Disney+, Max, Globoplay, Apple TV e Claro tv+. Logotipo do título, nota do IMDb, classificação, duração, gêneros e sinopse. |
 | **Assistir direto no título** | "Assistir no Netflix" abre a **página da série/filme** dentro do app (Netflix, Prime Video, Disney+, Apple TV), usando os códigos abertos do Wikidata. Quando o título não tem código, abre o app e diz o que procurar. |
 | **Trocar o título na mão** | Do app, **▲** seleciona o título do topo; aí **◀ ▶** passam para o anterior/próximo e **OK** assiste. As teclas ◀◀ ▶▶ do controle também trocam. |
+| **Trailer no fundo** | Parou num título, em poucos segundos o trailer começa a tocar sem som atrás do texto, como na Apple TV, e depois de ~30 s volta para a imagem e segue. **Play/Pause** no controle liga o som. |
+| **Match pelo celular** | A TV mostra um QR code; cada pessoa abre no celular (sem instalar nada), desliza os pôsteres como no Tinder, e o primeiro título que **a sala inteira** curtir aparece na TV com "Deu match!" e o botão para assistir. Tudo na sua rede Wi-Fi, sem nuvem. |
+| **Esta semana nos seus streamings** | Séries com episódio novo nos próximos dias e filmes que acabaram de chegar aos seus apps: "Novo ep. quinta · Netflix", "Novo no Prime Video". |
+| **Cor que acompanha o filme** | As telas e os botões ganham um tom tirado da imagem em destaque. |
 | **Roleta** | Escolha **Filme** ou **Série** e gire: três rolos estilo caça-níquel param em três títulos dos seus streamings (de apps diferentes), sempre com IMDb 6,5 ou mais. |
 | **Fileira de apps com o foco do tvOS** | O cartão cresce, inclina na direção do controle e recebe um brilho. Segure OK para reorganizar: ◀ ▶ move, ▼ oculta, OK conclui. |
 | **O que assistir agora?** | Duas perguntas (quanto tempo você tem e o que está a fim) e três sugestões dos **seus** streamings, todas com IMDb 7 ou mais. |
@@ -191,6 +199,8 @@ Kotlin, Jetpack Compose for TV, Coil, OkHttp e kotlinx.serialization. A tela tem
 - [Sofadrop](https://github.com/rfmarcos/projectivy-plugin-sofadrop) (Apache-2.0): base do leitor das notas do IMDb (`ImdbRatings.kt`).
 - [Inter](https://github.com/rsms/inter) (SIL OFL 1.1, `licenses/Inter-OFL.txt`): a fonte, no lugar da SF Pro.
 - [Aerial Views](https://github.com/theothernt/AerialViews): protetor de tela recomendado.
+- [android-youtube-player](https://github.com/PierfrancescoSoffritti/android-youtube-player) (Apache-2.0): trailer no fundo, pelo player oficial do YouTube.
+- [NanoHTTPD](https://github.com/NanoHttpd/nanohttpd) (BSD-3) e [ZXing](https://github.com/zxing/zxing) (Apache-2.0): servidor e QR code do Match.
 - Dados: [TMDB](https://www.themoviedb.org) (este produto usa a API do TMDB, mas não é endossado nem certificado pelo TMDB),
   [IMDb Non-Commercial Datasets](https://developer.imdb.com/non-commercial-datasets/) (uso pessoal e não comercial)
   e [Wikidata](https://www.wikidata.org) (CC0).

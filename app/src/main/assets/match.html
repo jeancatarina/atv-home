@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#000000">
+<title>Match · Início</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; background: #000; color: #fff;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", Inter, Roboto, sans-serif; overflow: hidden; }
+  .screen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; padding: 22px; }
+  h1 { font-size: 30px; letter-spacing: -0.5px; margin: 28px 0 6px; }
+  p.sub { color: rgba(255,255,255,.6); margin: 0 0 28px; text-align: center; line-height: 1.4; }
+  input { width: 100%; max-width: 340px; font-size: 19px; padding: 15px 18px; border-radius: 14px; border: 0;
+    background: #1c1c1e; color: #fff; outline: none; }
+  button.primary { margin-top: 16px; width: 100%; max-width: 340px; font-size: 18px; font-weight: 600; padding: 15px;
+    border: 0; border-radius: 14px; background: #fff; color: #000; }
+  #deck { position: relative; width: 100%; max-width: 380px; flex: 1; margin-top: 10px; }
+  .card { position: absolute; inset: 0; border-radius: 22px; overflow: hidden; background: #1c1c1e;
+    box-shadow: 0 18px 40px rgba(0,0,0,.6); transition: transform .35s ease, opacity .35s ease; touch-action: none; }
+  .card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .card .info { position: absolute; left: 0; right: 0; bottom: 0; padding: 70px 18px 18px;
+    background: linear-gradient(transparent, rgba(0,0,0,.92)); }
+  .card .t { font-size: 24px; font-weight: 700; }
+  .card .m { color: rgba(255,255,255,.75); margin-top: 4px; font-size: 15px; }
+  .imdb { background: #f5c518; color: #000; font-weight: 700; border-radius: 4px; padding: 0 5px; margin-right: 4px; font-size: 13px; }
+  .stamp { position: absolute; top: 26px; padding: 6px 14px; border: 3px solid; border-radius: 10px;
+    font-size: 26px; font-weight: 800; opacity: 0; transform: rotate(-12deg); }
+  .stamp.yes { left: 20px; color: #30d158; } .stamp.no { right: 20px; color: #ff453a; transform: rotate(12deg); }
+  .buttons { display: flex; gap: 34px; padding: 18px 0 8px; }
+  .round { width: 72px; height: 72px; border-radius: 50%; border: 0; font-size: 30px; background: #1c1c1e; color: #fff; }
+  .round.yes { color: #30d158; } .round.no { color: #ff453a; }
+  .hint { color: rgba(255,255,255,.45); font-size: 13px; }
+  #match { display: none; background: radial-gradient(circle at 50% 30%, #3a1c4a, #000 70%); justify-content: center; }
+  #match img { width: 64%; max-width: 260px; border-radius: 18px; box-shadow: 0 20px 50px rgba(0,0,0,.7); margin: 18px 0; }
+  .big { font-size: 40px; font-weight: 800; letter-spacing: -1px; }
+  .empty { color: rgba(255,255,255,.6); text-align: center; margin-top: 40%; line-height: 1.5; }
+</style>
+</head>
+<body>
+<div class="screen" id="join">
+  <h1>♥ Match</h1>
+  <p class="sub">Deslize os filmes. Quando todo mundo na sala<br>gostar do mesmo, ele aparece na TV.</p>
+  <input id="name" placeholder="Seu nome" maxlength="20" autocomplete="off">
+  <button class="primary" id="go">Começar</button>
+</div>
+
+<div class="screen" id="play" style="display:none">
+  <div class="hint" id="people"></div>
+  <div id="deck"></div>
+  <div class="buttons">
+    <button class="round no" id="no">✕</button>
+    <button class="round yes" id="yes">♥</button>
+  </div>
+</div>
+
+<div class="screen" id="match">
+  <div class="big">Deu match!</div>
+  <img id="mimg" alt="">
+  <div class="card-title" id="mtitle" style="font-size:24px;font-weight:700;text-align:center"></div>
+  <p class="sub" style="margin-top:10px">Olhe para a TV 🍿</p>
+</div>
+
+<script>
+let me = null, cards = [], i = 0, byKey = {}, shownKey = null;
+const $ = (id) => document.getElementById(id);
+const post = (path, body) => fetch(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then(r => r.json());
+
+$('name').value = localStorage.getItem('matchName') || '';
+$('go').onclick = async () => {
+  const name = $('name').value.trim();
+  localStorage.setItem('matchName', name);
+  me = (await post('/join', { name })).id;
+  cards = (await fetch('/deck').then(r => r.json())).cards;
+  cards.forEach(c => byKey[c.key] = c);
+  $('join').style.display = 'none';
+  $('play').style.display = 'flex';
+  render();
+  setInterval(poll, 2000);
+};
+
+function render() {
+  const deck = $('deck');
+  deck.innerHTML = '';
+  if (i >= cards.length) {
+    deck.innerHTML = '<div class="empty">Você viu todos.<br>Esperando os outros…</div>';
+    return;
+  }
+  for (let k = Math.min(i + 1, cards.length - 1); k >= i; k--) {
+    const c = cards[k];
+    const el = document.createElement('div');
+    el.className = 'card';
+    if (k > i) el.style.transform = 'scale(.95) translateY(12px)';
+    el.innerHTML = `<img src="${c.poster || ''}" alt="">
+      <div class="stamp yes">QUERO</div><div class="stamp no">PASSO</div>
+      <div class="info"><div class="t">${esc(c.title)}</div>
+      <div class="m">${c.imdb ? '<span class="imdb">IMDb</span>' + c.imdb + ' · ' : ''}${c.year || ''}${c.where ? ' · ' + esc(c.where) : ''}</div></div>`;
+    deck.appendChild(el);
+    if (k === i) drag(el, c);
+  }
+}
+
+function drag(el, c) {
+  let x0 = null, dx = 0;
+  el.addEventListener('pointerdown', e => { x0 = e.clientX; el.style.transition = 'none'; el.setPointerCapture(e.pointerId); });
+  el.addEventListener('pointermove', e => {
+    if (x0 === null) return;
+    dx = e.clientX - x0;
+    el.style.transform = `translateX(${dx}px) rotate(${dx / 18}deg)`;
+    el.querySelector('.yes').style.opacity = Math.max(0, dx / 100);
+    el.querySelector('.no').style.opacity = Math.max(0, -dx / 100);
+  });
+  el.addEventListener('pointerup', () => {
+    el.style.transition = '';
+    if (Math.abs(dx) > 90) decide(dx > 0); else { el.style.transform = ''; el.querySelectorAll('.stamp').forEach(s => s.style.opacity = 0); }
+    x0 = null; dx = 0;
+  });
+}
+
+async function decide(like) {
+  const c = cards[i];
+  if (!c) return;
+  const el = $('deck').lastChild;
+  if (el) { el.style.transform = `translateX(${like ? 600 : -600}px) rotate(${like ? 25 : -25}deg)`; el.style.opacity = 0; }
+  i++;
+  setTimeout(render, 220);
+  const s = await post('/vote', { id: me, key: c.key, like });
+  show(s);
+}
+
+$('yes').onclick = () => decide(true);
+$('no').onclick = () => decide(false);
+
+async function poll() { show(await fetch('/state').then(r => r.json())); }
+
+function show(s) {
+  $('people').textContent = s.people === 1 ? 'Só você por enquanto: chame mais gente pelo QR da TV' : s.people + ' pessoas votando';
+  if (!s.match && shownKey) {
+    // The TV asked for another match: back to swiping
+    shownKey = null;
+    $('match').style.display = 'none';
+    $('play').style.display = 'flex';
+  }
+  if (s.match && byKey[s.match] && s.match !== shownKey) {
+    shownKey = s.match;
+    const c = byKey[s.match];
+    $('mimg').src = c.poster || '';
+    $('mtitle').textContent = c.title;
+    $('play').style.display = 'none';
+    $('match').style.display = 'flex';
+    if (navigator.vibrate) navigator.vibrate([80, 60, 120]);
+  }
+}
+
+function esc(t) { return (t || '').replace(/[&<>"]/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch])); }
+</script>
+</body>
+</html>

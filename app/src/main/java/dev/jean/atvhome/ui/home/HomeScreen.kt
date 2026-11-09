@@ -37,6 +37,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableFloatStateOf
+import dev.jean.atvhome.ui.theme.Accent
+import dev.jean.atvhome.ui.theme.LocalAccent
+import dev.jean.atvhome.ui.theme.screen
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -105,6 +109,7 @@ fun HomeScreen(
     onWhatToWatch: () -> Unit,
     onExplore: () -> Unit,
     onRoulette: () -> Unit,
+    onMatch: () -> Unit,
     toast: (String) -> Unit,
 ) {
     val context = LocalContext.current
@@ -137,6 +142,10 @@ fun HomeScreen(
     val heroProviderPackage = if (override == null) shelf.appPackage else null
 
     // The Top Shelf moves on every 8 s, unless the user is reading it (buttons focused) or away
+    var trailerAlpha by remember { mutableFloatStateOf(0f) }
+    var sound by remember { mutableStateOf(false) }
+    val trailerOn = trailerAlpha > 0.05f
+    LaunchedEffect(hero?.title?.key) { sound = false }
     var manualTick by remember { mutableIntStateOf(0) }
     val step: (Int) -> Unit = { d ->
         if (heroItems.size > 1 && override == null) {
@@ -144,8 +153,8 @@ fun HomeScreen(
             manualTick++
         }
     }
-    LaunchedEffect(heroLabel, heroItems.size, heroButtonsFocused, override, active, manualTick) {
-        if (heroButtonsFocused || override != null || !active) return@LaunchedEffect
+    LaunchedEffect(heroLabel, heroItems.size, heroButtonsFocused, override, active, manualTick, trailerOn) {
+        if (heroButtonsFocused || override != null || !active || trailerOn) return@LaunchedEffect
         while (true) {
             delay(8_000)
             heroIndex++
@@ -196,11 +205,23 @@ fun HomeScreen(
             when (e.key) {
                 Key.MediaFastForward, Key.MediaNext -> { step(1); true }
                 Key.MediaRewind, Key.MediaPrevious -> { step(-1); true }
+                // Play/Pause turns the trailer's sound on and off, like tvOS
+                Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> { if (trailerOn) { sound = !sound; true } else false }
                 else -> false
             }
         },
     ) {
-        HeroBackdrop(hero) { dim.value }
+        // Scrolled down, the page takes the artwork's colour; at the top the artwork covers it
+        if (dim.value > 0f) Box(Modifier.fillMaxSize().background(LocalAccent.current.screen()))
+        TrailerBackdrop(
+            videoKey = hero?.details?.trailerKey,
+            play = active && !scrolled && editing == null && hero != null,
+            sound = sound,
+            dim = { dim.value },
+            onAlpha = { trailerAlpha = it },
+            onEnded = { sound = false; if (override == null) step(1) },
+        )
+        HeroBackdrop(hero, onColor = { vm.accent = it }) { (1f - trailerAlpha) * (1f - dim.value) }
 
         LazyColumn(
             state = listState,
@@ -219,6 +240,8 @@ fun HomeScreen(
                     onWhatToWatch = onWhatToWatch,
                     onExplore = onExplore,
                     onRoulette = onRoulette,
+                    onMatch = onMatch,
+                    soundState = if (!trailerOn) 0 else if (sound) 2 else 1,
                     onOpen = onOpen,
                     onStep = step,
                     titleFocus = titleFocus,
@@ -288,6 +311,17 @@ fun HomeScreen(
                     }
                 }
             }
+            if (vm.thisWeek.isNotEmpty()) {
+                item(key = "thisWeek") {
+                    Section("Esta semana nos seus streamings") {
+                        LazyRow(contentPadding = RowPadding, horizontalArrangement = RowSpacing) {
+                            items(vm.thisWeek, key = { it.first.title.key }) { (item, badge) ->
+                                ItemCard(item, vm, onOpen = onOpen, onFocusItem = { pendingOverride = it }, badge = badge)
+                            }
+                        }
+                    }
+                }
+            }
             if (vm.trending.isNotEmpty()) {
                 item(key = "trending") {
                     Section("Em alta no Brasil") {
@@ -348,7 +382,8 @@ private fun Section(title: String, content: @Composable () -> Unit) {
  * redrew the whole screen every frame and the TV's GPU missed most frame deadlines.
  */
 @Composable
-private fun HeroBackdrop(item: Item?, dim: () -> Float) {
+private fun HeroBackdrop(item: Item?, onColor: (Color) -> Unit, alpha: () -> Float) {
+    val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val url = TmdbClient.image(item?.title?.backdrop, "w1280")
     // The scrim is baked into the bitmap (see Scrim) and dimming is the image's own alpha over the
@@ -359,7 +394,11 @@ private fun HeroBackdrop(item: Item?, dim: () -> Float) {
         },
         contentDescription = null,
         contentScale = ContentScale.Crop,
-        modifier = Modifier.fillMaxSize().graphicsLayer { alpha = 1f - dim() },
+        onSuccess = { state ->
+            val bitmap = (state.result.image as? coil3.BitmapImage)?.bitmap
+            if (bitmap != null && url != null) scope.launch { onColor(Accent.of(url, bitmap)) }
+        },
+        modifier = Modifier.fillMaxSize().graphicsLayer { this.alpha = alpha() },
     )
 }
 
@@ -375,6 +414,8 @@ private fun HeroInfo(
     onWhatToWatch: () -> Unit,
     onExplore: () -> Unit,
     onRoulette: () -> Unit,
+    onMatch: () -> Unit,
+    soundState: Int,
     onOpen: (Title) -> Unit,
     onButtonsFocus: (Boolean) -> Unit,
     onStep: (Int) -> Unit,
@@ -390,6 +431,7 @@ private fun HeroInfo(
             PillButton("Buscar", onSearch, icon = "⌕", onFocus = onButtonsFocus)
             PillButton("O que assistir agora?", onWhatToWatch, icon = "✦", onFocus = onButtonsFocus)
             PillButton("Roleta", onRoulette, icon = "🎲", onFocus = onButtonsFocus)
+            PillButton("Match", onMatch, icon = "♥", onFocus = onButtonsFocus)
             PillButton("Explorar", onExplore, onFocus = onButtonsFocus)
         }
         Spacer(Modifier.height(30.dp))
@@ -477,6 +519,10 @@ private fun HeroInfo(
                         repeat(minOf(count, 12)) { i ->
                             val on = i == index.mod(count) % 12
                             Box(Modifier.size(if (on) 7.dp else 5.dp).background(if (on) Color.White else Tv.Tertiary, CircleShape))
+                        }
+                        if (soundState > 0) {
+                            Spacer(Modifier.width(10.dp))
+                            Text(if (soundState == 2) "🔊" else "🔇", style = Tv.Meta, color = Tv.Secondary)
                         }
                     }
                 }

@@ -45,6 +45,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     var myProviders by mutableStateOf<List<Provider>>(emptyList()); private set
     var trending by mutableStateOf<List<Item>>(emptyList()); private set
     var highImdb by mutableStateOf<List<Item>>(emptyList()); private set
+    /** "Esta semana": new on the user's services, with the reason as a badge. */
+    var thisWeek by mutableStateOf<List<Pair<Item, String?>>>(emptyList()); private set
+    /** Colour of the Top Shelf artwork, tinting every screen (see Accent). */
+    var accent by mutableStateOf(dev.jean.atvhome.ui.theme.Accent.Neutral)
     var watchNext by mutableStateOf<List<WatchNextItem>>(emptyList()); private set
     var fromApps by mutableStateOf<List<WatchNextItem>>(emptyList()); private set
     var problem by mutableStateOf<String?>(null); private set
@@ -65,6 +69,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
             launch { loadImdb() }
             loadTrending()
+            launch { loadThisWeek() }
             loadHighImdb()
         }
         refreshWatchNext()
@@ -195,6 +200,36 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val good = items.filter { (it.imdb?.rating ?: 0.0) >= 7.5 && (it.imdb?.votes ?: 0) >= 20_000 }
         // Before IMDb's dataset arrives, TMDB's rating stands in so the row isn't empty on first boot
         highImdb = (if (ImdbRatings.isLoaded) good else items.filter { it.title.tmdbRating >= 7.8 }).take(16)
+    }
+
+    private suspend fun loadThisWeek() {
+        val titles = catalog.thisWeek(myProviders.map { it.id }.toSet())
+        thisWeek = catalog.items(titles).mapNotNull { item ->
+            val app = myProvidersOf(item).firstOrNull()?.let { p -> packageFor(p)?.let(::appFor)?.label ?: p.name }
+                ?: return@mapNotNull null
+            val badge = if (item.title.type == MediaType.TV) {
+                dev.jean.atvhome.data.Format.episodeBadge(item.details.nextEpisodeDate, item.details.lastEpisodeDate)
+                    ?.let { "$it · $app" } ?: "Novo ep. · $app"
+            } else "Novo no $app"
+            item to badge
+        }
+    }
+
+    // --- Match ----------------------------------------------------------------------------------
+
+    /** A shared deck for the phone game: 30 titles on the user's services with IMDb 6.5 or more. */
+    suspend fun matchDeck(type: MediaType): List<Item> {
+        val ids = myProviders.map { it.id }.toSet()
+        val filters = Filters(type = type, minImdb = 6.5)
+        val titles = coroutineScope {
+            (0 until 4).map { i ->
+                async { catalog.discover(filters, ids, page = 1 + Random.nextInt(10), sortByRating = i % 2 == 1) }
+            }.awaitAll().flatten().distinctBy { it.key }.filter { it.poster != null }
+        }
+        val minVotes = if (type == MediaType.MOVIE) 3_000 else 1_500
+        return catalog.items(titles.shuffled().take(45))
+            .filter { catalog.passes(it, filters, minVotes) && myProvidersOf(it).isNotEmpty() }
+            .shuffled().take(30)
     }
 
     fun refreshWatchNext() = viewModelScope.launch {

@@ -39,6 +39,10 @@ import dev.jean.atvhome.ui.discover.ExploreScreen
 import dev.jean.atvhome.ui.discover.SearchScreen
 import dev.jean.atvhome.ui.discover.WhatToWatchScreen
 import dev.jean.atvhome.ui.discover.RouletteScreen
+import dev.jean.atvhome.ui.discover.MatchScreen
+import dev.jean.atvhome.ui.theme.LocalAccent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import dev.jean.atvhome.ui.home.HomeScreen
 import dev.jean.atvhome.ui.panel.QuickPanel
 import dev.jean.atvhome.ui.theme.InicioTheme
@@ -50,6 +54,7 @@ sealed interface Screen {
     data object Explore : Screen
     data object WhatToWatch : Screen
     data object Roulette : Screen
+    data object Match : Screen
 }
 
 class HomeActivity : ComponentActivity() {
@@ -64,7 +69,8 @@ class HomeActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             InicioTheme {
-              CompositionLocalProvider(LocalBringIntoViewSpec provides TvScroll) {
+              val accent by animateColorAsState(vm.accent, tween(900), label = "accent")
+              CompositionLocalProvider(LocalBringIntoViewSpec provides TvScroll, LocalAccent provides accent) {
                 var restoreSignal by remember { mutableIntStateOf(0) }
                 val top = stack.lastOrNull()
                 val toast: (String) -> Unit = { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() }
@@ -99,6 +105,7 @@ class HomeActivity : ComponentActivity() {
                             onWhatToWatch = { open(Screen.WhatToWatch) },
                             onExplore = { open(Screen.Explore) },
                             onRoulette = { open(Screen.Roulette) },
+                            onMatch = { open(Screen.Match) },
                             toast = toast,
                         )
                     }
@@ -111,6 +118,7 @@ class HomeActivity : ComponentActivity() {
                                 Screen.Explore -> ExploreScreen(vm, onOpen)
                                 Screen.WhatToWatch -> WhatToWatchScreen(vm, onOpen)
                                 Screen.Roulette -> RouletteScreen(vm, onOpen)
+                                Screen.Match -> MatchScreen(vm, onOpen, toast)
                             }
                         }
                     }

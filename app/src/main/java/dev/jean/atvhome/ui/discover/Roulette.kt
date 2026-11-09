@@ -44,6 +44,8 @@ import dev.jean.atvhome.ui.components.Chip
 import dev.jean.atvhome.ui.components.PillButton
 import dev.jean.atvhome.ui.components.PosterCard
 import dev.jean.atvhome.ui.theme.Tv
+import dev.jean.atvhome.ui.theme.LocalAccent
+import dev.jean.atvhome.ui.theme.screen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -92,7 +94,7 @@ fun RouletteScreen(vm: HomeViewModel, onOpen: (Title) -> Unit) {
         }
     }
 
-    Column(Modifier.fillMaxSize().background(Color(0xFF0B0B0C)).padding(start = Tv.Edge, top = 30.dp, end = Tv.Edge)) {
+    Column(Modifier.fillMaxSize().background(LocalAccent.current.screen()).padding(start = Tv.Edge, top = 30.dp, end = Tv.Edge)) {
         Text("Roleta", style = Tv.Title, color = Tv.Primary)
         Spacer(Modifier.height(3.dp))
         Text("Deixe a sorte escolher: três títulos dos seus streamings, sempre com IMDb 6,5 ou mais", style = Tv.Meta, color = Tv.Tertiary)
