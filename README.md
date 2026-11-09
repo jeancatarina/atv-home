@@ -6,6 +6,21 @@ busca em português do jeito que a gente fala e avisos quando algo da sua lista 
 
 Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e de código aberto.
 
+![Tela inicial: o topo mostra o que está em alta no app focado](docs/img/inicio.jpg)
+
+## Fotos
+
+| | |
+|---|---|
+| ![Página do título com IMDb, elenco e parecidos](docs/img/titulo.jpg) | ![Filmografia de um ator com o app onde cada filme está](docs/img/filmografia.jpg) |
+| **Página do título**: IMDb com votos, onde assistir, elenco e parecidos | **Filmografia**: o selo mostra em qual dos seus apps cada filme está |
+| ![O que assistir agora?](docs/img/o-que-assistir.jpg) | ![Roleta de filmes e séries](docs/img/roleta.jpg) |
+| **O que assistir agora?**: tempo + clima → três sugestões | **Roleta**: três títulos sorteados com IMDb 6,5+ |
+| ![Busca em português](docs/img/busca.jpg) | ![Explorar com filtros](docs/img/explorar.jpg) |
+| **Busca**: "comédia curta na Netflix com nota alta" | **Explorar**: filtros por app, gênero, nota e época |
+| ![Central com as entradas HDMI](docs/img/central.jpg) | ![Protetor de tela com os aéreos da Apple](docs/img/protetor.jpg) |
+| **Central** (tecla MENU): entradas HDMI e ajustes | **Protetor de tela** com os aéreos da Apple (Aerial Views) |
+
 ---
 
 ## O que ele faz

@@ -117,7 +117,7 @@ fun SearchScreen(vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> 
                             .border(if (fieldFocused) 2.dp else 0.dp, Color.White.copy(alpha = if (fieldFocused) 0.9f else 0f), RoundedCornerShape(50))
                             .padding(horizontal = 18.dp, vertical = 10.dp),
                     ) {
-                        if (query.isEmpty()) Text(if (fieldFocused) "OK abre o teclado" else "Digite aqui", style = Tv.Headline, color = Tv.Tertiary)
+                        if (query.isEmpty()) Text("Digite aqui", style = Tv.Headline, color = Tv.Tertiary)
                         inner()
                     }
                 },

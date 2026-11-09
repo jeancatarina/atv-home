@@ -42,7 +42,6 @@ fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit) {
                 .background(Color(0xF21C1C1E), RoundedCornerShape(22.dp)).padding(18.dp),
         ) {
             Text("Central", style = Tv.Title, color = Tv.Primary)
-            Text("MENU ou VOLTAR fecha", style = Tv.Caption, color = Tv.Tertiary)
             LazyColumn(contentPadding = PaddingValues(vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (inputs.isNotEmpty()) {
                     item { Text("Entradas", style = Tv.Meta, color = Tv.Secondary) }

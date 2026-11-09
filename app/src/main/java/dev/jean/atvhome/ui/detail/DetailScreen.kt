@@ -155,7 +155,7 @@ fun DetailScreen(
             if (d.cast.isNotEmpty()) {
                 item(key = "cast") {
                     Column(Modifier.padding(top = 26.dp)) {
-                        RowTitle("Elenco  ·  OK mostra a filmografia nos seus streamings")
+                        RowTitle("Elenco")
                         LazyRow(contentPadding = RowPadding, horizontalArrangement = RowSpacing) {
                             items(d.cast, key = { it.id }) { c -> PersonCard(TmdbClient.image(c.photo, "w185"), c.name, c.character) { onPerson(c.id) } }
                         }
@@ -208,7 +208,7 @@ fun PersonScreen(id: Int, vm: HomeViewModel, onOpen: (Title) -> Unit) {
                 Spacer(Modifier.padding(8.dp))
                 Column {
                     Text(p.name, style = Tv.Title, color = Tv.Primary)
-                    Text("${p.credits.size} títulos  ·  o selo mostra onde você já pode assistir", style = Tv.Meta, color = Tv.Tertiary)
+                    Text("${p.credits.size} títulos", style = Tv.Meta, color = Tv.Tertiary)
                 }
             }
             Spacer(Modifier.height(18.dp))

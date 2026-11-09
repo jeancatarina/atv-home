@@ -312,7 +312,7 @@ fun HomeScreen(
             }
             if (vm.hiddenApps.isNotEmpty()) {
                 item(key = "hidden") {
-                    Section("Apps ocultos  ·  OK abre, segurar OK mostra de novo") {
+                    Section("Apps ocultos") {
                         LazyRow(contentPadding = RowPadding, horizontalArrangement = RowSpacing) {
                             items(vm.hiddenApps, key = { it.packageName }) { app ->
                                 AppCard(app, editing = false, onFocus = {}, onClick = { vm.launch(app) }, onLongClick = {
@@ -479,12 +479,6 @@ private fun HeroInfo(
                             Box(Modifier.size(if (on) 7.dp else 5.dp).background(if (on) Color.White else Tv.Tertiary, CircleShape))
                         }
                     }
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        if (titleFocused) "${index.mod(count) + 1} de $count  ·  ◀ ▶ trocam  ·  OK assiste"
-                        else "${index.mod(count) + 1} de $count  ·  ▲ no título e ◀ ▶ para trocar",
-                        style = Tv.Caption, color = if (titleFocused) Tv.Primary else Tv.Tertiary,
-                    )
                 }
             }
         }
@@ -553,7 +547,7 @@ private fun Dock(
             }
         }
         val hint = if (editing != null) "Modo de edição  ·  ◀ ▶ mover  ·  ▼ ocultar  ·  OK concluir"
-        else focusedLabel?.let { "$it  ·  segure OK para reorganizar" }
+        else focusedLabel
         AnimatedVisibility(hint != null, enter = fadeIn(), exit = fadeOut()) {
             Text(hint.orEmpty(), style = Tv.Meta, color = if (editing != null) Tv.Primary else Tv.Tertiary, modifier = Modifier.padding(start = Tv.Edge))
         }
