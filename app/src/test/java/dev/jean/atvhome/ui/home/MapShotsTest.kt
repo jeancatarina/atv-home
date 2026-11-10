@@ -83,7 +83,8 @@ class MapShotsTest {
         rule.mainClock.advanceTimeBy(1_500)
         rule.waitForIdle()
         rule.onNodeWithText("2º andar").assertExists()
-        rule.onRoot().performKeyInput { repeat(4) { pressKey(Key.DirectionRight) } }
+        // From the front bedroom: left to the half bath behind it, down to the suite at the back
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionLeft); pressKey(Key.DirectionDown) }
         rule.waitForIdle()
         rule.onNodeWithText("Quarto principal").assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-model-suite.png")

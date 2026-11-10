@@ -1,32 +1,32 @@
 {
-  "width": 12,
-  "depth": 6,
+  "width": 7,
+  "depth": 12,
   "floors": [
     {
       "name": "1º andar",
       "open": true,
       "rooms": [
-        { "room": "Sala de Estar", "x": 0, "y": 0, "w": 5, "d": 6 },
-        { "room": "Sala de Jantar", "x": 5, "y": 0, "w": 3.5, "d": 6 },
-        { "room": "Cozinha", "x": 8.5, "y": 0, "w": 3.5, "d": 6 }
+        { "room": "Sala de Estar", "x": 0, "y": 0, "w": 7, "d": 5 },
+        { "room": "Sala de Jantar", "x": 0, "y": 5, "w": 7, "d": 3.5 },
+        { "room": "Cozinha", "x": 0, "y": 8.5, "w": 7, "d": 3.5 }
       ]
     },
     {
       "name": "2º andar",
       "rooms": [
-        { "room": "Quarto Secundário", "x": 0, "y": 0, "w": 3, "d": 6 },
-        { "room": "Escritório", "x": 3, "y": 0, "w": 3, "d": 6 },
-        { "room": "Lavabo", "x": 6, "y": 0, "w": 2, "d": 2.4 },
-        { "room": "Corredor", "x": 6, "y": 2.4, "w": 2, "d": 3.6 },
-        { "room": "Quarto principal", "x": 8, "y": 0, "w": 4, "d": 3.8 },
-        { "room": "Banheiro", "x": 8, "y": 3.8, "w": 4, "d": 2.2 }
+        { "room": "Quarto Secundário", "x": 0, "y": 0, "w": 3.5, "d": 4 },
+        { "room": "Escritório", "x": 3.5, "y": 0, "w": 3.5, "d": 4 },
+        { "room": "Lavabo", "x": 0, "y": 4, "w": 2.4, "d": 2.6 },
+        { "room": "Corredor", "x": 2.4, "y": 4, "w": 4.6, "d": 2.6 },
+        { "room": "Quarto principal", "x": 0, "y": 6.6, "w": 7, "d": 3.4 },
+        { "room": "Banheiro", "x": 0, "y": 10, "w": 7, "d": 2 }
       ]
     },
     {
       "name": "Terraço",
       "outdoor": true,
       "rooms": [
-        { "room": "Terraço", "x": 0, "y": 0, "w": 12, "d": 6 }
+        { "room": "Terraço", "x": 0, "y": 0, "w": 7, "d": 12 }
       ]
     }
   ]

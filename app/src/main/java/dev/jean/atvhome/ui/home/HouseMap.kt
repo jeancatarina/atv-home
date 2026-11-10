@@ -327,22 +327,28 @@ private val Pool = Color(0xFFFFC77A)
 private val Bulb = Color(0xFFFFF1CC)
 
 private val FloorDry = Color(0xFF2A2C32)
-private val FloorWood = Color(0xFF30292A)
+private val FloorWood = Color(0xFF332B29)
 private val FloorWet = Color(0xFF262B31)
-private val FloorDeck = Color(0xFF2E2923)
+private val FloorDeck = Color(0xFF30291F)
 private val SlabLeft = Color(0xFF17191C)
 private val SlabRight = Color(0xFF111214)
 private val Wall = Color(0xFF4C515B)
 
-// Furniture
-private val Wood = Color(0xFF7A6047)
-private val Fabric = Color(0xFF5A6474)
-private val Linen = Color(0xFFDCD5C8)
-private val Stone = Color(0xFF9A958E)
-private val Porcelain = Color(0xFFD5D8DC)
+// Furniture: soft, slightly warm tones, like a designer's model
+private val Wood = Color(0xFF8A6B4E)
+private val Walnut = Color(0xFF5E4636)
+private val Fabric = Color(0xFF5D6B7E)
+private val Cushion = Color(0xFF7686A0)
+private val Linen = Color(0xFFE2DBCE)
+private val Duvet = Color(0xFFC9D2DE)
+private val Stone = Color(0xFFA29C94)
+private val Porcelain = Color(0xFFE0E3E7)
 private val Black = Color(0xFF1C1D20)
-private val Leaf = Color(0xFF5B8A55)
-private val Planter = Color(0xFF6E5B48)
+private val Graphite = Color(0xFF3A3D44)
+private val Leaf = Color(0xFF5E9159)
+private val LeafLight = Color(0xFF7DB26F)
+private val Planter = Color(0xFFB9A58C)
+private val Rug = Color(0xFF3F3D4A)
 
 /** [dz]: the whole floor raised, while it settles into place. */
 private class Iso(val s: Float, val ox: Float, val oy: Float, val dz: Float = 0f) {
@@ -389,6 +395,37 @@ private fun Iso.poly(vararg pts: Triple<Float, Float, Float>) = Path().apply {
 private fun Iso.rect(x0: Float, y0: Float, x1: Float, y1: Float, z: Float = 0f) =
     poly(Triple(x0, y0, z), Triple(x1, y0, z), Triple(x1, y1, z), Triple(x0, y1, z))
 
+private fun path(points: List<Offset>) = Path().apply {
+    points.forEachIndexed { i, o -> if (i == 0) moveTo(o.x, o.y) else lineTo(o.x, o.y) }
+    close()
+}
+
+/** A rounded rectangle of the footprint as points, corners of radius [r] (a circle or a pill at most). */
+private fun rounded(x0: Float, y0: Float, x1: Float, y1: Float, r: Float): List<Pair<Float, Float>> {
+    val rr = r.coerceAtMost(minOf(x1 - x0, y1 - y0) / 2f)
+    if (rr <= 0.001f) return listOf(x0 to y0, x1 to y0, x1 to y1, x0 to y1)
+    val out = ArrayList<Pair<Float, Float>>(28)
+    val corners = listOf(Triple(x1 - rr, y0 + rr, -90f), Triple(x1 - rr, y1 - rr, 0f), Triple(x0 + rr, y1 - rr, 90f), Triple(x0 + rr, y0 + rr, 180f))
+    corners.forEach { (cx, cy, start) ->
+        for (i in 0..6) {
+            val a = Math.toRadians((start + i * 15f).toDouble())
+            out += (cx + rr * kotlin.math.cos(a).toFloat()) to (cy + rr * kotlin.math.sin(a).toFloat())
+        }
+    }
+    return out
+}
+
+/** The outline of a set of points on screen (monotone chain): the silhouette of a rounded prism. */
+private fun hull(points: List<Offset>): List<Offset> {
+    val p = points.sortedWith(compareBy({ it.x }, { it.y }))
+    if (p.size < 3) return p
+    fun cross(o: Offset, a: Offset, b: Offset) = (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x)
+    val lower = ArrayList<Offset>(); val upper = ArrayList<Offset>()
+    p.forEach { q -> while (lower.size >= 2 && cross(lower[lower.size - 2], lower.last(), q) <= 0) lower.removeAt(lower.lastIndex); lower += q }
+    p.asReversed().forEach { q -> while (upper.size >= 2 && cross(upper[upper.size - 2], upper.last(), q) <= 0) upper.removeAt(upper.lastIndex); upper += q }
+    return lower.dropLast(1) + upper.dropLast(1)
+}
+
 private val WET = Regex("(?i)banheiro|lavabo|cozinha|toalete|área de serviço|lavanderia")
 
 /** Where each light hangs in its room: a small grid, so a room with three lights has three pools. */
@@ -400,8 +437,10 @@ private fun spots(r: RoomBox, n: Int): List<Pair<Float, Float>> {
 }
 
 /**
- * A box of the model: a wall or a piece of furniture, drawn far to near. [room]: whose light warms it.
- * [screen]: a TV's glowing face. [glass]: a railing.
+ * A box of the model: a wall, or a piece of furniture with rounded corners ([radius]; a cylinder
+ * when it is half the box), drawn far to near. [room]: whose light warms it. [screen]: a glowing
+ * face (a TV, a monitor), on the +x or +y side, whichever the box is thin in. [glass]: a railing.
+ * [bush]: leaves on top (a planter). [lamp]: a shade that glows when its room is lit.
  */
 private class Block(
     val x0: Float, val y0: Float, val x1: Float, val y1: Float, val z0: Float, val z1: Float,
@@ -409,6 +448,9 @@ private class Block(
     val top: Color? = null,
     /** The house's outline: its back walls go first, its front walls last, whatever their length. */
     val order: Float? = null,
+    val radius: Float = 0f,
+    val bush: Boolean = false,
+    val lamp: Boolean = false,
 ) {
     /**
      * Painter's order: by the box's far corner. A long wall's centre would put it after a bed
@@ -422,7 +464,8 @@ private fun walls(plan: Plan, floor: Floor): List<Block> {
     val out = ArrayList<Block>()
     fun along(xa: Float, xb: Float, y: Float, h: Float, order: Float? = null) = out.add(Block(xa, y - T / 2, xb, y + T / 2, 0f, h, Wall, wall = true, room = null, glass = floor.outdoor, order = order))
     fun across(ya: Float, yb: Float, x: Float, h: Float, order: Float? = null) = out.add(Block(x - T / 2, ya, x + T / 2, yb, 0f, h, Wall, wall = true, room = null, glass = floor.outdoor, order = order))
-    // The house's own outline: tall at the back, low at the front, a railing on the terrace
+    // The house's own outline: tall at the back (the street front, with its windows), low at the
+    // front of the view, a railing on the terrace
     val back = if (floor.outdoor) RAIL else BACK
     val front = if (floor.outdoor) RAIL else FRONT
     along(0f, w, 0f, back, order = -1000f); across(0f, d, 0f, back, order = -1000f)
@@ -437,87 +480,110 @@ private fun walls(plan: Plan, floor: Floor): List<Block> {
 }
 
 /**
- * The furniture that says what a room is, sized to it, against its back wall. Recognised by name,
- * in Portuguese, the way the Tuya app names rooms; a room it does not know stays empty.
+ * The furniture that says what a room is, sized to it and soft-cornered. Recognised by name, in
+ * Portuguese, the way the Tuya app names rooms; a room it does not know stays empty. The TV hangs on
+ * the side wall (x = 0), never under a window, and the sofa faces it.
  */
 private fun furniture(r: RoomBox, outdoor: Boolean, tv: Boolean): List<Block> {
     val out = ArrayList<Block>()
     val x0 = r.x + 0.25f; val y0 = r.y + 0.25f; val x1 = r.x + r.w - 0.25f; val y1 = r.y + r.d - 0.25f
-    val cx = (x0 + x1) / 2; val w = x1 - x0; val d = y1 - y0
-    fun box(ax: Float, ay: Float, bx: Float, by: Float, z0: Float, z1: Float, c: Color, top: Color? = null) =
-        out.add(Block(ax, ay, bx, by, z0, z1, c, wall = false, room = r, top = top))
+    val cx = (x0 + x1) / 2; val cy = (y0 + y1) / 2; val w = x1 - x0; val d = y1 - y0
+    fun box(ax: Float, ay: Float, bx: Float, by: Float, z0: Float, z1: Float, c: Color, top: Color? = null, radius: Float = 0.08f, bush: Boolean = false, lamp: Boolean = false, screen: Boolean = false) =
+        out.add(Block(ax, ay, bx, by, z0, z1, c, wall = false, room = r, top = top, radius = radius, bush = bush, lamp = lamp, screen = screen))
+    fun round(x: Float, y: Float, radius: Float, z0: Float, z1: Float, c: Color, top: Color? = null, bush: Boolean = false, lamp: Boolean = false) =
+        box(x - radius, y - radius, x + radius, y + radius, z0, z1, c, top, radius = radius, bush = bush, lamp = lamp)
+    fun plant(x: Float, y: Float, size: Float = 0.28f) = round(x, y, size, 0f, 0.42f, Planter, bush = true)
     val name = r.room.lowercase()
     when {
         outdoor -> {
-            // Two loungers, a little table, planters at the corners
-            // Each lounger a seat with its back raised at the head, apart from the next
-            val lw = minOf(0.75f, w * 0.14f)
-            listOf(cx - 2.6f, cx - 1.45f).forEach { lx ->
-                box(lx, y0 + 1.15f, lx + lw, y0 + 2.7f, 0f, 0.26f, Linen)
-                box(lx, y0 + 0.75f, lx + lw, y0 + 1.15f, 0f, 0.55f, Linen)
+            // Loungers with their backs raised, a round table under the sun, planters round the edge
+            val lw = minOf(0.72f, w * 0.14f)
+            listOf(x0 + 0.4f, x0 + 0.4f + lw + 0.45f).forEach { lx ->
+                box(lx, y0 + d * 0.3f + 0.4f, lx + lw, y0 + d * 0.3f + 1.9f, 0f, 0.24f, Linen, radius = 0.14f)
+                box(lx, y0 + d * 0.3f, lx + lw, y0 + d * 0.3f + 0.42f, 0f, 0.5f, Linen, radius = 0.14f)
             }
-            box(cx - 0.05f, y0 + 1.4f, cx + 0.55f, y0 + 2f, 0f, 0.5f, Wood)
-            listOf(x0 to y0, x1 - 0.6f to y0, x1 - 0.6f to y1 - 0.6f).forEach { (px, py) -> box(px, py, px + 0.6f, py + 0.6f, 0f, 0.5f, Planter, top = Leaf) }
+            round(x1 - 1.3f, cy, 0.42f, 0f, 0.5f, Wood, top = Linen)
+            listOf(x0 + 0.3f to y0 + 0.3f, x1 - 0.3f to y0 + 0.3f, x1 - 0.3f to y1 - 0.3f, x0 + 0.3f to y1 - 0.3f, x1 - 0.3f to cy).forEach { (px, py) -> plant(px, py, 0.3f) }
         }
         tv || name.contains("estar") || name.contains("living") -> {
-            // TV against the back wall, on (you are here), a sofa facing it, a low table between
-            val tw = minOf(2f, w * 0.55f)
-            box(cx - tw / 2 - 0.2f, y0, cx + tw / 2 + 0.2f, y0 + 0.4f, 0f, 0.4f, Black)
-            if (tv) out.add(Block(cx - tw / 2, r.y + T / 2, cx + tw / 2, r.y + T / 2 + 0.06f, 0.5f, 1.15f, Black, wall = false, room = r, screen = true))
-            val sw = minOf(3f, w * 0.7f)
-            val sy = minOf(y1 - 0.9f, y0 + d * 0.62f)
-            box(cx - sw / 2, sy, cx + sw / 2, sy + 0.9f, 0f, 0.38f, Fabric)
-            box(cx - sw / 2, sy + 0.65f, cx + sw / 2, sy + 0.9f, 0.38f, 0.75f, Fabric)
-            box(cx - 0.6f, y0 + d * 0.36f, cx + 0.6f, y0 + d * 0.36f + 0.6f, 0f, 0.3f, Wood)
+            // The TV on the side wall, on: you are here. The sofa faces it across a round table on a rug
+            val tl = minOf(2f, d * 0.5f)
+            box(r.x + T / 2, cy - tl / 2 - 0.2f, r.x + T / 2 + 0.42f, cy + tl / 2 + 0.2f, 0f, 0.38f, Walnut, radius = 0.05f)
+            if (tv) box(r.x + T / 2, cy - tl / 2, r.x + T / 2 + 0.06f, cy + tl / 2, 0.52f, 1.16f, Black, radius = 0f, screen = true)
+            val sl = minOf(3f, d * 0.7f)
+            val sx = minOf(x1 - 0.95f, x0 + w * 0.62f)
+            box(sx, cy - sl / 2, sx + 0.95f, cy + sl / 2, 0f, 0.36f, Fabric, radius = 0.16f) // seat
+            box(sx + 0.68f, cy - sl / 2, sx + 0.95f, cy + sl / 2, 0.3f, 0.78f, Fabric, radius = 0.13f) // back
+            box(sx, cy - sl / 2, sx + 0.95f, cy - sl / 2 + 0.24f, 0.3f, 0.58f, Fabric, radius = 0.11f) // arms
+            box(sx, cy + sl / 2 - 0.24f, sx + 0.95f, cy + sl / 2, 0.3f, 0.58f, Fabric, radius = 0.11f)
+            listOf(-0.5f, 0.5f).forEach { o -> box(sx + 0.12f, cy + o * (sl - 0.6f) / 2 - (sl - 0.6f) / 4 + 0.02f, sx + 0.66f, cy + o * (sl - 0.6f) / 2 + (sl - 0.6f) / 4 - 0.02f, 0.36f, 0.46f, Cushion, radius = 0.14f) }
+            round((r.x + 0.5f + sx) / 2 + 0.2f, cy, 0.42f, 0f, 0.3f, Wood, top = Linen)
+            plant(x0 + 0.3f, y1 - 0.3f, 0.3f)
+            round(sx + 0.5f, y0 + 0.3f, 0.2f, 0f, 1.05f, Walnut, lamp = true) // a floor lamp by the sofa
         }
         name.contains("jantar") -> {
-            val tw = minOf(2.2f, w * 0.6f); val td = minOf(1f, d * 0.35f)
-            val ty = y0 + d / 2 - td / 2
+            // A long table with rounded chairs either side, a plant in the corner
+            val tl = minOf(2.4f, w * 0.55f); val td = minOf(1f, d * 0.4f)
+            val ty = cy - td / 2
             (0 until 3).forEach { i ->
-                val chx = cx - tw / 2 + tw * (i + 0.5f) / 3 - 0.2f
-                box(chx, ty - 0.55f, chx + 0.4f, ty - 0.15f, 0f, 0.45f, Wood)
+                val chx = cx - tl / 2 + tl * (i + 0.5f) / 3
+                round(chx, ty - 0.35f, 0.2f, 0f, 0.46f, Walnut)
             }
-            box(cx - tw / 2, ty, cx + tw / 2, ty + td, 0f, 0.55f, Wood)
+            box(cx - tl / 2, ty, cx + tl / 2, ty + td, 0f, 0.56f, Wood, top = Color(0xFF9C7B5B), radius = 0.12f)
             (0 until 3).forEach { i ->
-                val chx = cx - tw / 2 + tw * (i + 0.5f) / 3 - 0.2f
-                box(chx, ty + td + 0.15f, chx + 0.4f, ty + td + 0.55f, 0f, 0.45f, Wood)
+                val chx = cx - tl / 2 + tl * (i + 0.5f) / 3
+                round(chx, ty + td + 0.35f, 0.2f, 0f, 0.46f, Walnut)
             }
+            plant(x1 - 0.35f, y0 + 0.35f, 0.32f)
         }
         name.contains("cozinha") -> {
-            box(x0, y0, x1, y0 + 0.6f, 0f, 0.9f, Stone, top = Porcelain)
-            val iw = minOf(2f, w * 0.55f)
-            box(cx - iw / 2, y0 + d * 0.5f, cx + iw / 2, y0 + d * 0.5f + 0.8f, 0f, 0.9f, Wood, top = Porcelain)
+            // Counter along the side wall, an island with stools
+            box(r.x + T / 2, y0, r.x + T / 2 + 0.62f, y1, 0f, 0.9f, Stone, top = Porcelain, radius = 0.04f)
+            val il = minOf(2.2f, d * 0.6f)
+            box(cx - 0.45f, cy - il / 2, cx + 0.45f, cy + il / 2, 0f, 0.9f, Wood, top = Porcelain, radius = 0.1f)
+            listOf(-0.6f, 0f, 0.6f).forEach { o -> round(cx + 0.78f, cy + o, 0.17f, 0f, 0.62f, Graphite) }
         }
         name.contains("quarto") || name.contains("suíte") || name.contains("suite") || name.contains("ninho") || name.contains("principal") -> {
-            val bw = if (w < 2.4f) minOf(1f, w * 0.7f) else minOf(1.8f, w * 0.55f)
-            val bl = minOf(2.1f, d * 0.6f)
-            box(cx - bw / 2 - 0.05f, y0, cx + bw / 2 + 0.05f, y0 + 0.12f, 0f, 0.85f, Wood) // headboard
-            box(cx - bw / 2, y0 + 0.12f, cx + bw / 2, y0 + 0.12f + bl, 0f, 0.45f, Fabric, top = Linen)
-            box(cx - bw / 2 + 0.12f, y0 + 0.2f, cx + bw / 2 - 0.12f, y0 + 0.55f, 0.45f, 0.58f, Porcelain)
-            if (w - bw > 1.1f) {
-                box(cx - bw / 2 - 0.55f, y0, cx - bw / 2 - 0.1f, y0 + 0.45f, 0f, 0.5f, Wood)
-                box(cx + bw / 2 + 0.1f, y0, cx + bw / 2 + 0.55f, y0 + 0.45f, 0f, 0.5f, Wood)
+            // A bed against the side wall: headboard, duvet, two pillows; bedside tables with lamps
+            val bw = if (d < 2.6f) minOf(1.1f, d * 0.6f) else minOf(1.8f, d * 0.55f)
+            val bl = minOf(2.1f, w * 0.6f)
+            box(r.x + T / 2, cy - bw / 2 - 0.05f, r.x + T / 2 + 0.12f, cy + bw / 2 + 0.05f, 0f, 0.92f, Walnut, radius = 0.05f)
+            box(r.x + T / 2 + 0.12f, cy - bw / 2, r.x + T / 2 + 0.12f + bl, cy + bw / 2, 0f, 0.42f, Linen, radius = 0.12f)
+            box(r.x + T / 2 + 0.7f, cy - bw / 2 + 0.02f, r.x + T / 2 + 0.12f + bl, cy + bw / 2 - 0.02f, 0.42f, 0.5f, Duvet, radius = 0.12f)
+            val pw = if (bw > 1.3f) 2 else 1
+            (0 until pw).forEach { i ->
+                val py0 = cy - bw / 2 + 0.1f + i * (bw - 0.2f) / pw
+                box(r.x + T / 2 + 0.2f, py0 + 0.04f, r.x + T / 2 + 0.58f, py0 + (bw - 0.2f) / pw - 0.04f, 0.42f, 0.56f, Porcelain, radius = 0.12f)
+            }
+            if (d - bw > 1.2f) listOf(cy - bw / 2 - 0.4f, cy + bw / 2 + 0.4f).forEach { ny ->
+                box(r.x + T / 2 + 0.05f, ny - 0.22f, r.x + T / 2 + 0.5f, ny + 0.22f, 0f, 0.5f, Wood, radius = 0.06f)
+                round(r.x + T / 2 + 0.28f, ny, 0.11f, 0.5f, 0.78f, Linen, lamp = true)
             }
         }
         name.contains("escritório") || name.contains("escritorio") -> {
-            box(x0, y0, x0 + 0.32f, y0 + minOf(1.8f, d * 0.45f), 0f, 0.95f, Wood) // bookshelf, under the walls' height
-            val dw = minOf(1.6f, w * 0.6f)
-            box(cx - dw / 2 + 0.2f, y0, cx + dw / 2 + 0.2f, y0 + 0.7f, 0f, 0.75f, Wood, top = Linen)
-            box(cx + 0.05f, y0 + 0.95f, cx + 0.42f, y0 + 1.32f, 0f, 0.42f, Color(0xFF3A3D44))
+            // A desk under the window with a monitor that is on, a round chair, a shelf, a plant
+            val dw = minOf(1.8f, w * 0.6f)
+            box(cx - dw / 2, y0, cx + dw / 2, y0 + 0.7f, 0f, 0.74f, Wood, top = Linen, radius = 0.06f)
+            box(cx - 0.42f, y0 + 0.12f, cx + 0.42f, y0 + 0.18f, 0.8f, 1.22f, Black, radius = 0f, screen = true)
+            round(cx, y0 + 1.25f, 0.24f, 0f, 0.48f, Graphite)
+            box(x1 - 0.3f, y0 + 1f, x1, minOf(y1, y0 + 2.6f), 0f, 0.95f, Walnut, radius = 0.04f)
+            plant(x0 + 0.3f, y1 - 0.3f)
         }
         name.contains("banheiro") || name.contains("lavabo") || name.contains("toalete") -> {
-            box(x0, y0, x0 + minOf(1.3f, w * 0.6f), y0 + 0.5f, 0f, 0.85f, Porcelain)
-            box(x1 - 0.45f, y0, x1, y0 + 0.65f, 0f, 0.42f, Porcelain)
+            box(r.x + T / 2, y0, r.x + T / 2 + 0.55f, y0 + minOf(1.3f, d * 0.55f), 0f, 0.86f, Porcelain, radius = 0.1f)
+            box(x1 - 0.5f, y1 - 0.68f, x1, y1, 0f, 0.42f, Porcelain, radius = 0.22f)
+            if (w > 3f) box(x1 - 1.3f, y0, x1, y0 + 1.1f, 0f, 0.06f, Color(0xFF8FB4C8), radius = 0.04f) // the shower's tray
         }
         name.contains("corredor") || name.contains("hall") || name.contains("escada") -> {
-            // The stairs, rising towards the back
+            // The stairs, rising towards the street side, with a plant at their foot
             val steps = 8
-            val sw = minOf(1.1f, w * 0.7f)
-            val run = minOf(d * 0.75f, 3f) / steps
+            val sw = minOf(1.1f, d * 0.6f)
+            val run = minOf(w * 0.75f, 3.2f) / steps
             (0 until steps).forEach { i ->
-                val sy = y1 - (i + 1) * run
-                box(cx - sw / 2, sy, cx + sw / 2, sy + run, 0f, (i + 1) * 0.15f, Stone)
+                val sx = x1 - (i + 1) * run
+                box(sx, cy - sw / 2, sx + run, cy + sw / 2, 0f, (i + 1) * 0.15f, Stone, radius = 0f)
             }
+            plant(x1 - 0.25f, y1 - 0.25f, 0.22f)
         }
     }
     return out
@@ -567,8 +633,8 @@ private fun DrawScope.drawFloor(
     }
     drawPath(iso.poly(Triple(0f, d, 0f), Triple(w, d, 0f), Triple(w, d, -SLAB), Triple(0f, d, -SLAB)), SlabLeft, alpha = settle)
     drawPath(iso.poly(Triple(w, 0f, 0f), Triple(w, d, 0f), Triple(w, d, -SLAB), Triple(w, 0f, -SLAB)), SlabRight, alpha = settle)
-    drawLine(Color.White.copy(alpha = 0.08f * settle), iso.p(0f, d), iso.p(w, d), 1f)
-    drawLine(Color.White.copy(alpha = 0.06f * settle), iso.p(w, 0f), iso.p(w, d), 1f)
+    drawLine(Color.White.copy(alpha = 0.1f * settle), iso.p(0f, d), iso.p(w, d), 1.2f)
+    drawLine(Color.White.copy(alpha = 0.07f * settle), iso.p(w, 0f), iso.p(w, d), 1.2f)
 
     // Floors and their finish: wood in the bedrooms, tiles where it gets wet, a deck outside
     floor.rooms.forEach { r ->
@@ -579,8 +645,8 @@ private fun DrawScope.drawFloor(
         drawPath(shape, lerp(base, Color(0xFF3D3122), warmth(r)), alpha = settle)
         val line = Color.White.copy(alpha = (if (floor.outdoor) 0.05f else 0.035f) * settle)
         if (floor.outdoor || bedroom) {
-            var y = r.y + if (floor.outdoor) 0.5f else 0.35f
-            while (y < r.y + r.d) { drawLine(line, iso.p(r.x, y), iso.p(r.x + r.w, y), 1f); y += if (floor.outdoor) 0.5f else 0.35f }
+            var x = r.x + if (floor.outdoor) 0.5f else 0.35f
+            while (x < r.x + r.w) { drawLine(line, iso.p(x, r.y), iso.p(x, r.y + r.d), 1f); x += if (floor.outdoor) 0.5f else 0.35f }
         } else if (wet) {
             var x = r.x + 0.6f
             while (x < r.x + r.w) { drawLine(line, iso.p(x, r.y), iso.p(x, r.y + r.d), 1f); x += 0.6f }
@@ -588,26 +654,23 @@ private fun DrawScope.drawFloor(
             while (y < r.y + r.d) { drawLine(line, iso.p(r.x, y), iso.p(r.x + r.w, y), 1f); y += 0.6f }
         }
         if (floor.open) drawPath(shape, Color.White.copy(alpha = 0.05f * settle), style = Stroke(1f))
-        // A rug under the living room's table
+        // A soft rug under the living room's table
         if (!floor.outdoor && (r.room == tvRoom || r.room.contains("estar", true))) {
-            val cx = r.x + r.w / 2; val rw = minOf(2.6f, r.w * 0.6f)
-            drawPath(iso.rect(cx - rw / 2, r.y + r.d * 0.3f, cx + rw / 2, r.y + r.d * 0.3f + r.d * 0.42f), Color(0xFF3B3A44).copy(alpha = 0.8f * settle))
+            val cy = r.y + r.d / 2; val rl = minOf(3f, r.d * 0.62f)
+            drawPath(path(rounded(r.x + 0.8f, cy - rl / 2, r.x + r.w * 0.78f, cy + rl / 2, 0.35f).map { (x, y) -> iso.p(x, y) }), Rug.copy(alpha = 0.9f * settle))
         }
     }
 
     val wallsUp = stage(build, 0.15f, 0.55f)
-    // Sun or moon through the back windows, on the floor (before anything stands on it)
-    val windows = if (floor.outdoor) emptyList() else floor.rooms.flatMap { r ->
-        buildList {
-            if (r.y < 0.01f && r.w >= 1.8f) add(Triple(true, r.x + r.w / 2, minOf(1.6f, r.w * 0.45f)))
-            if (r.x < 0.01f && r.d >= 1.8f) add(Triple(false, r.y + r.d / 2, minOf(1.6f, r.d * 0.45f)))
-        }
+    // Windows on the street side (y = 0): the sun or the moon through them, on the floor, before
+    // anything stands on it
+    val windows = if (floor.outdoor) emptyList() else floor.rooms.filter { it.y < 0.01f }.flatMap { r ->
+        val n = if (r.w >= 4.5f) 2 else 1
+        (0 until n).map { i -> r.x + r.w * (i + 0.5f) / n to minOf(1.5f, r.w * 0.42f / n * 1.6f) }
     }
-    windows.forEach { (alongX, mid, len) ->
+    windows.forEach { (mid, len) ->
         val a = mid - len / 2; val b = mid + len / 2
-        val patch = if (alongX) iso.poly(Triple(a, T / 2, 0f), Triple(b, T / 2, 0f), Triple(b + 0.8f, 1.9f, 0f), Triple(a + 0.8f, 1.9f, 0f))
-        else iso.poly(Triple(T / 2, a, 0f), Triple(T / 2, b, 0f), Triple(1.9f, b + 0.8f, 0f), Triple(1.9f, a + 0.8f, 0f))
-        drawPath(patch, sky.sun.copy(alpha = sky.sun.alpha * wallsUp))
+        drawPath(iso.poly(Triple(a, T / 2, 0f), Triple(b, T / 2, 0f), Triple(b + 0.8f, 1.9f, 0f), Triple(a + 0.8f, 1.9f, 0f)), sky.sun.copy(alpha = sky.sun.alpha * wallsUp))
     }
     // Shadow where the floor meets the back walls
     val ao = Color.Black.copy(alpha = 0.32f * wallsUp)
@@ -631,10 +694,10 @@ private fun DrawScope.drawFloor(
     // The TV's own light on the floor in front of it, bluish
     val tvBox = floor.rooms.firstOrNull { it.room == tvRoom }
     if (tvBox != null && !floor.outdoor) {
-        val c = iso.p(tvBox.x + tvBox.w / 2, tvBox.y + 1.1f)
-        val radius = 1.6f * COS * iso.s
+        val c = iso.p(tvBox.x + 1.1f, tvBox.y + tvBox.d / 2)
+        val radius = 1.7f * COS * iso.s
         scale(1f, SIN / COS, pivot = c) {
-            drawCircle(Brush.radialGradient(listOf(Color(0xFF8FB8FF).copy(alpha = 0.22f * wallsUp), Color.Transparent), c, radius), radius, c)
+            drawCircle(Brush.radialGradient(listOf(Color(0xFF8FB8FF).copy(alpha = 0.24f * wallsUp), Color.Transparent), c, radius), radius, c)
         }
     }
     // The chosen room's floor brightens a little; its tag (below) turns white
@@ -672,31 +735,62 @@ private fun DrawScope.drawFloor(
         val heatY = if (b.wall) warmth(roomAt((x0 + x1) / 2, y1 + 0.3f)) else warmth(b.room)
         val heatX = if (b.wall) warmth(roomAt(x1 + 0.3f, (y0 + y1) / 2)) else warmth(b.room)
         val base = washed(b.color)
-        val faceY = lerp(lerp(base, Color.Black, 0.22f), Warm, heatY * (if (b.wall) 0.42f else 0.25f))
+        val faceY = lerp(lerp(base, Color.Black, 0.2f), Warm, heatY * (if (b.wall) 0.42f else 0.25f))
         val faceX = lerp(lerp(base, Color.Black, 0.36f), Warm, heatX * (if (b.wall) 0.36f else 0.2f))
-        val top = lerp(washed(b.top ?: lerp(b.color, Color.White, 0.08f)), Warm, warmth(b.room ?: roomAt((x0 + x1) / 2, (y0 + y1) / 2)) * 0.18f)
-        val frontFace = iso.poly(Triple(x0, y1, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x0, y1, z1))
+        val roomHeat = warmth(b.room ?: roomAt((x0 + x1) / 2, (y0 + y1) / 2))
+        val top = lerp(washed(b.top ?: lerp(b.color, Color.White, 0.1f)), Warm, roomHeat * 0.18f)
         if (b.screen) {
-            // The TV is on: you are here
-            drawPath(frontFace, Brush.linearGradient(listOf(Color(0xFFA9C8FF), Color(0xFF6E6BF2)), iso.p(x0, y1, z1), iso.p(x1, y1, z0)))
-            drawPath(frontFace, Color.White.copy(alpha = 0.6f), style = Stroke(1f))
+            // A glowing face: the TV (you are here) or a monitor, on the side the box is thin in
+            val face = if (x1 - x0 < y1 - y0) iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1))
+            else iso.poly(Triple(x0, y1, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x0, y1, z1))
+            drawPath(face, Brush.linearGradient(listOf(Color(0xFFB5CFFF), Color(0xFF6E6BF2)), iso.p(x0, y0, z1), iso.p(x1, y1, z0)))
+            drawPath(face, Color.White.copy(alpha = 0.55f), style = Stroke(1f))
             return@forEach
         }
-        drawPath(frontFace, faceY)
-        drawPath(iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1)), faceX)
+        if (b.radius > 0.001f) {
+            // A soft piece: the rounded outline extruded. Its silhouette is the hull of the top and
+            // bottom outlines, shaded left to right like light on a curved side; then its top
+            val outline = rounded(x0, y0, x1, y1, b.radius)
+            val topPts = outline.map { (x, y) -> iso.p(x, y, z1) }
+            val sides = hull(outline.map { (x, y) -> iso.p(x, y, z0) } + topPts)
+            val left = sides.minOf { it.x }; val right = sides.maxOf { it.x }
+            drawPath(path(sides), Brush.horizontalGradient(listOf(faceY, lerp(faceY, faceX, 0.5f), faceX), left, right))
+            drawPath(path(topPts), top)
+            drawPath(path(topPts), Color.White.copy(alpha = 0.1f), style = Stroke(1f))
+            if (b.bush) {
+                // Leaves: a few overlapping discs above the pot
+                val c = iso.p((x0 + x1) / 2, (y0 + y1) / 2, z1)
+                val rr = (x1 - x0) * 0.62f * iso.s * rise
+                drawCircle(lerp(Leaf, Color.Black, 0.2f), rr * 1.05f, c + Offset(0f, -rr * 0.55f))
+                drawCircle(Leaf, rr * 0.85f, c + Offset(-rr * 0.45f, -rr * 0.95f))
+                drawCircle(LeafLight, rr * 0.7f, c + Offset(rr * 0.35f, -rr * 1.25f))
+            }
+            if (b.lamp) {
+                // A shade that glows when its room is lit
+                val c = iso.p((x0 + x1) / 2, (y0 + y1) / 2, z1)
+                val rr = (x1 - x0) * 0.9f * iso.s
+                if (roomHeat > 0.01f) drawCircle(Brush.radialGradient(listOf(Bulb.copy(alpha = 0.55f * roomHeat), Color.Transparent), c, rr * 2.6f), rr * 2.6f, c)
+                drawCircle(lerp(Linen, Bulb, roomHeat), rr * 0.75f, c)
+            }
+            return@forEach
+        }
+        // A wall: its faces a little darker at the foot, and a highlight along its top edge
+        val frontFace = iso.poly(Triple(x0, y1, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x0, y1, z1))
+        drawPath(frontFace, Brush.verticalGradient(listOf(faceY, lerp(faceY, Color.Black, 0.25f)), iso.p(x0, y1, z1).y, iso.p(x0, y1, z0).y))
+        drawPath(iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1)), Brush.verticalGradient(listOf(faceX, lerp(faceX, Color.Black, 0.25f)), iso.p(x1, y0, z1).y, iso.p(x1, y0, z0).y))
         drawPath(iso.rect(x0, y0, x1, y1, z1), top)
-        // Windows on the back walls, their glass taking the hour
-        if (b.wall && z1 > 0.9f && (y0 < 0f || x0 < 0f)) {
-            windows.forEach { (alongX, mid, len) ->
+        drawLine(Color.White.copy(alpha = 0.16f), iso.p(x0, y1, z1), iso.p(x1, y1, z1), 1f)
+        drawLine(Color.White.copy(alpha = 0.1f), iso.p(x1, y0, z1), iso.p(x1, y1, z1), 1f)
+        // Windows on the street wall, their glass taking the hour, with a sill and a mullion
+        if (b.order == -1000f && x1 - x0 > y1 - y0) {
+            windows.forEach { (mid, len) ->
                 val a = mid - len / 2; val c = mid + len / 2
-                val zz0 = 0.5f * rise; val zz1 = 1.18f * rise
-                val pane = when {
-                    alongX && y0 < 0f && x1 - x0 > y1 - y0 -> iso.poly(Triple(a, y1, zz0), Triple(c, y1, zz0), Triple(c, y1, zz1), Triple(a, y1, zz1))
-                    !alongX && x0 < 0f && y1 - y0 > x1 - x0 -> iso.poly(Triple(x1, a, zz0), Triple(x1, c, zz0), Triple(x1, c, zz1), Triple(x1, a, zz1))
-                    else -> null
-                } ?: return@forEach
-                drawPath(pane, sky.glass)
-                drawPath(pane, Color.White.copy(alpha = 0.18f), style = Stroke(1.2f))
+                val zz0 = 0.48f * rise; val zz1 = 1.2f * rise
+                val pane = iso.poly(Triple(a, y1, zz0), Triple(c, y1, zz0), Triple(c, y1, zz1), Triple(a, y1, zz1))
+                drawPath(pane, Brush.verticalGradient(listOf(lerp(sky.glass, Color.White, 0.15f), sky.glass), iso.p(a, y1, zz1).y, iso.p(a, y1, zz0).y))
+                drawPath(pane, Color.White.copy(alpha = 0.22f), style = Stroke(1.2f))
+                drawLine(Color.White.copy(alpha = 0.18f), iso.p(mid, y1, zz0), iso.p(mid, y1, zz1), 1f)
+                drawLine(Color.White.copy(alpha = 0.3f), iso.p(a - 0.05f, y1 + 0.05f, zz0), iso.p(c + 0.05f, y1 + 0.05f, zz0), 2f)
             }
         }
     }
@@ -741,7 +835,6 @@ private fun DrawScope.drawFloor(
         tag(label, iso.p(r.x + r.w / 2, r.y + r.d / 2, 1.45f), if (picked) Color.White.copy(alpha = if (focused) 1f else 0.7f) else Color(0xE0141518))
     }
     if (tvBox != null && !floor.outdoor) {
-        tag(buildAnnotatedString { withStyle(SpanStyle(color = Color(0xFFBFD3FF))) { append("● Você está aqui") } }, iso.p(tvBox.x + tvBox.w / 2, tvBox.y + T, 1.75f), Color(0xE0141A2B))
+        tag(buildAnnotatedString { withStyle(SpanStyle(color = Color(0xFFBFD3FF))) { append("● Você está aqui") } }, iso.p(tvBox.x + 0.2f, tvBox.y + tvBox.d / 2, 1.7f), Color(0xE0141A2B))
     }
 }
-
