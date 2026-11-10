@@ -40,6 +40,8 @@ class Cover(private val service: AccessibilityService) {
         if (view.keep != keep) { view.keep = keep; view.invalidate() }
     }
 
+    val showing: Boolean get() = shade != null
+
     /** Invisible for a moment (still attached), so one captured frame shows the whole screen. */
     fun peek(on: Boolean) {
         shade?.let { it.animate().cancel(); it.alpha = if (on) 0f else 1f }
@@ -67,6 +69,8 @@ class Cover(private val service: AccessibilityService) {
             // In the middle of the screen on purpose: outside the bands the OCR reads
             paint.textSize = height * 0.05f
             canvas.drawText("Intervalo", width / 2f, height / 2f, paint)
+            paint.textSize = height * 0.025f
+            canvas.drawText("Qualquer tecla mostra a tela", width / 2f, height * 0.56f, paint)
         }
     }
 

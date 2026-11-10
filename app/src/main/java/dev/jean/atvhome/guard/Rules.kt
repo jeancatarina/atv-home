@@ -9,7 +9,8 @@ import kotlinx.serialization.json.Json
 data class Rules(
     val version: Int = 1,
     @SerialName("max_label_chars") val maxLabelChars: Int = 40,
-    @SerialName("max_player_labels") val maxPlayerLabels: Int = 8,
+    /** A bare "Anúncio" counts only on a screen with this few texts: menus show "Ad" on sponsored cards. */
+    @SerialName("max_player_labels") val maxPlayerLabels: Int = 4,
     @SerialName("countdown_rule") val countdownRule: Boolean = true,
     @SerialName("tap_to_skip") val tapToSkip: Boolean = true,
     /** Kill switch for the screen reader (OCR), the only costly one. */

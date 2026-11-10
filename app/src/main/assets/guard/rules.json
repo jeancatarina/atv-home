@@ -1,7 +1,7 @@
 {
   "version": 1,
   "max_label_chars": 40,
-  "max_player_labels": 8,
+  "max_player_labels": 4,
   "countdown_rule": true,
   "tap_to_skip": true,
   "screen_reader": true,

@@ -28,6 +28,13 @@ class AdSignalsTest {
         assertEquals(Verdict.None, judge(l("Anúncio"), *menu.toTypedArray()))
     }
 
+    @Test fun aSponsoredCardInARowOfCardsIsNotABreak() {
+        val row = listOf("Trailer oficial", "Canal Exemplo", "1,2 mi de visualizações", "Lançamentos").map { l(it, 0.3f, 0.85f) }
+        assertEquals(Verdict.None, judge(l("Ad", 0.1f, 0.8f), *row.toTypedArray()))
+        // A real player badge carries its countdown, so it still counts there
+        assertTrue(judge(l("Ad · 0:15", 0.1f, 0.8f), *row.toTypedArray()) is Verdict.Ad)
+    }
+
     @Test fun wordsThatOnlyLookLikeAdsAreNot() {
         for (text in listOf("Ad Astra", "Adicionar à lista", "Anunciação")) assertEquals(text, Verdict.None, judge(l(text)))
     }

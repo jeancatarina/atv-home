@@ -22,7 +22,7 @@ palavras do `rules.json` são o ponto de partida, não o texto real de cada app.
 | Leitor 2 | Em `ui.xml`: há nó com o texto do selo ou do botão de pular? `text`, `content-desc`, `resource-id`, `bounds` |
 | Leitor 3 | `screen.png` mostra o selo/contagem ou sai preto? Texto exato, idioma, canto (% da largura e altura) |
 | Contagem | Entre `screen.png` e `screen-2s.png` o número caiu 2? |
-| Espelho | O `screenrecord` engasgou o filme? A gravação mostra a interface? |
+| Espelho | O `screenrecord` engasgou o filme, baixou a qualidade ou fez o app parar com erro de proteção? A gravação mostra a interface? Se o app parar, marque-o: a guarda não pode usar o leitor 3 nele |
 | Pular | Só YouTube: `adb shell input tap <x> <y>` no "Pular" pula? E `adb shell input keyevent 23`? |
 | Mudo | `adb shell input keyevent 164` tira o som de fato (soundbar/eARC)? |
 

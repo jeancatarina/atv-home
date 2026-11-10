@@ -177,14 +177,20 @@ O que acontece em cada caso:
 - **É pulado**: quando o app mostra um botão "Pular".
 - **Fica mudo e coberto** ("Intervalo" na tela), e volta sozinho ao filme: anúncio costurado no
   próprio vídeo (Netflix, Prime Video, Disney+, Max nos planos com anúncios). Entra até uns 4 s depois
-  de começar e sai até uns 3 s depois de acabar; a cada 5 s a cobertura pisca por um instante.
+  de começar e sai até uns 3 s depois de acabar. **Qualquer tecla** tira a cobertura por 8 s (para
+  pausar, abrir os controles ou sair vendo o que faz); anúncio pausado também não fica coberto. Nos
+  primeiros 20 s, em apps que só a tela revela, a cobertura pisca a cada 5 s para achar um botão "Pular".
 - **Não tem jeito**: canal ao vivo, e app que não mostra o intervalo a nenhum dos três leitores
   (sessão de mídia, árvore de acessibilidade, OCR das bordas da tela).
 
 O que foi medido em cada app fica em [docs/anuncios/SINAIS.md](docs/anuncios/SINAIS.md).
 
-- **TV sem internet** depois de ligar: desligue na Central, ou
-  `adb shell settings put global private_dns_mode opportunistic`.
+- **O filtro de DNS nunca deixa a TV sem internet**: ao ligar, o Início confere se a rede ainda
+  funciona por ele; se não, volta ao DNS da TV e fica só a guarda. Ao voltar para a Home faz a mesma
+  conferência e avisa se precisou voltar. Desligar e ligar de novo na Central tenta outra vez. Último
+  recurso: `adb shell settings put global private_dns_mode opportunistic`.
+- Na primeira vez a TV pode perguntar se o Início pode capturar a tela (o leitor 3). Com o
+  `tools/ad-guard-setup.sh` ela não pergunta; recusando, o Início não pergunta mais sozinho, só ao ligar na Central.
 - **TV ficou muda** depois de um travamento: a tecla de volume do controle.
 - **Outro idioma**: uma chave nova em `ad_words` e `skip_words` de `app/src/main/assets/guard/rules.json`,
   um caso novo em `AdSignalsTest`, reinstalar. Fora das palavras, a contagem regressiva no canto vale em qualquer idioma latino.

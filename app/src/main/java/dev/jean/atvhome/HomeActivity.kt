@@ -13,6 +13,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import dev.jean.atvhome.data.AdShield
 import dev.jean.atvhome.guard.ScreenService
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
@@ -184,11 +185,15 @@ class HomeActivity : ComponentActivity() {
      */
     private val capture = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val data = result.data
-        if (result.resultCode == RESULT_OK && data != null) ScreenService.start(this, result.resultCode, data)
+        val granted = result.resultCode == RESULT_OK && data != null
+        AdShield.rememberCapture(this, granted)
+        if (granted) ScreenService.start(this, result.resultCode, data!!)
     }
-    /** Once per launcher process on its own (a refusal is not asked again); the Central asks anew. */
+    /** Asked on its own once per launcher process (after a reboot), never again after a "no". */
     private var captureAsked = false
+    private var healing: Job? = null
 
+    /** From the Central's switch: the person asked, so a past "no" does not count. */
     private fun askCapture() {
         captureAsked = true
         if (ScreenService.running(this)) return
@@ -200,7 +205,14 @@ class HomeActivity : ComponentActivity() {
         super.onStart()
         // The guard steps aside while Home is in front: browsing pays nothing for it
         lifecycleScope.launch { AdShield.launcherInFront(this@HomeActivity, true) }
-        if (!captureAsked && AdShield.isOn(this)) askCapture()
+        if (!AdShield.isOn(this)) return
+        if (!captureAsked && !AdShield.captureRefused(this)) askCapture()
+        // A resolver that stopped answering must not leave the TV without internet
+        if (healing?.isActive != true) healing = lifecycleScope.launch {
+            if (AdShield.heal(this@HomeActivity)) {
+                Toast.makeText(this@HomeActivity, "O filtro de DNS parou de responder: a TV voltou ao DNS normal", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     /** Another app took the screen: a Social game freezes instead of running its clocks behind the app. */

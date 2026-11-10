@@ -46,6 +46,8 @@ fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit, onAdShieldOn: () ->
     val first = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     var shield by remember { mutableStateOf(AdShield.isOn(context)) }
+    // Switching on checks that the TV still reaches the internet, which takes a few seconds
+    var switching by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))) {
         Column(
@@ -71,12 +73,27 @@ fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit, onAdShieldOn: () ->
                 }
                 item {
                     // Stays open on purpose: the label is the feedback
-                    PillButton(if (shield) "Sem anúncios: ligado" else "Sem anúncios: desligado", {
-                        if (!AdShield.allowed(context)) toast("Falta liberar pelo computador: tools/ad-guard-setup.sh")
-                        else scope.launch {
-                            val next = !shield
-                            if (!AdShield.set(context, next)) toast("Esta TV não deixou mudar o DNS")
-                            else { shield = next; if (next) onAdShieldOn() }
+                    val label = when {
+                        switching -> "Sem anúncios: conferindo…"
+                        shield -> "Sem anúncios: ligado"
+                        else -> "Sem anúncios: desligado"
+                    }
+                    PillButton(label, {
+                        if (switching) return@PillButton
+                        if (!AdShield.allowed(context)) { toast("Falta liberar pelo computador: tools/ad-guard-setup.sh"); return@PillButton }
+                        val next = !shield
+                        switching = true
+                        scope.launch {
+                            when (AdShield.set(context, next)) {
+                                AdShield.Outcome.REFUSED -> toast("Esta TV não deixou mudar as configurações")
+                                AdShield.Outcome.NO_DNS -> {
+                                    shield = next
+                                    toast("O filtro de DNS não respondeu: ficou só a guarda de intervalos")
+                                }
+                                AdShield.Outcome.DONE -> shield = next
+                            }
+                            switching = false
+                            if (next && shield) onAdShieldOn()
                         }
                     }, modifier = Modifier.fillMaxWidth(), selected = shield)
                 }

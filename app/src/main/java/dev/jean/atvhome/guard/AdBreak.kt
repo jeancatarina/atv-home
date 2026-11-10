@@ -17,6 +17,9 @@ class AdBreak {
 
     val inBreak: Boolean get() = since != 0L
 
+    /** When the open break started; 0 when there is none. */
+    val startedAt: Long get() = since
+
     fun on(verdict: Verdict, now: Long): Decision {
         if (now < blockedUntil) return Decision(false)
         if (verdict == Verdict.None) { positives = 0; negatives++ } else { negatives = 0; positives++ }

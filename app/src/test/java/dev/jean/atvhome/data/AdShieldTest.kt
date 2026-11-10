@@ -3,15 +3,16 @@ package dev.jean.atvhome.data
 import android.Manifest
 import android.app.Application
 import android.provider.Settings
-import org.robolectric.RuntimeEnvironment
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
+import org.robolectric.RuntimeEnvironment
 import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
 
@@ -22,20 +23,23 @@ class AdShieldTest {
     private val app = RuntimeEnvironment.getApplication()
     private val cr get() = app.contentResolver
     private val guard = "dev.jean.atvhome/dev.jean.atvhome.guard.AdGuardService"
+    private var dnsAnswers = true
 
     private fun mode() = Settings.Global.getString(cr, "private_dns_mode")
     private fun services() = Settings.Secure.getString(cr, "enabled_accessibility_services").orEmpty()
     private fun allow() = shadowOf(app).grantPermissions(Manifest.permission.WRITE_SECURE_SETTINGS)
 
+    @Before fun fakeTheNetwork() { AdShield.dnsCheck = { dnsAnswers } }
+
     @Test fun withoutThePermissionNothingChanges() = runBlocking {
-        assertFalse(AdShield.set(app, true))
+        assertEquals(AdShield.Outcome.REFUSED, AdShield.set(app, true))
         assertNull(mode())
         assertFalse(AdShield.isOn(app))
     }
 
     @Test fun onPointsTheDnsAndWaitsForAnotherAppToListTheGuard() = runBlocking {
         allow()
-        assertTrue(AdShield.set(app, true))
+        assertEquals(AdShield.Outcome.DONE, AdShield.set(app, true))
         assertEquals("hostname", mode())
         assertEquals("dns.adguard-dns.com", Settings.Global.getString(cr, "private_dns_specifier"))
         assertTrue(AdShield.isOn(app))
@@ -70,5 +74,37 @@ class AdShieldTest {
         allow()
         AdShield.launcherInFront(app, false)
         assertEquals("", services())
+    }
+
+    @Test fun aResolverThatDoesNotAnswerNeverLeavesTheTvOffline() = runBlocking {
+        allow()
+        Settings.Global.putString(cr, "private_dns_mode", "opportunistic")
+        dnsAnswers = false
+        assertEquals(AdShield.Outcome.NO_DNS, AdShield.set(app, true))
+        assertEquals("opportunistic", mode())
+        // The guard still works without the DNS part
+        assertTrue(AdShield.isOn(app))
+        AdShield.launcherInFront(app, false)
+        assertTrue(guard in services())
+    }
+
+    @Test fun backOnHomeAResolverThatStoppedAnsweringStepsAside() = runBlocking {
+        allow()
+        Settings.Global.putString(cr, "private_dns_mode", "opportunistic")
+        AdShield.set(app, true)
+        assertFalse(AdShield.heal(app))
+        assertEquals("hostname", mode())
+        dnsAnswers = false
+        assertTrue(AdShield.heal(app))
+        assertEquals("opportunistic", mode())
+        assertFalse(AdShield.heal(app)) // already back: nothing more to do
+    }
+
+    @Test fun aRefusedCaptureIsRemembered() {
+        assertFalse(AdShield.captureRefused(app))
+        AdShield.rememberCapture(app, granted = false)
+        assertTrue(AdShield.captureRefused(app))
+        AdShield.rememberCapture(app, granted = true)
+        assertFalse(AdShield.captureRefused(app))
     }
 }
