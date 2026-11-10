@@ -81,5 +81,9 @@ class MapShotsTest {
         rule.waitForIdle()
         rule.onNodeWithText("Quarto principal").assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-model-suite.png")
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
+        rule.mainClock.advanceTimeBy(600)
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage("build/shots/casa-model-terraco.png")
     }
 }

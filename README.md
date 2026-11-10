@@ -201,9 +201,11 @@ Como as teclas viram luzes:
   um ponto, e os pontos valem metade a cada 30 dias. A fileira só se reordena quando a Home volta à
   frente, nunca embaixo do foco.
 
-**Maquete**: em **Ver a casa**, o botão **Maquete** mostra a casa em 3D isométrico, os andares
-empilhados. O andar escolhido se abre (os de cima sobem e somem), cada cômodo acende em âmbar conforme
-as luzes dele e tem um ponto por luz. **▲ ▼** trocam de andar, **◀ ▶** de cômodo, **OK** apaga ou acende
+**Maquete**: em **Ver a casa**, o botão **Maquete** mostra um andar por vez como uma maquete de
+arquiteto em 3D isométrico, com as paredes cortadas (altas ao fundo, à meia altura entre cômodos,
+baixas na frente). Cada luz acesa faz uma poça de luz quente no piso e na parede; a cozinha e os
+banheiros têm lajota, e o terraço (`"outdoor": true`) é um deck com guarda-corpo de vidro. Trocar de
+andar desliza o andar, e a pilha no canto mostra em qual você está. **▲ ▼** trocam de andar, **◀ ▶** de cômodo, **OK** apaga ou acende
 o cômodo inteiro, e ao lado ficam as luzes do cômodo. A planta é sua: copie
 `tools/casa-plan.example.json` para `casa-plan.json` (fora do git, como as chaves), ajuste os andares e
 os retângulos dos cômodos (os nomes iguais aos do app Tuya) e rode `tools/tuya-setup.sh`. Sem planta, a

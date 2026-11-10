@@ -30,9 +30,12 @@ data class Plan(val width: Float, val depth: Float, val floors: List<Floor>) {
     }
 }
 
-/** One floor. [open]: rooms without walls between them (an integrated living and kitchen). */
+/**
+ * One floor. [open]: rooms without walls between them (an integrated living and kitchen).
+ * [outdoor]: a terrace: a deck with a glass railing instead of walls.
+ */
 @Serializable
-data class Floor(val name: String, val rooms: List<RoomBox>, val open: Boolean = false)
+data class Floor(val name: String, val rooms: List<RoomBox>, val open: Boolean = false, val outdoor: Boolean = false)
 
 /** A room's rectangle on the footprint: [x] along the width, [y] along the depth, from the back corner. */
 @Serializable
