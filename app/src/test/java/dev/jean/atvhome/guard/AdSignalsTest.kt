@@ -14,7 +14,7 @@ class AdSignalsTest {
         signals.judge(Reading(Source.SCREEN, labels = labels.toList()), countdown)
 
     @Test fun mediaSessionFlagIsAnAd() {
-        assertEquals(Verdict.Ad(), signals.judge(Reading(Source.SESSION, adFlag = true)))
+        assertEquals(Verdict.Ad, signals.judge(Reading(Source.SESSION, adFlag = true)))
     }
 
     @Test fun badgesInEveryLanguageAreAds() {
@@ -67,9 +67,7 @@ class AdSignalsTest {
     }
 
     @Test fun aProvenCountdownAloneIsAnAd() {
-        val counter = l("12")
-        val verdict = judge(countdown = counter)
-        assertTrue(verdict is Verdict.Ad && counter in verdict.keep)
+        assertEquals(Verdict.Ad, judge(countdown = l("12")))
     }
 
     companion object {

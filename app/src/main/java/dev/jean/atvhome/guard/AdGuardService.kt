@@ -1,7 +1,6 @@
 package dev.jean.atvhome.guard
 
 import android.accessibilityservice.AccessibilityService
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
 import android.content.Intent
 import android.graphics.Path
@@ -11,7 +10,6 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
-import android.view.KeyEvent
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -20,11 +18,12 @@ import java.io.File
 
 /**
  * The ad-break guard. Knows no streaming app: once a second it asks three readers what the app in
- * front shows, and during an ad it presses "skip" when there is one, or mutes and covers the screen.
- * Fails open: on any doubt or error it undoes everything and the app plays as if we were not here.
+ * front shows, and during an ad it presses "skip" when there is one, or else only mutes it. The
+ * picture is never hidden: an ad you can see beats a black screen. Fails open: on any doubt or
+ * error it undoes everything and the app plays as if we were not here.
  *
- * Runs in the guard process, and is only bound while "Sem anúncios" is on and another app is in
- * front (data/AdShield.kt): being bound is what "on" means here.
+ * Runs in the guard process, and is only bound while "Sem anúncios" is on and another app plays
+ * sound (data/AdShield.kt): being bound is what "on" means here.
  */
 class AdGuardService : AccessibilityService() {
 
@@ -36,17 +35,14 @@ class AdGuardService : AccessibilityService() {
     private lateinit var countdown: Countdown
     private lateinit var readers: Readers
     private lateinit var audio: AudioManager
-    private lateinit var cover: Cover
     private lateinit var namedIds: List<String>
     private var front: String? = null
     private var mutedByGuard = false
+    /** The person changed the sound during this break: it is theirs until the break ends. */
+    private var soundByPerson = false
     private var shotSeq = 0L
     private var lastVerdict: Verdict = Verdict.None
-    private var keep: List<Label> = emptyList()
     private var ticks = 0
-    private var breakTicks = 0
-    private var revealUntil = 0L
-    private var soundByPerson = false
     private var keyboards: Set<String> = emptySet()
 
     private val tick = object : Runnable {
@@ -63,7 +59,6 @@ class AdGuardService : AccessibilityService() {
         readers = Readers(this)
         if (File(filesDir, RESET_MARK).delete()) readers.reset()
         audio = getSystemService(AudioManager::class.java)
-        cover = Cover(this)
         namedIds = rules.adViewIds + rules.skipViewIds
         @Suppress("DEPRECATION") (getSystemService(WINDOW_SERVICE) as WindowManager).defaultDisplay.getRealSize(size)
         keyboards = runCatching {
@@ -83,36 +78,12 @@ class AdGuardService : AccessibilityService() {
     /** The system UI (volume bar, a dialog), the on-screen keyboard and our own windows do not change which app plays. */
     private fun isApp(pkg: String) = pkg != SYSTEM_UI && pkg != packageName && pkg !in keyboards
 
-    /**
-     * Only while the cover is up (keys are not filtered otherwise, so they never wait for us): any
-     * key lifts it for [REVEAL_MS]. The person may be pausing, opening the controls or leaving, and
-     * must see what they do. The key still goes to the app; the sound stays off.
-     */
-    override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (event.action == KeyEvent.ACTION_DOWN && state.inBreak) {
-            revealUntil = SystemClock.elapsedRealtime() + REVEAL_MS
-            cover.hide()
-            // The person took the sound in hand: theirs until this break ends, never undone by us
-            if (event.keyCode in VOLUME_KEYS) { soundByPerson = true; mutedByGuard = false }
-        }
-        return false
-    }
-
-    private fun filterKeys(on: Boolean) {
-        val info = serviceInfo ?: return
-        val flags = if (on) info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
-        else info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS.inv()
-        if (flags == info.flags) return
-        info.flags = flags
-        serviceInfo = info
-    }
-
     override fun onInterrupt() = Unit
 
     override fun onUnbind(intent: Intent?): Boolean {
         handler.removeCallbacksAndMessages(null)
         calm()
-        ScreenService.instance?.rest() // the capture token stays for the next time an app is in front
+        ScreenService.instance?.rest() // the capture token stays for the next time an app plays
         return super.onUnbind(intent)
     }
 
@@ -127,14 +98,9 @@ class AdGuardService : AccessibilityService() {
         // Cheapest first; on a tie maxByOrNull keeps the first, so the cheapest reader gets the credit
         val verdicts = ArrayList<Pair<Verdict, Source>>(3)
         SessionReader.read(this, pkg)?.let { verdicts += signals.judge(it) to Source.SESSION }
-        // The node tree is read under the cover: when it sees text, the screen needs no peek
-        var treeSees = false
         if (readers.wants(pkg, Source.TREE, state.inBreak)) {
             rootInActiveWindow?.takeIf { it.packageName?.toString() == pkg }?.let { root ->
-                TreeReader.read(root, size.x, size.y, namedIds)?.let {
-                    treeSees = it.labels.isNotEmpty()
-                    verdicts += signals.judge(it) to Source.TREE
-                }
+                TreeReader.read(root, size.x, size.y, namedIds)?.let { verdicts += signals.judge(it) to Source.TREE }
             }
         }
         var waitingForScreen = false
@@ -142,7 +108,7 @@ class AdGuardService : AccessibilityService() {
             // Calm: one look every SLOW_EVERY ticks. Alert (something like an ad, a corner number,
             // a break): one a second
             val alert = state.inBreak || lastVerdict != Verdict.None || countdown.watching
-            if (alert || ++ticks % SLOW_EVERY == 0) look(screen, now, peekAllowed = !treeSees)
+            if (alert || ++ticks % SLOW_EVERY == 0) screen.look()
             val shot = screen.latest(now)
             when {
                 // A stale or missing read counts as "no ad": the guard fails open
@@ -166,30 +132,10 @@ class AdGuardService : AccessibilityService() {
         if (decision.active && verdict != Verdict.None) readers.remember(pkg, source)
         if (state.inBreak && !wasInBreak) Log.i(TAG, "break in $pkg by $source")
         decision.click?.let(::press)
-        if (!decision.active) { quiet(); return }
-        // Holes only matter to the screen reader; one missed read must not close them
-        if (source == Source.SCREEN && decision.keep.isNotEmpty()) keep = decision.keep
-        mute()
-        filterKeys(true)
-        // A key pressed a moment ago, or the ad paused: the person sees the screen. A paused
-        // picture makes no sound, and a black screen over it would only confuse
-        if (now < revealUntil || !audio.isMusicActive) cover.hide() else cover.show(keep)
+        if (decision.active) mute() else unmute()
     }
 
-    /**
-     * In the first [PEEK_WINDOW_MS] of a break, every [PEEK_EVERY] ticks, the cover lifts for one
-     * frame to spot a skip button that showed up under it (YouTube's comes after 5 s). Not when the
-     * node tree already sees under the cover, nor once a skip button was found.
-     */
-    private fun look(screen: ScreenService, now: Long, peekAllowed: Boolean) {
-        val early = state.inBreak && now - state.startedAt < PEEK_WINDOW_MS
-        if (early && peekAllowed && cover.showing && lastVerdict !is Verdict.Skippable && ++breakTicks % PEEK_EVERY == 0) {
-            cover.peek(true)
-            handler.postDelayed({ screen.look { cover.peek(false) } }, PEEK_MS)
-        } else screen.look()
-    }
-
-    private fun rank(v: Verdict) = when (v) { Verdict.None -> 0; is Verdict.Ad -> 1; is Verdict.Skippable -> 2 }
+    private fun rank(v: Verdict) = when (v) { Verdict.None -> 0; Verdict.Ad -> 1; is Verdict.Skippable -> 2 }
 
     /** Clicks the node when the app has one; otherwise taps the spot where the OCR read the button. */
     private fun press(label: Label) {
@@ -210,32 +156,28 @@ class AdGuardService : AccessibilityService() {
     }
 
     private fun mute() {
+        val muted = audio.isStreamMute(AudioManager.STREAM_MUSIC)
+        // We muted it and it is no longer muted: the person turned the sound back on. Theirs now
+        if (mutedByGuard && !muted) { mutedByGuard = false; soundByPerson = true }
         // Already muted by the person: not ours to undo later
-        if (soundByPerson || mutedByGuard || audio.isStreamMute(AudioManager.STREAM_MUSIC)) return
+        if (soundByPerson || mutedByGuard || muted) return
         audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
         mutedByGuard = true
     }
 
-    /** Sound and picture back; the break state machine keeps counting. */
-    private fun quiet() {
-        if (mutedByGuard) {
-            audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
-            mutedByGuard = false
-        }
-        if (::cover.isInitialized) cover.hide()
-        keep = emptyList()
-        revealUntil = 0L
+    /** Sound back; the break state machine keeps counting. */
+    private fun unmute() {
+        if (mutedByGuard && ::audio.isInitialized) audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+        mutedByGuard = false
         soundByPerson = false
-        runCatching { filterKeys(false) }
     }
 
     /** Everything back and forgotten: the app in front changed, the guard went off, or something failed. */
     private fun calm() {
-        quiet()
+        unmute()
         state.reset()
         if (::countdown.isInitialized) countdown.reset()
         lastVerdict = Verdict.None
-        breakTicks = 0
     }
 
     companion object {
@@ -246,10 +188,5 @@ class AdGuardService : AccessibilityService() {
         private const val TICK_MS = 1_000L
         /** Lever (docs/anuncios/SINAIS.md): calm screen looks every this many ticks. */
         private const val SLOW_EVERY = 2
-        private const val PEEK_EVERY = 5
-        private const val PEEK_MS = 150L
-        private const val PEEK_WINDOW_MS = 20_000L
-        private const val REVEAL_MS = 8_000L
-        private val VOLUME_KEYS = setOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
     }
 }

@@ -49,15 +49,15 @@ e nem o filme, nem a Home, nem os menus dos apps podem engasgar por causa da gua
   serviço desses ligado, o Compose de qualquer app (a Home inclusive) mantém a árvore de semântica a
   cada mudança; assim, Home e menus não pagam nada. Uma pausa só o tira depois de 10 s, para um
   intervalo não cair entre o anúncio e o filme. `accessibility_enabled` volta ao valor de antes.
-- Teclas só passam pela guarda enquanto a cobertura está na tela.
+- A guarda não esconde a imagem nem filtra teclas: no anúncio que não dá para pular, só tira o som.
 - O espelho da tela fica sem superfície entre as olhadas; cada olhada pega um quadro só. Sem olhar
   por 30 s, o modelo do OCR, os bitmaps e a fila de imagens são liberados.
 - Calmo, uma olhada a cada 2 s; em alerta, uma por segundo. OCR numa thread de segundo plano.
 - `isMusicActive` antes de tudo; a árvore do app só é lida em app novo, app "de árvore" ou durante o intervalo.
 
-Contra falso positivo (o pior que a guarda pode fazer é cobrir um filme): duas leituras para entrar;
-palavra solta só fora do meio da tela e com até 4 textos à vista; contagem regressiva sem palavra só
-num app que já teve anúncio confirmado; nunca mais de 4 min; qualquer tecla mostra a tela.
+Contra falso positivo (o pior que a guarda pode fazer é tirar o som de um filme): duas leituras para
+entrar; palavra solta só fora do meio da tela e com até 4 textos à vista; contagem regressiva sem
+palavra só num app que já teve anúncio confirmado; nunca mais de 4 min; a tecla de volume devolve o som.
 
 | O que | Limite | Como medir |
 |---|---|---|

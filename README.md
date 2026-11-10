@@ -179,13 +179,11 @@ A regra é que a TV nunca fique pior do que sem isto: na dúvida, a guarda não 
 O que a guarda faz:
 
 - **Pula**: quando o app mostra um botão "Pular" que dá para apertar.
-- **Fica mudo e coberto** ("Intervalo" na tela), e volta sozinho ao filme: anúncio costurado no
-  próprio vídeo (Netflix, Prime Video, Disney+, Max nos planos com anúncios). Entra até uns 4 s depois
-  de começar e sai até uns 3 s depois de acabar.
-- **Qualquer tecla** tira a cobertura por 8 s (para pausar, abrir os controles ou sair vendo o que
-  faz); anúncio pausado também não fica coberto. **Volume** no controle devolve o som a você até o fim
-  daquele intervalo, e a guarda não mexe mais nele.
-- Nos primeiros 20 s, em apps que só a tela revela, a cobertura pisca a cada 5 s para achar um botão "Pular".
+- **Fica mudo** quando não dá para pular: anúncio costurado no próprio vídeo (Netflix, Prime Video,
+  Disney+, Max nos planos com anúncios). A imagem nunca é escondida: ver o anúncio é melhor que ficar
+  olhando uma tela preta. O som sai até uns 4 s depois do começo e volta até uns 3 s depois do fim.
+- **Volume** no controle durante o anúncio devolve o som a você até o fim daquele intervalo, e a
+  guarda não mexe mais nele.
 - **Não tem jeito**: canal ao vivo, e app que não mostra o intervalo a nenhum dos três leitores
   (sessão de mídia, árvore de acessibilidade, OCR das bordas da tela).
 

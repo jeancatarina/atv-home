@@ -11,7 +11,7 @@ class AdBreakTest {
 
     private val state = AdBreak()
     private var now = 10_000L
-    private val ad = Verdict.Ad()
+    private val ad = Verdict.Ad
     private val skip = Verdict.Skippable(Label("Pular", 0.9f, 0.9f))
 
     private fun next(v: Verdict): Decision = state.on(v, now).also { now += 1_000 }

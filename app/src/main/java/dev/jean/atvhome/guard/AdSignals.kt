@@ -17,9 +17,8 @@ data class Reading(val source: Source, val adFlag: Boolean = false, val labels: 
 
 sealed interface Verdict {
     data object None : Verdict
-    /** [keep]: labels the cover must leave visible, so the screen reader keeps seeing them. */
-    data class Ad(val keep: List<Label> = emptyList()) : Verdict
-    data class Skippable(val button: Label, val keep: List<Label> = emptyList()) : Verdict
+    data object Ad : Verdict
+    data class Skippable(val button: Label) : Verdict
 }
 
 /** Decides whether a reading is an ad. Knows no app: only words, shapes and limits from [Rules]. */
@@ -32,18 +31,17 @@ class AdSignals(private val rules: Rules) {
 
     /** [countdown]: the label [Countdown] reported for this same reading, if any. */
     fun judge(reading: Reading, countdown: Label? = null): Verdict {
-        if (reading.adFlag) return Verdict.Ad()
+        if (reading.adFlag) return Verdict.Ad
         val labels = reading.labels.filter { it.text.length <= rules.maxLabelChars }
         val badge = labels.firstOrNull(::isBadge)
         val skip = labels.firstOrNull { isSkip(it, badge != null) }
-        val keep = listOfNotNull(badge, countdown)
         // A bare word ("Anúncio") only counts on a screen with little text (a player, not a menu) and
         // off the middle, where subtitles are: a line of dialogue saying "Comercial!" is not a break
         val badgeCounts = badge != null &&
             (badge.text.any(Char::isDigit) || (labels.size <= rules.maxPlayerLabels && offCentre(badge)))
         return when {
-            skip != null -> Verdict.Skippable(skip, keep)
-            badgeCounts || countdown != null -> Verdict.Ad(keep)
+            skip != null -> Verdict.Skippable(skip)
+            badgeCounts || countdown != null -> Verdict.Ad
             else -> Verdict.None
         }
     }

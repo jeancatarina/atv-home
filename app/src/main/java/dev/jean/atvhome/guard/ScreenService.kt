@@ -59,7 +59,6 @@ class ScreenService : Service() {
     private var bands: Bitmap? = null // top and bottom bands stacked: what the OCR gets, reused
     private var busy = false          // from a look's start until its OCR is done
     private var waiting = false       // a look waits for its frame
-    private var done: (() -> Unit)? = null
     private var seq = 0L
     private var last: Shot? = null
     private var lastAt = 0L
@@ -86,7 +85,6 @@ class ScreenService : Service() {
         detach()
         if (last != null) lastAt = SystemClock.elapsedRealtime()
         busy = false
-        finishLook()
     }
 
     val ready: Boolean get() = projection != null
@@ -127,20 +125,15 @@ class ScreenService : Service() {
         else startForeground(1, note)
     }
 
-    /**
-     * Reads the screen once; the result shows up in [latest] a few hundred ms later. [onFrame] runs
-     * once the frame was taken (or none came, or no look started): the cover may come back then.
-     */
-    fun look(onFrame: (() -> Unit)? = null) {
+    /** Reads the screen once; the result shows up in [latest] a few hundred ms later. */
+    fun look() {
         val p = projection
-        if (p == null || busy) { onFrame?.invoke(); return }
-        val reader = images ?: runCatching { mirror(p) }.onFailure { Log.w(TAG, "mirror", it) }.getOrNull()
-        if (reader == null) { onFrame?.invoke(); return }
+        if (p == null || busy) return
+        val reader = images ?: runCatching { mirror(p) }.onFailure { Log.w(TAG, "mirror", it) }.getOrNull() ?: return
         handler.removeCallbacks(trim)
         handler.postDelayed(trim, IDLE_MS)
         busy = true
         waiting = true
-        done = onFrame
         reader.acquireLatestImage()?.close() // a frame left from before is old news
         display?.surface = reader.surface
         handler.postDelayed(noFrame, FRAME_WAIT_MS)
@@ -175,7 +168,6 @@ class ScreenService : Service() {
         detach()
         val input = runCatching { stack(image) }.onFailure { Log.w(TAG, "frame", it) }.getOrNull()
         image.close()
-        finishLook()
         if (input == null) { busy = false; return }
         recognizer().process(InputImage.fromBitmap(input, 0))
             .addOnSuccessListener { text ->
@@ -185,8 +177,6 @@ class ScreenService : Service() {
             .addOnFailureListener { Log.w(TAG, "ocr", it) }
             .addOnCompleteListener { busy = false }
     }
-
-    private fun finishLook() { done?.invoke(); done = null }
 
     /** Without a surface the mirror costs nothing: Android treats it like a screen that is off. */
     private fun detach() { if (!KEEP_MIRROR) display?.surface = null }
@@ -200,7 +190,6 @@ class ScreenService : Service() {
             waiting = false
             handler.removeCallbacks(noFrame)
             busy = false
-            finishLook()
         }
         detach()
         last = null

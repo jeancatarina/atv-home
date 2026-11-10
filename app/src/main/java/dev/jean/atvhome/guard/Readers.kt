@@ -33,7 +33,7 @@ object ReaderChoice {
     /**
      * The media session costs one binder call: always. The node tree makes the app's own UI thread
      * work, so it runs in a new app, in an app where it once caught an ad, or during a break (the
-     * picture is covered then, and the skip button must be found). The screen runs in a new app or
+     * skip button must be found then). The screen runs in a new app or
      * in one only it ever caught.
      */
     fun wants(known: Source?, source: Source, inBreak: Boolean): Boolean = when (source) {
