@@ -1,7 +1,12 @@
 package dev.jean.atvhome.ui.home
 
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -90,6 +95,12 @@ internal fun CasaTile(
     val rest by animateColorAsState(if (on) Casa.On else Casa.Off, fade, label = "tile")
     val focus by animateColorAsState(if (on) Casa.OnFocused else Casa.OffFocused, fade, label = "tileFocus")
     val discColor by animateColorAsState(if (on) disc else Casa.Disc, fade, label = "disc")
+    // A ring leaves the disc whenever the light changes, from the TV or from the wall switch
+    val ring = remember { Animatable(1f) }
+    var seen by remember { mutableStateOf(on) }
+    LaunchedEffect(on) {
+        if (on != seen) { seen = on; ring.snapTo(0f); ring.animateTo(1f, tween(650, easing = FastOutSlowInEasing)) }
+    }
     FocusCard(
         onClick = onClick,
         onLongClick = onLongClick,
@@ -100,7 +111,15 @@ internal fun CasaTile(
         modifier = modifier,
     ) {
         Column(Modifier.fillMaxSize().padding(12.dp)) {
-            Box(Modifier.size(34.dp).background(discColor, CircleShape), contentAlignment = Alignment.Center) {
+            Box(
+                Modifier.size(34.dp)
+                    .drawBehind {
+                        val p = ring.value
+                        if (p < 1f) drawCircle(disc.copy(alpha = (1f - p) * 0.7f), radius = size.minDimension / 2 * (1f + p * 0.9f), style = Stroke(2.dp.toPx() * (1f - p) + 0.5f))
+                    }
+                    .background(discColor, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
                 Icon(icon, contentDescription = null, tint = if (on) Color.White else Tv.Secondary, modifier = Modifier.size(19.dp))
             }
             Spacer(Modifier.weight(1f))

@@ -36,3 +36,40 @@ object Panel {
             .groupBy({ it.first }, { it.second })
             .mapValues { (_, dps) -> dps.associateWith { on } }
 }
+
+/**
+ * The two scenes. The TV's room is the first room of the setup (the app's order), where people
+ * watch from.
+ */
+object Scenes {
+    /** "Cinema": the TV's whole floor goes dark, the open living and kitchen with it; the rest of the house stays. */
+    fun cinema(lights: List<Light>, plan: Plan?): List<Light> {
+        val tv = lights.firstOrNull()?.room ?: return emptyList()
+        val floor = plan?.floors?.firstOrNull { f -> f.rooms.any { it.room == tv } } ?: return lights.filter { it.room == tv }
+        val rooms = floor.rooms.map { it.room }.toSet()
+        return lights.filter { it.room in rooms }
+    }
+
+    /**
+     * "Boa noite": every room, farthest from the TV first, the TV's room last, so the dark comes
+     * through the house towards where you are. Rooms off the plan go first.
+     */
+    fun goodNight(lights: List<Light>, plan: Plan?): List<List<Light>> {
+        val byRoom = lights.groupBy { it.room }
+        val tv = lights.firstOrNull()?.room ?: return emptyList()
+        fun where(room: String): Triple<Int, Float, Float>? {
+            plan ?: return null
+            plan.floors.forEachIndexed { k, f -> f.rooms.firstOrNull { it.room == room }?.let { return Triple(k, it.x + it.w / 2, it.y + it.d / 2) } }
+            return null
+        }
+        val home = where(tv)
+        fun distance(room: String): Float {
+            if (room == tv) return 0f
+            if (home == null) return 1f
+            val at = where(room) ?: return Float.MAX_VALUE
+            val dx = at.second - home.second; val dy = at.third - home.third
+            return kotlin.math.abs(at.first - home.first) * 100f + kotlin.math.sqrt(dx * dx + dy * dy)
+        }
+        return byRoom.keys.sortedByDescending(::distance).map { byRoom.getValue(it) }
+    }
+}

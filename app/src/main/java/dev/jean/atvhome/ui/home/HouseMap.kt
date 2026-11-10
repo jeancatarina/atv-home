@@ -1,12 +1,16 @@
 package dev.jean.atvhome.ui.home
 
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.WbTwilight
+import kotlinx.coroutines.delay
+import java.time.LocalTime
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -85,14 +89,24 @@ import kotlin.math.sqrt
  * on pours a warm pool on the floor and onto the wall behind it; rooms with everything off stay in
  * the dark. The kitchen and bathrooms are tiled, the terrace is a deck behind a glass railing.
  *
- * ▲ ▼ change floor (the floor slides, like a lift, and the stack in the corner says which), ◀ ▶
- * change room, OK switches the whole room; ▶ past the last room goes to its lights beside the model.
+ * ▲ ▼ change floor (the stack in the corner says which), ◀ ▶ change room, OK switches the whole
+ * room; ▶ past the last room goes to its lights beside the model.
  *
- * One Canvas of paths and flat or radial fills, no blur: it redraws only when a light changes or
- * while a floor slides in.
+ * It is alive: a floor builds itself when it comes into view (the slab settles, the walls rise from
+ * the back to the front), a light that comes on blooms (its pool overshoots a little, like a bulb
+ * warming) and one that goes off fades, and the model takes the hour's light ([clock]): blue at
+ * night, gold at sunset.
+ *
+ * One Canvas of paths and flat or radial fills, no blur: it redraws only while something moves.
  */
 @Composable
-fun HouseMap(home: HouseModel, plan: Plan, toast: (String) -> Unit, modifier: Modifier = Modifier) {
+fun HouseMap(
+    home: HouseModel,
+    plan: Plan,
+    toast: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    clock: () -> LocalTime = LocalTime::now,
+) {
     val statesState = home.states.collectAsState()
     val states = statesState.value
     val scope = rememberCoroutineScope()
@@ -107,6 +121,30 @@ fun HouseMap(home: HouseModel, plan: Plan, toast: (String) -> Unit, modifier: Mo
     val text = rememberTextMeasurer()
     fun switchRoom(on: Boolean) = scope.launch { if (!home.switchAll(inRoom, on)) toast("Algumas luzes não responderam") }
     LaunchedEffect(Unit) { mapFocus.requestWhenReady() }
+
+    // The floor builds itself each time it comes into view
+    val build = remember { Animatable(0f) }
+    // Which floor the animation belongs to: a new floor starts unbuilt on its very first frame,
+    // not fully built for one frame until the effect resets the animation (a flash)
+    var builtFor by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(floor) { build.snapTo(0f); builtFor = floor; build.animateTo(1f, tween(1500, easing = LinearEasing)) }
+    // Each light's glow, 0..1 (a little over while it blooms); kept across changes so one light animates alone
+    val glow = remember { mutableStateMapOf<String, Float>() }
+    val anims = remember { HashMap<String, Animatable<Float, AnimationVector1D>>() }
+    val animScope = rememberCoroutineScope()
+    LaunchedEffect(states) {
+        home.lights.forEach { l ->
+            val target = if (Panel.isOn(l, states)) 1f else 0f
+            val a = anims.getOrPut(l.key) { Animatable(target).also { glow[l.key] = target } }
+            if (a.targetValue != target) animScope.launch {
+                a.animateTo(target, if (target > 0f) spring(dampingRatio = 0.42f, stiffness = 140f) else tween(450)) { glow[l.key] = value }
+            }
+        }
+    }
+    // The hour outside, checked twice a minute
+    var now by remember { mutableStateOf(clock()) }
+    LaunchedEffect(Unit) { while (true) { delay(30_000); now = clock() } }
+    val sky = ambience(now)
 
     Row(modifier.fillMaxSize().padding(start = Tv.Edge, end = Tv.Edge, top = 26.dp, bottom = 22.dp)) {
         Box(
@@ -126,22 +164,18 @@ fun HouseMap(home: HouseModel, plan: Plan, toast: (String) -> Unit, modifier: Mo
                 }
                 .focusable(),
         ) {
-            // Up slides the new floor down from above, like going up a storey; down, the other way
-            AnimatedContent(
-                targetState = floor,
-                transitionSpec = {
-                    val up = targetState > initialState
-                    (slideInVertically(tween(380)) { h -> if (up) -h / 5 else h / 5 } + fadeIn(tween(300))) togetherWith
-                        (slideOutVertically(tween(380)) { h -> if (up) h / 5 else -h / 5 } + fadeOut(tween(220)))
-                },
-                label = "floor",
-            ) { f ->
-                val fl = plan.floors[f]
-                Canvas(Modifier.fillMaxSize()) {
-                    drawFloor(plan, fl, home.lights, states, if (f == floor) room else null, focused, text)
+            Canvas(Modifier.fillMaxSize()) {
+                drawFloor(plan, plan.floors[floor], home.lights, glow, room, focused, text, if (builtFor == floor) build.value else 0f, sky)
+            }
+            Column(Modifier.align(Alignment.TopStart)) {
+                FloorStack(plan.floors, floor)
+                Spacer(Modifier.height(14.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    androidx.tv.material3.Icon(sky.icon, contentDescription = null, tint = sky.accent, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("${now.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))}  ·  ${sky.name}", style = Tv.Meta, color = Tv.Secondary)
                 }
             }
-            FloorStack(plan.floors, floor, Modifier.align(Alignment.TopStart))
             Text(
                 "▲ ▼  andar     ◀ ▶  cômodo     OK  acende ou apaga",
                 style = Tv.Caption, color = Tv.Tertiary, modifier = Modifier.align(Alignment.BottomStart),
@@ -234,17 +268,37 @@ private val WallTop = Color(0xFF555A64)
 private val WallFaceY = Color(0xFF3A3E46)
 private val WallFaceX = Color(0xFF30333A)
 
-private class Iso(val s: Float, val ox: Float, val oy: Float) {
-    fun p(x: Float, y: Float, z: Float = 0f) = Offset(ox + (x - y) * COS * s, oy + (x + y) * SIN * s - z * s)
+/** [dz]: the whole floor raised, while it settles into place. */
+private class Iso(val s: Float, val ox: Float, val oy: Float, val dz: Float = 0f) {
+    fun p(x: Float, y: Float, z: Float = 0f) = Offset(ox + (x - y) * COS * s, oy + (x + y) * SIN * s - (z + dz) * s)
 }
 
-private fun DrawScope.fit(plan: Plan): Iso {
+/** The hour's light on the model. */
+private class Sky(val name: String, val icon: ImageVector, val accent: Color, val glow: Color, val wash: Color, val amount: Float, val pools: Float)
+
+private fun ambience(t: LocalTime): Sky {
+    val h = t.hour + t.minute / 60f
+    return when {
+        h < 5f || h >= 20f -> Sky("noite", Icons.Rounded.DarkMode, Color(0xFF9DB4FF), Color(0xFF3550A0), Color(0xFF1A2444), 0.3f, 1.2f)
+        h < 7f -> Sky("amanhecer", Icons.Rounded.WbTwilight, Color(0xFFFFB3A1), Color(0xFF8A5A7A), Color(0xFF3A2C44), 0.16f, 1f)
+        h < 17f -> Sky("dia", Icons.Rounded.WbSunny, Color(0xFFFFE08A), Color(0xFFC8D4E6), Color(0xFF8C9AB0), 0.07f, 0.8f)
+        else -> Sky("pôr do sol", Icons.Rounded.WbTwilight, Color(0xFFFFB066), Color(0xFFC0682E), Color(0xFF4C2E1E), 0.2f, 1.05f)
+    }
+}
+
+/** Linear 0..1 to eased, over the part of the build between [from] and [to]. */
+private fun stage(build: Float, from: Float, to: Float): Float {
+    val t = ((build - from) / (to - from)).coerceIn(0f, 1f)
+    return 1f - (1f - t) * (1f - t) * (1f - t)
+}
+
+private fun DrawScope.fit(plan: Plan, dz: Float = 0f): Iso {
     val w = (plan.width + plan.depth) * COS
     val h = (plan.width + plan.depth) * SIN + BACK + SLAB
     val s = minOf(size.width / w, size.height / h) * 0.9f
     val ox = (size.width - w * s) / 2f + plan.depth * COS * s
     val oy = (size.height - h * s) / 2f + BACK * s
-    return Iso(s, ox, oy)
+    return Iso(s, ox, oy, dz)
 }
 
 private fun Iso.poly(vararg pts: Triple<Float, Float, Float>) = Path().apply {
@@ -291,43 +345,55 @@ private fun DrawScope.drawFloor(
     plan: Plan,
     floor: Floor,
     lights: List<Light>,
-    states: Map<String, Boolean>,
+    glow: Map<String, Float>,
     chosen: RoomBox?,
     focused: Boolean,
     text: TextMeasurer,
+    build: Float,
+    sky: Sky,
 ) {
-    val iso = fit(plan)
+    // The build: the slab settles from above and fades in, the walls rise back to front, then the light and the names
+    val settle = stage(build, 0f, 0.45f)
+    val slabAlpha = settle
+    val iso = fit(plan, dz = (1f - settle) * 0.9f)
     val w = plan.width; val d = plan.depth
     val centre = iso.p(w / 2, d / 2)
-    // A soft light behind the model, not the whole screen: it lifts the model off the page
+    // The hour's light behind the model, not the whole screen: it lifts the model off the page
     drawCircle(
-        Brush.radialGradient(listOf(Color.White.copy(alpha = 0.05f), Color.Transparent), centre, size.minDimension * 0.62f),
-        radius = size.minDimension * 0.62f, center = centre,
+        Brush.radialGradient(listOf(sky.glow.copy(alpha = 0.22f), sky.glow.copy(alpha = 0.05f), Color.Transparent), centre, size.minDimension * 0.7f),
+        radius = size.minDimension * 0.7f, center = centre,
     )
-    // The slab's two front faces, and a hairline on its edge
-    drawPath(iso.poly(Triple(0f, d, 0f), Triple(w, d, 0f), Triple(w, d, -SLAB), Triple(0f, d, -SLAB)), SlabLeft)
-    drawPath(iso.poly(Triple(w, 0f, 0f), Triple(w, d, 0f), Triple(w, d, -SLAB), Triple(w, 0f, -SLAB)), SlabRight)
+    // The slab's two front faces
+    drawPath(iso.poly(Triple(0f, d, 0f), Triple(w, d, 0f), Triple(w, d, -SLAB), Triple(0f, d, -SLAB)), SlabLeft, alpha = slabAlpha)
+    drawPath(iso.poly(Triple(w, 0f, 0f), Triple(w, d, 0f), Triple(w, d, -SLAB), Triple(w, 0f, -SLAB)), SlabRight, alpha = slabAlpha)
 
+    // Once the walls are up, the lights come on one after another, not all at once
+    val order = floor.rooms.flatMap { r -> lights.filter { it.room == r.room } }.withIndex().associate { (i, l) -> l.key to i }
+    fun g(l: Light): Float {
+        val i = order[l.key] ?: 0
+        return (glow[l.key] ?: 0f) * stage(build, 0.5f + i * 0.035f, 0.72f + i * 0.035f)
+    }
     fun warmth(r: RoomBox?): Float {
         r ?: return 0f
         val inRoom = lights.filter { it.room == r.room }
-        val lit = inRoom.count { Panel.isOn(it, states) }
-        return if (lit == 0) 0f else 0.35f + 0.65f * lit / inRoom.size
+        if (inRoom.isEmpty()) return 0f
+        val sum = inRoom.sumOf { g(it).coerceIn(0f, 1f).toDouble() }.toFloat()
+        return if (sum <= 0.001f) 0f else (0.35f * sum.coerceAtMost(1f) + 0.65f * sum / inRoom.size)
     }
     fun roomAt(x: Float, y: Float) = floor.rooms.firstOrNull { x >= it.x && x <= it.x + it.w && y >= it.y && y <= it.y + it.d }
 
     // Floors, with their finish, the light on them, and the chosen room
     floor.rooms.forEach { r ->
         val wet = WET.containsMatchIn(r.room)
-        val base = when { floor.outdoor -> FloorDeck; wet -> FloorWet; else -> FloorDry }
+        val base = lerp(when { floor.outdoor -> FloorDeck; wet -> FloorWet; else -> FloorDry }, sky.wash, sky.amount * 0.6f)
         val heat = warmth(r)
         val shape = iso.rect(r.x, r.y, r.x + r.w, r.y + r.d)
-        drawPath(shape, lerp(base, Color(0xFF3D3122), heat))
+        drawPath(shape, lerp(base, Color(0xFF3D3122), heat), alpha = slabAlpha)
         // Finish: deck planks, or tiles where it gets wet
         val line = Color.White.copy(alpha = if (floor.outdoor) 0.05f else 0.035f)
         if (floor.outdoor) {
             var y = r.y + 0.5f
-            while (y < r.y + r.d) { drawLine(line, iso.p(r.x, y), iso.p(r.x + r.w, y), 1f); y += 0.5f }
+            while (y < r.y + r.d) { drawLine(line, iso.p(r.x, y), iso.p(r.x + r.w, y), 1f, alpha = slabAlpha); y += 0.5f }
         } else if (wet) {
             var x = r.x + 0.6f
             while (x < r.x + r.w) { drawLine(line, iso.p(x, r.y), iso.p(x, r.y + r.d), 1f); x += 0.6f }
@@ -341,11 +407,14 @@ private fun DrawScope.drawFloor(
     floor.rooms.forEach { r ->
         val inRoom = lights.filter { it.room == r.room }
         spots(r, inRoom.size).zip(inRoom).forEach { (spot, l) ->
-            if (!Panel.isOn(l, states)) return@forEach
+            val k = g(l)
+            if (k <= 0.01f) return@forEach
             val c = iso.p(spot.first, spot.second)
-            val radius = minOf(r.w, r.d, 3.2f) * 0.62f * 1.414f * COS * iso.s
+            // Blooming: the pool grows past its size and settles (the spring's overshoot), and brightens
+            val radius = minOf(r.w, r.d, 3.2f) * 0.62f * 1.414f * COS * iso.s * (0.45f + 0.55f * k)
+            val a = (k.coerceIn(0f, 1f) * sky.pools).coerceAtMost(1.2f)
             scale(1f, SIN / COS, pivot = c) {
-                drawCircle(Brush.radialGradient(listOf(Pool.copy(alpha = 0.55f), Pool.copy(alpha = 0.16f), Color.Transparent), c, radius), radius, c)
+                drawCircle(Brush.radialGradient(listOf(Pool.copy(alpha = (0.55f * a).coerceAtMost(1f)), Pool.copy(alpha = 0.16f * a), Color.Transparent), c, radius), radius, c)
             }
         }
     }
@@ -356,14 +425,18 @@ private fun DrawScope.drawFloor(
         val inRoom = lights.filter { it.room == r.room }
         spots(r, inRoom.size).zip(inRoom).forEach { (spot, l) ->
             val c = iso.p(spot.first, spot.second)
-            val on = Panel.isOn(l, states)
-            if (on) drawCircle(Bulb.copy(alpha = 0.35f), radius = 6.dp.toPx(), center = c)
-            drawCircle(if (on) Bulb else Color.White.copy(alpha = 0.22f), radius = 2.6.dp.toPx(), center = c)
+            val k = g(l).coerceIn(0f, 1.3f)
+            if (k > 0.01f) drawCircle(Bulb.copy(alpha = 0.35f * k.coerceAtMost(1f)), radius = 6.dp.toPx() * (0.6f + 0.4f * k), center = c)
+            drawCircle(lerp(Color.White.copy(alpha = 0.22f), Bulb, k.coerceIn(0f, 1f)), radius = 2.6.dp.toPx(), center = c, alpha = slabAlpha)
         }
     }
     // Walls, far to near. A face catches the light of the room it faces
     walls(plan, floor).forEach { wall ->
-        val x0 = wall.x0; val y0 = wall.y0; val x1 = wall.x1; val y1 = wall.y1; val h = wall.h
+        // Rising back to front: a wall's delay follows how far forward it stands
+        val depth = (wall.x0 + wall.x1 + wall.y0 + wall.y1) / 2f / (w + d)
+        val rise = stage(build, 0.18f + depth * 0.3f, 0.55f + depth * 0.3f)
+        if (rise <= 0.01f) return@forEach
+        val x0 = wall.x0; val y0 = wall.y0; val x1 = wall.x1; val y1 = wall.y1; val h = wall.h * rise
         val facingY = warmth(roomAt((x0 + x1) / 2, y1 + 0.3f))
         val facingX = warmth(roomAt(x1 + 0.3f, (y0 + y1) / 2))
         if (wall.glass) {
@@ -376,14 +449,18 @@ private fun DrawScope.drawFloor(
             drawLine(Color.White.copy(alpha = 0.45f), a, b, 1.5.dp.toPx())
             return@forEach
         }
-        drawPath(iso.poly(Triple(x0, y1, 0f), Triple(x1, y1, 0f), Triple(x1, y1, h), Triple(x0, y1, h)), lerp(WallFaceY, Warm, facingY * 0.42f))
-        drawPath(iso.poly(Triple(x1, y0, 0f), Triple(x1, y1, 0f), Triple(x1, y1, h), Triple(x1, y0, h)), lerp(WallFaceX, Warm, facingX * 0.36f))
-        drawPath(iso.rect(x0, y0, x1, y1, h), WallTop)
+        val faceY = lerp(WallFaceY, sky.wash, sky.amount)
+        val faceX = lerp(WallFaceX, sky.wash, sky.amount)
+        drawPath(iso.poly(Triple(x0, y1, 0f), Triple(x1, y1, 0f), Triple(x1, y1, h), Triple(x0, y1, h)), lerp(faceY, Warm, facingY * 0.42f))
+        drawPath(iso.poly(Triple(x1, y0, 0f), Triple(x1, y1, 0f), Triple(x1, y1, h), Triple(x1, y0, h)), lerp(faceX, Warm, facingX * 0.36f))
+        drawPath(iso.rect(x0, y0, x1, y1, h), lerp(WallTop, sky.wash, sky.amount * 0.5f))
     }
-    // Names on glass tags, with what is lit in amber
+    // Names on glass tags, with what is lit in amber: the last thing to arrive
+    val tags = stage(build, 0.7f, 1f)
+    if (tags <= 0.01f) return
     floor.rooms.forEach { r ->
         val inRoom = lights.filter { it.room == r.room }
-        val lit = inRoom.count { Panel.isOn(it, states) }
+        val lit = inRoom.count { (glow[it.key] ?: 0f) > 0.5f }
         val picked = r == chosen
         val ink = if (picked) Casa.Ink else Color.White
         val label = buildAnnotatedString {
@@ -395,8 +472,8 @@ private fun DrawScope.drawFloor(
         val padX = 7.dp.toPx(); val padY = 3.dp.toPx()
         val tl = Offset(c.x - m.size.width / 2f - padX, c.y - m.size.height - padY * 2 - 10.dp.toPx())
         val tag = Size(m.size.width + padX * 2, m.size.height + padY * 2)
-        drawRoundRect(if (picked) Color.White.copy(alpha = if (focused) 1f else 0.7f) else Color(0xE0141518), tl, tag, androidx.compose.ui.geometry.CornerRadius(tag.height / 2))
-        drawText(m, topLeft = Offset(tl.x + padX, tl.y + padY))
+        drawRoundRect(if (picked) Color.White.copy(alpha = if (focused) 1f else 0.7f) else Color(0xE0141518), tl, tag, androidx.compose.ui.geometry.CornerRadius(tag.height / 2), alpha = tags)
+        drawText(m, topLeft = Offset(tl.x + padX, tl.y + padY), alpha = tags)
     }
 }
 

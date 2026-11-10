@@ -211,6 +211,15 @@ o cômodo inteiro, e ao lado ficam as luzes do cômodo. A planta é sua: copie
 os retângulos dos cômodos (os nomes iguais aos do app Tuya) e rode `tools/tuya-setup.sh`. Sem planta, a
 maquete põe todos os cômodos num andar só.
 
+A maquete é viva: o andar se monta ao aparecer (a laje assenta, as paredes sobem do fundo para a
+frente e as luzes acendem uma a uma), uma luz que acende "floresce" como lâmpada esquentando, e o
+ambiente segue a hora: azul de noite, dourado no pôr do sol.
+
+**Cenas**: **Cinema** apaga o andar da TV inteiro (a sala integrada) e deixa o resto da casa;
+**Boa noite** apaga a casa cômodo por cômodo, do mais longe até a sala da TV, numa onda de cerca de
+1 s que se vê na maquete e nos cômodos. Quando alguém aperta um interruptor na parede, o bloco da luz
+pulsa na tela.
+
 **Ver a casa** e o **botão amarelo** abrem o mesmo painel:
 
 - Atalhos no topo: **Apagar tudo**, **Apagar** e **Acender** o cômodo escolhido (sem cômodo escolhido,

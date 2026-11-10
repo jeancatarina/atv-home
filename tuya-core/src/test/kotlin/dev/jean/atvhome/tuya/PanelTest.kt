@@ -32,3 +32,25 @@ class PanelTest {
         assertEquals(emptyMap<String, Map<Int, Boolean>>(), Panel.switching(listOf(sala), states, on = false))
     }
 }
+
+class ScenesTest {
+    private val plan = Plan(12f, 6f, listOf(
+        Floor("1º", listOf(RoomBox("Sala", 0f, 0f, 5f, 6f), RoomBox("Cozinha", 8f, 0f, 4f, 6f)), open = true),
+        Floor("2º", listOf(RoomBox("Escritório", 0f, 0f, 3f, 6f), RoomBox("Suíte", 8f, 0f, 4f, 6f))),
+    ))
+    private val sala = Light("s", listOf(1), "Luz sala", "Sala", "Estar")
+    private val coz = Light("c", listOf(1), "Luz cozinha", "Cozinha", "Cozinha")
+    private val esc = Light("e", listOf(1), "Escritório", "Escritório", "Escritório")
+    private val suite = Light("u", listOf(1), "Suíte", "Suíte", "Ninho")
+    private val lights = listOf(sala, coz, esc, suite)
+
+    @Test fun `cinema darkens the TV's whole floor and nothing else`() {
+        assertEquals(listOf(sala, coz), Scenes.cinema(lights, plan))
+        assertEquals(listOf(sala), Scenes.cinema(lights, null))
+    }
+
+    @Test fun `good night goes from the farthest room to the TV's`() {
+        assertEquals(listOf("Suíte", "Escritório", "Cozinha", "Sala"), Scenes.goodNight(lights, plan).map { it.first().room })
+        assertEquals("Sala", Scenes.goodNight(lights, null).last().first().room)
+    }
+}

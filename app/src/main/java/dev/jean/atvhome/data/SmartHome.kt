@@ -43,6 +43,14 @@ interface HouseModel {
     suspend fun toggle(light: Light): Boolean
     suspend fun switchAll(group: List<Light>, on: Boolean): Boolean
     fun setHidden(light: Light, hide: Boolean)
+
+    /**
+     * Switches [groups] one after another, [stepMs] apart, without waiting for each answer: the
+     * house goes dark room by room ("Boa noite"), in the model and in the rooms themselves.
+     */
+    suspend fun cascade(groups: List<List<Light>>, on: Boolean, stepMs: Long = 110): Boolean = coroutineScope {
+        groups.mapIndexed { i, group -> async { delay(i * stepMs); switchAll(group, on) } }.awaitAll().all { it }
+    }
 }
 
 /**

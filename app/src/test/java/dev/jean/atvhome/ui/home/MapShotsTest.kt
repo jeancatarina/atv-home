@@ -29,6 +29,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
+import java.time.LocalTime
 
 /** The model with the example plan (tools/casa-plan.example.json): build/shots/casa-model-*.png. */
 @RunWith(RobolectricTestRunner::class)
@@ -67,23 +68,43 @@ class MapShotsTest {
         override fun setHidden(light: Light, hide: Boolean) = Unit
     }
 
-    @Test fun `the model opens floor by floor`() {
-        rule.setContent { InicioTheme { Box(Modifier.fillMaxSize().background(LocalAccent.current.screen())) { HouseMap(house, plan, toast = {}) } } }
+    private fun show(at: LocalTime) = rule.setContent {
+        InicioTheme { Box(Modifier.fillMaxSize().background(LocalAccent.current.screen())) { HouseMap(house, plan, toast = {}, clock = { at }) } }
+    }
+
+    @Test fun `the model opens floor by floor, at night`() {
+        show(LocalTime.of(21, 30))
+        rule.mainClock.advanceTimeBy(1_500)
         rule.waitForIdle()
         rule.onNodeWithText("2 de 4 acesas").assertExists() // the living room, first on the ground floor
+        rule.onNodeWithText("21:30", substring = true).assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-model-1.png")
         rule.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
-        rule.mainClock.advanceTimeBy(600)
+        rule.mainClock.advanceTimeBy(1_500)
         rule.waitForIdle()
         rule.onNodeWithText("2º andar").assertExists()
-        rule.onRoot().captureRoboImage("build/shots/casa-model-2.png")
         rule.onRoot().performKeyInput { repeat(4) { pressKey(Key.DirectionRight) } }
         rule.waitForIdle()
         rule.onNodeWithText("Quarto principal").assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-model-suite.png")
         rule.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
-        rule.mainClock.advanceTimeBy(600)
+        rule.mainClock.advanceTimeBy(1_500)
         rule.waitForIdle()
         rule.onRoot().captureRoboImage("build/shots/casa-model-terraco.png")
+    }
+
+    @Test fun `a floor builds itself, the slab settles and the walls rise back to front`() {
+        rule.mainClock.autoAdvance = false
+        show(LocalTime.of(21, 30))
+        rule.mainClock.advanceTimeBy(560)
+        rule.onRoot().captureRoboImage("build/shots/casa-model-building.png")
+    }
+
+    @Test fun `at sunset the model turns gold`() {
+        show(LocalTime.of(18, 10))
+        rule.mainClock.advanceTimeBy(1_500)
+        rule.waitForIdle()
+        rule.onNodeWithText("pôr do sol", substring = true).assertExists()
+        rule.onRoot().captureRoboImage("build/shots/casa-model-sunset.png")
     }
 }

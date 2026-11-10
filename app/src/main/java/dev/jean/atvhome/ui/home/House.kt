@@ -29,6 +29,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Lightbulb
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bedtime
+import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Keyboard
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.NightsStay
@@ -76,6 +78,7 @@ import dev.jean.atvhome.tuya.Kind
 import dev.jean.atvhome.tuya.Light
 import dev.jean.atvhome.tuya.Link
 import dev.jean.atvhome.tuya.Panel
+import dev.jean.atvhome.tuya.Scenes
 import dev.jean.atvhome.tuya.Show
 import dev.jean.atvhome.ui.components.RowPadding
 import dev.jean.atvhome.ui.components.requestWhenReady
@@ -301,6 +304,19 @@ fun HousePanel(
                     SceneButton(Icons.Rounded.PowerSettingsNew, "Apagar tudo", { group(lights, false) },
                         detail = lit(litAll), modifier = Modifier.focusRequester(firstFocus))
                 }
+                // The model next: the house in 3D is the first thing worth showing
+                if (onModel != null) item(key = "model") {
+                    SceneButton(Icons.Rounded.ViewInAr, "Maquete", onModel, detail = "${home.plan.floors.size} ${if (home.plan.floors.size == 1) "andar" else "andares"}", tint = Casa.Scene)
+                }
+                // The two scenes: the TV's floor dark for a film, and the whole house dark towards you
+                item(key = "cinema") {
+                    SceneButton(Icons.Rounded.Movie, "Cinema", { group(Scenes.cinema(lights, home.plan), false) }, detail = "apaga o andar da TV", tint = Casa.Scene)
+                }
+                item(key = "night") {
+                    SceneButton(Icons.Rounded.Bedtime, "Boa noite", {
+                        scope.launch { if (!home.cascade(Scenes.goodNight(lights, home.plan), false)) toast("Algumas luzes não responderam") }
+                    }, detail = "apaga a casa até aqui", tint = Casa.Scene)
+                }
                 if (focusRoom != null) {
                     val inRoom = lights.filter { it.room == focusRoom }
                     item(key = "roomOff") {
@@ -309,9 +325,6 @@ fun HousePanel(
                     item(key = "roomOn") {
                         SceneButton(Icons.Rounded.WbSunny, "Acender", { group(inRoom, true) }, detail = focusRoom)
                     }
-                }
-                if (onModel != null) item(key = "model") {
-                    SceneButton(Icons.Rounded.ViewInAr, "Maquete", onModel, detail = "${home.plan.floors.size} ${if (home.plan.floors.size == 1) "andar" else "andares"}", tint = Casa.Scene)
                 }
                 if (shortcut != null) item(key = "shortcut") {
                     SceneButton(Icons.Rounded.Keyboard, "Atalho no filme", shortcut.second, detail = shortcut.first,
