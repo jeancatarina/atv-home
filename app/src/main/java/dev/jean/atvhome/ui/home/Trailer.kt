@@ -104,9 +104,10 @@ fun TrailerBackdrop(
                                 else -> Unit
                             }
                         }
-                        // During an embed ad the content time stays at START_AT: the ad plays unseen and muted
+                        // During an embed ad the content time stays at START_AT: the ad plays unseen and
+                        // muted. Without one, the first tick past START_AT comes as soon as PLAYING did
                         override fun onCurrentSecond(youTubePlayer: YouTubePlayer, second: Float) {
-                            if (second > START_AT + 0.5f) playing = true
+                            if (second > START_AT + 0.1f) playing = true
                         }
                         override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) {
                             // Embedding disabled or unavailable in Brazil: stay on the still image

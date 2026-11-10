@@ -5,6 +5,8 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioManager
+import android.media.AudioPlaybackConfiguration
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
@@ -12,19 +14,28 @@ import android.provider.Settings
 import android.util.Log
 import dev.jean.atvhome.guard.AdGuardService
 import dev.jean.atvhome.guard.ScreenService
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.concurrent.Executors
 
 /**
- * "Sem anúncios": the TV's Private DNS pointed at an ad-filtering resolver, plus the ad-break
- * guard (dev.jean.atvhome.guard). Needs WRITE_SECURE_SETTINGS, granted once over adb
- * (tools/ad-guard-setup.sh). Strict Private DNS means "resolver down = no internet", so the DNS
- * part is checked when switched on and on every return to Home, and steps aside on its own when it
- * stops answering. Launcher process only: the guard runs in its own process and never reads these
- * preferences.
+ * "Sem anúncios", two independent switches in the Central. Both need WRITE_SECURE_SETTINGS,
+ * granted once over adb (tools/ad-guard-setup.sh). Launcher process only: the guard runs in its own
+ * process and never reads these preferences.
+ *
+ * - The guard (dev.jean.atvhome.guard): mutes, covers or skips ad breaks in any app. It is listed
+ *   as an accessibility service only while another app plays sound, so Home, app menus and a
+ *   silent TV run exactly as if it were not installed.
+ * - The network filter: the TV's Private DNS pointed at an ad-filtering resolver. Opt-in, because
+ *   a filtering resolver can break an app that waits for its ad server, or a name only the home
+ *   router knows. It never leaves the TV offline: checked when switched on and on every return to
+ *   Home, and switched off on its own when it stops answering.
  */
 object AdShield {
 
@@ -36,60 +47,153 @@ object AdShield {
     private const val A11Y_ENABLED = "accessibility_enabled"           // Settings.Secure
     private const val DNS_CHECKS = 10 // one a second: Android validates a new resolver in a few seconds
 
-    /** What a switch did. [NO_DNS]: the guard is on, but the resolver did not answer and the DNS went back. */
-    enum class Outcome { DONE, NO_DNS, REFUSED }
+    /** What switching the network filter on did. */
+    enum class Outcome { DONE, NO_ANSWER, REFUSED }
 
     /** Settings writes block on the settings provider: one at a time, in order, off the main thread. */
     private val writer = Executors.newSingleThreadExecutor { Thread(it, "adshield") }.asCoroutineDispatcher()
+    private val scope = CoroutineScope(SupervisorJob() + writer)
 
     /** Whether the network in use reaches the internet through our resolver. Replaced in tests. */
     internal var dnsCheck: suspend (Context) -> Boolean = ::dnsAnswers
+
+    /** A pause, or the gap between an ad and the film, must not unbind the guard mid-break. */
+    internal var offDelayMs = 10_000L
+
+    // Touched on the writer thread only
+    private var homeInFront = true
+    private var playing = false
+    private var pendingOff: Job? = null
+    private var playback: AudioManager.AudioPlaybackCallback? = null
 
     private fun prefs(context: Context) = context.getSharedPreferences("adshield", Context.MODE_PRIVATE)
 
     fun allowed(context: Context): Boolean =
         context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) == PackageManager.PERMISSION_GRANTED
 
-    /** The switch as the user left it. */
+    // ---- The guard ----
+
+    /** The guard's switch as the user left it. */
     fun isOn(context: Context): Boolean = prefs(context).getBoolean("on", false)
 
-    /** Turns DNS filtering and the guard on or off together. */
-    suspend fun set(context: Context, on: Boolean): Outcome {
+    /** Turns the guard on or off. False when the TV refused. */
+    suspend fun set(context: Context, on: Boolean): Boolean = withContext(writer) {
+        runCatching {
+            check(allowed(context)) { "WRITE_SECURE_SETTINGS not granted" }
+            prefs(context).edit().putBoolean("on", on).commit()
+            if (on) {
+                // Switching on again is how the user says "start over": the guard forgets what it learned
+                File(context.filesDir, AdGuardService.RESET_MARK).createNewFile()
+            } else {
+                pendingOff?.cancel()
+                guardService(context, false)
+                context.stopService(Intent(context, ScreenService::class.java))
+            }
+        }.onFailure { Log.w(TAG, "set $on", it) }.isSuccess
+    }.also { if (it) { if (on) watch(context) else unwatch(context) } }
+
+    /**
+     * Follows sound playing on the TV (a callback, no polling). Called when the launcher starts and
+     * when the guard is switched on.
+     */
+    fun watch(context: Context) {
+        if (playback != null || !isOn(context)) return
+        val app = context.applicationContext
+        val audio = app.getSystemService(AudioManager::class.java)
+        val callback = object : AudioManager.AudioPlaybackCallback() {
+            override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
+                scope.launch {
+                    playbackChanged(app, audio.isMusicActive)
+                    // A player reports starting a moment before its sound really reaches the output
+                    delay(1_000)
+                    playbackChanged(app, audio.isMusicActive)
+                }
+            }
+        }
+        runCatching { audio.registerAudioPlaybackCallback(callback, null) }
+            .onSuccess { playback = callback }.onFailure { Log.w(TAG, "watch", it) }
+    }
+
+    private fun unwatch(context: Context) {
+        val callback = playback ?: return
+        playback = null
+        runCatching { context.applicationContext.getSystemService(AudioManager::class.java).unregisterAudioPlaybackCallback(callback) }
+    }
+
+    /** From HomeActivity.onStart/onStop. */
+    suspend fun launcherInFront(context: Context, front: Boolean) = withContext(writer) {
+        homeInFront = front
+        update(context)
+    }
+
+    internal suspend fun playbackChanged(context: Context, nowPlaying: Boolean) = withContext(writer) {
+        if (playing == nowPlaying) return@withContext // nothing new: what is listed (or about to be) holds
+        playing = nowPlaying
+        update(context)
+    }
+
+    /** Listed only while another app plays sound: it costs nothing anywhere else. */
+    private fun update(context: Context) {
+        pendingOff?.cancel()
+        pendingOff = null
+        if (!isOn(context) || !allowed(context)) return
+        when {
+            !homeInFront && playing -> write(context, true)
+            homeInFront -> write(context, false) // Home must never pay for it, at once
+            else -> pendingOff = scope.launch { delay(offDelayMs); write(context, false) }
+        }
+    }
+
+    private fun write(context: Context, on: Boolean) {
+        runCatching { guardService(context, on) }.onFailure { Log.w(TAG, "guard $on", it) }
+    }
+
+    /** Adds or removes our accessibility service in the system's colon-separated list. */
+    private fun guardService(context: Context, on: Boolean) {
+        val cr = context.contentResolver
+        val p = prefs(context)
+        val me = ComponentName(context, AdGuardService::class.java).flattenToString()
+        val current = Settings.Secure.getString(cr, A11Y_SERVICES).orEmpty().split(':').filter { it.isNotBlank() }
+        val next = if (on) (current + me).distinct() else current - me
+        if (next == current) return
+        // Accessibility was off with no service at all: it goes back to off, exactly as it was
+        if (on && current.isEmpty()) p.edit().putString("a11y_before", Settings.Secure.getString(cr, A11Y_ENABLED) ?: "0").commit()
+        Settings.Secure.putString(cr, A11Y_SERVICES, next.joinToString(":"))
+        when {
+            next.isNotEmpty() -> Settings.Secure.putString(cr, A11Y_ENABLED, "1")
+            // Never switch accessibility off for the others (TalkBack, Sony's own services)
+            p.contains("a11y_before") -> {
+                Settings.Secure.putString(cr, A11Y_ENABLED, p.getString("a11y_before", "0"))
+                p.edit().remove("a11y_before").commit()
+            }
+        }
+    }
+
+    // ---- The network filter ----
+
+    /** The network filter's switch. */
+    fun dnsOn(context: Context): Boolean = prefs(context).getBoolean("dns", false)
+
+    /** Turns the network filter on or off. On only stays on when the TV still reaches the internet through it. */
+    suspend fun setDns(context: Context, on: Boolean): Outcome {
         val written = withContext(writer) {
             runCatching {
                 check(allowed(context)) { "WRITE_SECURE_SETTINGS not granted" }
-                val p = prefs(context)
-                if (on) {
-                    // Remember what was there, to put it back when switched off
-                    if (!p.getBoolean("on", false)) {
-                        val cr = context.contentResolver
-                        p.edit().putString("mode_before", Settings.Global.getString(cr, DNS_MODE))
-                            .putString("specifier_before", Settings.Global.getString(cr, DNS_SPECIFIER)).apply()
-                    }
-                    pointDns(context)
-                    // Switching on again is how the user says "start over": the guard forgets what it learned
-                    File(context.filesDir, AdGuardService.RESET_MARK).createNewFile()
-                    // The guard itself waits until another app is in front (launcherInFront)
-                } else {
-                    restoreDns(context)
-                    guardService(context, false)
-                    context.stopService(Intent(context, ScreenService::class.java))
-                }
-                p.edit().putBoolean("on", on).commit()
-            }.onFailure { Log.w(TAG, "set $on", it) }.isSuccess
+                if (on) pointDns(context) else restoreDns(context)
+            }.onFailure { Log.w(TAG, "dns $on", it) }.isSuccess
         }
         if (!written) return Outcome.REFUSED
         if (!on || dnsCheck(context)) return Outcome.DONE
         withContext(writer) { runCatching { restoreDns(context) }.onFailure { Log.w(TAG, "dns back", it) } }
-        return Outcome.NO_DNS
+        return Outcome.NO_ANSWER
     }
 
     /**
-     * Back on Home: if the network stopped reaching the internet through our resolver, the TV goes
-     * back to its own DNS (no internet is far worse than ads). True when it did.
+     * Back on Home: a resolver that stopped answering is switched off (no internet is far worse than
+     * ads). True when it did; the Central then shows the filter off.
      */
     suspend fun heal(context: Context): Boolean {
-        if (!isOn(context) || !prefs(context).getBoolean("dns", false) || dnsCheck(context)) return false
+        if (!dnsOn(context) || dnsCheck(context)) return false
         withContext(writer) { runCatching { restoreDns(context) }.onFailure { Log.w(TAG, "heal", it) } }
         Log.w(TAG, "$DNS_HOST stopped answering: back to the TV's own DNS")
         return true
@@ -97,14 +201,21 @@ object AdShield {
 
     private fun pointDns(context: Context) {
         val cr = context.contentResolver
+        val p = prefs(context)
+        // Remember what was there, to put it back when switched off
+        if (!p.getBoolean("dns", false)) {
+            p.edit().putString("mode_before", Settings.Global.getString(cr, DNS_MODE))
+                .putString("specifier_before", Settings.Global.getString(cr, DNS_SPECIFIER)).commit()
+        }
         Settings.Global.putString(cr, DNS_SPECIFIER, DNS_HOST)
         Settings.Global.putString(cr, DNS_MODE, "hostname")
-        prefs(context).edit().putBoolean("dns", true).commit()
+        p.edit().putBoolean("dns", true).commit()
     }
 
     private fun restoreDns(context: Context) {
         val cr = context.contentResolver
         val p = prefs(context)
+        if (!p.getBoolean("dns", false)) return
         Settings.Global.putString(cr, DNS_MODE, p.getString("mode_before", null) ?: "opportunistic")
         Settings.Global.putString(cr, DNS_SPECIFIER, p.getString("specifier_before", null))
         p.edit().putBoolean("dns", false).commit()
@@ -123,32 +234,12 @@ object AdShield {
         return false
     }
 
+    // ---- Screen capture ----
+
     /** The person said no to the screen-capture dialog: the launcher stops asking on its own. */
     fun captureRefused(context: Context): Boolean = prefs(context).getBoolean("capture_refused", false)
 
     fun rememberCapture(context: Context, granted: Boolean) {
         prefs(context).edit().putBoolean("capture_refused", !granted).apply()
-    }
-
-    /**
-     * The guard is listed as an accessibility service only while another app is in front. While
-     * any such service is enabled, Compose keeps the launcher's semantics tree up to date on every
-     * scroll; this way browsing Home costs nothing.
-     */
-    suspend fun launcherInFront(context: Context, front: Boolean) = withContext(writer) {
-        if (!isOn(context) || !allowed(context)) return@withContext
-        runCatching { guardService(context, !front) }.onFailure { Log.w(TAG, "guard ${!front}", it) }
-    }
-
-    /** Adds or removes our accessibility service in the system's colon-separated list. */
-    private fun guardService(context: Context, on: Boolean) {
-        val cr = context.contentResolver
-        val me = ComponentName(context, AdGuardService::class.java).flattenToString()
-        val current = Settings.Secure.getString(cr, A11Y_SERVICES).orEmpty().split(':').filter { it.isNotBlank() }
-        val next = if (on) (current + me).distinct() else current - me
-        if (next == current) return
-        Settings.Secure.putString(cr, A11Y_SERVICES, next.joinToString(":"))
-        // Never switch accessibility off for the others (TalkBack, Sony's own services)
-        if (next.isNotEmpty()) Settings.Secure.putString(cr, A11Y_ENABLED, "1")
     }
 }

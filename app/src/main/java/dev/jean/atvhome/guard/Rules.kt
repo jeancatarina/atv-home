@@ -12,7 +12,8 @@ data class Rules(
     /** A bare "Anúncio" counts only on a screen with this few texts: menus show "Ad" on sponsored cards. */
     @SerialName("max_player_labels") val maxPlayerLabels: Int = 4,
     @SerialName("countdown_rule") val countdownRule: Boolean = true,
-    @SerialName("tap_to_skip") val tapToSkip: Boolean = true,
+    /** Taps where the OCR read "Pular" when no node can be clicked. Off until docs/anuncios/SINAIS.md shows the tap lands right. */
+    @SerialName("tap_to_skip") val tapToSkip: Boolean = false,
     /** Kill switch for the screen reader (OCR), the only costly one. */
     @SerialName("screen_reader") val screenReader: Boolean = true,
     @SerialName("ad_words") val adWords: Map<String, List<String>> = emptyMap(),

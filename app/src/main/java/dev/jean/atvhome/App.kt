@@ -38,6 +38,8 @@ class App : Application(), SingletonImageLoader.Factory {
         apps = Apps(this)
         myList = MyList(this)
         deepLinks = dev.jean.atvhome.data.DeepLinks(cacheDir)
+        // "Sem anúncios": the guard is listed only while another app plays sound
+        dev.jean.atvhome.data.AdShield.watch(this)
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "daily",
             ExistingPeriodicWorkPolicy.KEEP,

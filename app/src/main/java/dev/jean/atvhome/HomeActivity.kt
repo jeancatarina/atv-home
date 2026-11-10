@@ -205,14 +205,13 @@ class HomeActivity : ComponentActivity() {
         super.onStart()
         // The guard steps aside while Home is in front: browsing pays nothing for it
         lifecycleScope.launch { AdShield.launcherInFront(this@HomeActivity, true) }
-        if (!AdShield.isOn(this)) return
-        if (!captureAsked && !AdShield.captureRefused(this)) askCapture()
-        // A resolver that stopped answering must not leave the TV without internet
-        if (healing?.isActive != true) healing = lifecycleScope.launch {
+        // A network filter that stopped answering must not leave the TV without internet
+        if (AdShield.dnsOn(this) && healing?.isActive != true) healing = lifecycleScope.launch {
             if (AdShield.heal(this@HomeActivity)) {
-                Toast.makeText(this@HomeActivity, "O filtro de DNS parou de responder: a TV voltou ao DNS normal", Toast.LENGTH_LONG).show()
+                Toast.makeText(this@HomeActivity, "O filtro na rede parou de responder e foi desligado", Toast.LENGTH_LONG).show()
             }
         }
+        if (AdShield.isOn(this) && !captureAsked && !AdShield.captureRefused(this)) askCapture()
     }
 
     /** Another app took the screen: a Social game freezes instead of running its clocks behind the app. */

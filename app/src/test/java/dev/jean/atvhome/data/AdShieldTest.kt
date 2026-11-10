@@ -3,6 +3,7 @@ package dev.jean.atvhome.data
 import android.Manifest
 import android.app.Application
 import android.provider.Settings
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -29,75 +30,112 @@ class AdShieldTest {
     private fun services() = Settings.Secure.getString(cr, "enabled_accessibility_services").orEmpty()
     private fun allow() = shadowOf(app).grantPermissions(Manifest.permission.WRITE_SECURE_SETTINGS)
 
-    @Before fun fakeTheNetwork() { AdShield.dnsCheck = { dnsAnswers } }
+    /** AdShield is an object: its view of the TV (Home in front, nothing playing) starts over each test. */
+    @Before fun startOnHome() = runBlocking {
+        AdShield.dnsCheck = { dnsAnswers }
+        AdShield.offDelayMs = 0
+        AdShield.launcherInFront(app, true)
+        AdShield.playbackChanged(app, false)
+    }
+
+    /** Another app is in front and plays sound. */
+    private suspend fun watching() { AdShield.launcherInFront(app, false); AdShield.playbackChanged(app, true) }
 
     @Test fun withoutThePermissionNothingChanges() = runBlocking {
-        assertEquals(AdShield.Outcome.REFUSED, AdShield.set(app, true))
+        assertFalse(AdShield.set(app, true))
+        assertEquals(AdShield.Outcome.REFUSED, AdShield.setDns(app, true))
         assertNull(mode())
         assertFalse(AdShield.isOn(app))
     }
 
-    @Test fun onPointsTheDnsAndWaitsForAnotherAppToListTheGuard() = runBlocking {
+    @Test fun theGuardIsListedOnlyWhileAnotherAppPlaysSound() = runBlocking {
         allow()
-        assertEquals(AdShield.Outcome.DONE, AdShield.set(app, true))
-        assertEquals("hostname", mode())
-        assertEquals("dns.adguard-dns.com", Settings.Global.getString(cr, "private_dns_specifier"))
-        assertTrue(AdShield.isOn(app))
-        // The launcher is in front when the switch is flipped: Home must not pay for the service
-        assertFalse(guard in services())
+        assertTrue(AdShield.set(app, true))
+        assertFalse(guard in services()) // Home in front
         AdShield.launcherInFront(app, false)
+        assertFalse(guard in services()) // an app's menu, nothing playing
+        AdShield.playbackChanged(app, true)
         assertTrue(guard in services())
-        assertEquals("1", Settings.Secure.getString(cr, "accessibility_enabled"))
         AdShield.launcherInFront(app, true)
+        assertFalse(guard in services()) // back on Home: at once
+        watching()
+        AdShield.playbackChanged(app, false)
+        delay(200) // the short grace for a pause or the gap between an ad and the film
         assertFalse(guard in services())
     }
 
-    @Test fun offPutsBackWhatWasThere() = runBlocking {
+    @Test fun theGuardAloneNeverTouchesTheDns() = runBlocking {
         allow()
-        Settings.Global.putString(cr, "private_dns_mode", "off")
         AdShield.set(app, true)
-        AdShield.set(app, false)
-        assertEquals("off", mode())
-    }
-
-    @Test fun otherServicesStayListed() = runBlocking {
-        allow()
-        Settings.Secure.putString(cr, "enabled_accessibility_services", "a/b.C")
-        AdShield.set(app, true)
-        AdShield.launcherInFront(app, false)
-        assertEquals("a/b.C:$guard", services())
-        AdShield.set(app, false)
-        assertEquals("a/b.C", services())
+        assertNull(mode())
+        assertFalse(AdShield.dnsOn(app))
     }
 
     @Test fun switchedOffTheGuardIsNeverListed() = runBlocking {
         allow()
-        AdShield.launcherInFront(app, false)
+        watching()
         assertEquals("", services())
+        AdShield.set(app, true)
+        AdShield.set(app, false)
+        AdShield.playbackChanged(app, false)
+        AdShield.playbackChanged(app, true)
+        assertEquals("", services())
+    }
+
+    @Test fun accessibilityIsLeftExactlyAsItWas() = runBlocking {
+        allow()
+        Settings.Secure.putString(cr, "accessibility_enabled", "0")
+        AdShield.set(app, true)
+        watching()
+        assertEquals("1", Settings.Secure.getString(cr, "accessibility_enabled"))
+        AdShield.launcherInFront(app, true)
+        assertEquals("0", Settings.Secure.getString(cr, "accessibility_enabled"))
+    }
+
+    @Test fun otherServicesStayListedAndOn() = runBlocking {
+        allow()
+        Settings.Secure.putString(cr, "enabled_accessibility_services", "a/b.C")
+        Settings.Secure.putString(cr, "accessibility_enabled", "1")
+        AdShield.set(app, true)
+        watching()
+        assertEquals("a/b.C:$guard", services())
+        AdShield.set(app, false)
+        assertEquals("a/b.C", services())
+        assertEquals("1", Settings.Secure.getString(cr, "accessibility_enabled"))
+    }
+
+    @Test fun theNetworkFilterPointsTheDnsAndPutsBackWhatWasThere() = runBlocking {
+        allow()
+        Settings.Global.putString(cr, "private_dns_mode", "off")
+        assertEquals(AdShield.Outcome.DONE, AdShield.setDns(app, true))
+        assertEquals("hostname", mode())
+        assertEquals("dns.adguard-dns.com", Settings.Global.getString(cr, "private_dns_specifier"))
+        assertTrue(AdShield.dnsOn(app))
+        AdShield.setDns(app, false)
+        assertEquals("off", mode())
+        assertFalse(AdShield.dnsOn(app))
     }
 
     @Test fun aResolverThatDoesNotAnswerNeverLeavesTheTvOffline() = runBlocking {
         allow()
         Settings.Global.putString(cr, "private_dns_mode", "opportunistic")
         dnsAnswers = false
-        assertEquals(AdShield.Outcome.NO_DNS, AdShield.set(app, true))
+        assertEquals(AdShield.Outcome.NO_ANSWER, AdShield.setDns(app, true))
         assertEquals("opportunistic", mode())
-        // The guard still works without the DNS part
-        assertTrue(AdShield.isOn(app))
-        AdShield.launcherInFront(app, false)
-        assertTrue(guard in services())
+        assertFalse(AdShield.dnsOn(app))
     }
 
-    @Test fun backOnHomeAResolverThatStoppedAnsweringStepsAside() = runBlocking {
+    @Test fun backOnHomeAResolverThatStoppedAnsweringIsSwitchedOff() = runBlocking {
         allow()
         Settings.Global.putString(cr, "private_dns_mode", "opportunistic")
-        AdShield.set(app, true)
+        AdShield.setDns(app, true)
         assertFalse(AdShield.heal(app))
         assertEquals("hostname", mode())
         dnsAnswers = false
         assertTrue(AdShield.heal(app))
         assertEquals("opportunistic", mode())
-        assertFalse(AdShield.heal(app)) // already back: nothing more to do
+        assertFalse(AdShield.dnsOn(app))
+        assertFalse(AdShield.heal(app)) // already off: nothing more to do
     }
 
     @Test fun aRefusedCaptureIsRemembered() {

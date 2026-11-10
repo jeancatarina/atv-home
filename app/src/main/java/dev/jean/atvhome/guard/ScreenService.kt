@@ -29,6 +29,7 @@ import com.google.mlkit.common.MlKit
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import java.util.concurrent.Executors
 
@@ -50,9 +51,7 @@ class ScreenService : Service() {
     private val ocrThread = Executors.newSingleThreadExecutor { task ->
         Thread({ Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND); task.run() }, "ad-guard-ocr")
     }
-    private val recognizer by lazy {
-        TextRecognition.getClient(TextRecognizerOptions.Builder().setExecutor(ocrThread).build())
-    }
+    private var recognizer: TextRecognizer? = null
     private var projection: MediaProjection? = null
     private var display: VirtualDisplay? = null
     private var images: ImageReader? = null
@@ -64,6 +63,21 @@ class ScreenService : Service() {
     private var seq = 0L
     private var last: Shot? = null
     private var lastAt = 0L
+
+    /**
+     * No look for [IDLE_MS] (no video in front, or an app the screen is not needed for): the OCR
+     * model, the frame buffers and the image queue go, so the guard process leaves the other apps
+     * their memory. The next look brings them back in a few hundred ms.
+     */
+    private val trim = object : Runnable {
+        override fun run() {
+            if (busy) { handler.postDelayed(this, IDLE_MS); return }
+            display?.surface = null
+            images?.close(); images = null
+            frame = null; bands = null
+            recognizer?.close(); recognizer = null
+        }
+    }
 
     /** No frame came: nothing on screen moved, so the last read still holds. */
     private val noFrame = Runnable {
@@ -122,6 +136,8 @@ class ScreenService : Service() {
         if (p == null || busy) { onFrame?.invoke(); return }
         val reader = images ?: runCatching { mirror(p) }.onFailure { Log.w(TAG, "mirror", it) }.getOrNull()
         if (reader == null) { onFrame?.invoke(); return }
+        handler.removeCallbacks(trim)
+        handler.postDelayed(trim, IDLE_MS)
         busy = true
         waiting = true
         done = onFrame
@@ -130,17 +146,26 @@ class ScreenService : Service() {
         handler.postDelayed(noFrame, FRAME_WAIT_MS)
     }
 
-    /** The mirror is made once and kept: Android 14 allows one virtual display per capture token. */
+    /**
+     * The image queue comes and goes ([trim]); the mirror is made once and kept, because Android 14
+     * allows one virtual display per capture token.
+     */
     private fun mirror(p: MediaProjection): ImageReader {
         val reader = ImageReader.newInstance(W, H, PixelFormat.RGBA_8888, 2)
         reader.setOnImageAvailableListener({ r -> onImage(r) }, handler)
-        display = p.createVirtualDisplay(
-            "ad-guard", W, H, 160, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            if (KEEP_MIRROR) reader.surface else null, null, handler,
-        )
+        val mirror = display
+        if (mirror == null) {
+            display = p.createVirtualDisplay(
+                "ad-guard", W, H, 160, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                if (KEEP_MIRROR) reader.surface else null, null, handler,
+            )
+        } else if (KEEP_MIRROR) mirror.surface = reader.surface
         images = reader
         return reader
     }
+
+    private fun recognizer(): TextRecognizer = recognizer
+        ?: TextRecognition.getClient(TextRecognizerOptions.Builder().setExecutor(ocrThread).build()).also { recognizer = it }
 
     private fun onImage(reader: ImageReader) {
         val image = reader.acquireLatestImage() ?: return
@@ -152,7 +177,7 @@ class ScreenService : Service() {
         image.close()
         finishLook()
         if (input == null) { busy = false; return }
-        recognizer.process(InputImage.fromBitmap(input, 0))
+        recognizer().process(InputImage.fromBitmap(input, 0))
             .addOnSuccessListener { text ->
                 last = Shot(++seq, Reading(Source.SCREEN, labels = labels(text)))
                 lastAt = SystemClock.elapsedRealtime()
@@ -208,7 +233,8 @@ class ScreenService : Service() {
         display?.release(); display = null
         images?.close(); images = null
         projection?.stop(); projection = null
-        recognizer.close()
+        handler.removeCallbacks(trim)
+        recognizer?.close(); recognizer = null
         ocrThread.shutdown()
         super.onDestroy()
     }
@@ -224,6 +250,7 @@ class ScreenService : Service() {
         private const val TOP = 180     // 25% of H
         private const val BOTTOM = 216  // 30% of H
         private const val FRAME_WAIT_MS = 400L
+        private const val IDLE_MS = 30_000L
         private const val FRESH_MS = 3_000L
         /** Lever (docs/anuncios/SINAIS.md): true only if attaching the mirror per look stutters on the TV. */
         private const val KEEP_MIRROR = false

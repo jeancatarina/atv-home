@@ -40,21 +40,32 @@ palavras do `rules.json` são o ponto de partida, não o texto real de cada app.
 
 ## Desempenho
 
-A TV tem 2,3 GB de RAM: nem o filme nem a Home podem engasgar por causa da guarda. O desenho:
+A regra: com "Sem anúncios" ligado, a TV fica igual ou melhor, nunca pior. A TV tem 2,3 GB de RAM,
+e nem o filme, nem a Home, nem os menus dos apps podem engasgar por causa da guarda. O desenho:
 
 - A guarda roda no processo `dev.jean.atvhome:guard`; o `App.onCreate` sai cedo nele.
-- O serviço de acessibilidade só fica na lista do sistema com outro app na frente (`HomeActivity.onStop`
-  põe, `onStart` tira): com ele ligado, o Compose da Home mantém a árvore de semântica a cada rolagem.
-- O espelho da tela fica sem superfície entre as olhadas; cada olhada pega um quadro só.
+- O serviço de acessibilidade só fica na lista do sistema enquanto **outro app toca som**
+  (`AdShield`: `AudioPlaybackCallback`, sem polling, mais `HomeActivity.onStart/onStop`). Com qualquer
+  serviço desses ligado, o Compose de qualquer app (a Home inclusive) mantém a árvore de semântica a
+  cada mudança; assim, Home e menus não pagam nada. Uma pausa só o tira depois de 10 s, para um
+  intervalo não cair entre o anúncio e o filme. `accessibility_enabled` volta ao valor de antes.
+- Teclas só passam pela guarda enquanto a cobertura está na tela.
+- O espelho da tela fica sem superfície entre as olhadas; cada olhada pega um quadro só. Sem olhar
+  por 30 s, o modelo do OCR, os bitmaps e a fila de imagens são liberados.
 - Calmo, uma olhada a cada 2 s; em alerta, uma por segundo. OCR numa thread de segundo plano.
 - `isMusicActive` antes de tudo; a árvore do app só é lida em app novo, app "de árvore" ou durante o intervalo.
+
+Contra falso positivo (o pior que a guarda pode fazer é cobrir um filme): duas leituras para entrar;
+palavra solta só fora do meio da tela e com até 4 textos à vista; contagem regressiva sem palavra só
+num app que já teve anúncio confirmado; nunca mais de 4 min; qualquer tecla mostra a tela.
 
 | O que | Limite | Como medir |
 |---|---|---|
 | Home, quadros | Diferença ≤ 2 pontos de jank entre desligado e ligado (meta do projeto: ≤ 10%, p90 ≤ 20 ms, p95 ≤ 33 ms) | `tools/ad-guard-perf.sh home home-off` e `home-on` |
 | Processo do launcher | PSS no patamar de hoje (base 123 MB) | idem |
 | Vídeo | Nenhum quadro perdido a mais, em 60 s | `tools/ad-guard-perf.sh video <app>-off` e `<app>-on` |
-| Processo `:guard` | PSS ≤ 80 MB; CPU ≤ 15% de um núcleo em regime calmo | idem |
+| Processo `:guard` | PSS ≤ 80 MB lendo a tela, ≤ 30 MB parado; CPU ≤ 15% de um núcleo em regime calmo | idem |
+| Menus dos apps | Navegar no menu de um app (sem som tocando) igual com a guarda ligada e desligada | no olho, e `dumpsys accessibility` não lista a guarda |
 
 Se estourar, nesta ordem, uma coisa por vez: `SLOW_EVERY` 2 → 3 (`AdGuardService`); captura em
 960×540 (`W`, `H`, `TOP`, `BOTTOM` de `ScreenService`); `KEEP_MIRROR = true` (`ScreenService`, só se

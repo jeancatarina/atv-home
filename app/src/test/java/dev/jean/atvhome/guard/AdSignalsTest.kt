@@ -28,6 +28,11 @@ class AdSignalsTest {
         assertEquals(Verdict.None, judge(l("Anúncio"), *menu.toTypedArray()))
     }
 
+    @Test fun aSubtitleSayingTheWordIsNotABreak() {
+        assertEquals(Verdict.None, judge(l("Comercial!", 0.5f, 0.88f)))
+        assertEquals(Verdict.None, judge(l("Anúncio", 0.48f, 0.9f)))
+    }
+
     @Test fun aSponsoredCardInARowOfCardsIsNotABreak() {
         val row = listOf("Trailer oficial", "Canal Exemplo", "1,2 mi de visualizações", "Lançamentos").map { l(it, 0.3f, 0.85f) }
         assertEquals(Verdict.None, judge(l("Ad", 0.1f, 0.8f), *row.toTypedArray()))

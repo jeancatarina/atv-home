@@ -37,8 +37,10 @@ class AdSignals(private val rules: Rules) {
         val badge = labels.firstOrNull(::isBadge)
         val skip = labels.firstOrNull { isSkip(it, badge != null) }
         val keep = listOfNotNull(badge, countdown)
-        // A bare word ("Anúncio") only counts on a screen with little text: a player, not a menu
-        val badgeCounts = badge != null && (badge.text.any(Char::isDigit) || labels.size <= rules.maxPlayerLabels)
+        // A bare word ("Anúncio") only counts on a screen with little text (a player, not a menu) and
+        // off the middle, where subtitles are: a line of dialogue saying "Comercial!" is not a break
+        val badgeCounts = badge != null &&
+            (badge.text.any(Char::isDigit) || (labels.size <= rules.maxPlayerLabels && offCentre(badge)))
         return when {
             skip != null -> Verdict.Skippable(skip, keep)
             badgeCounts || countdown != null -> Verdict.Ad(keep)
@@ -60,6 +62,8 @@ class AdSignals(private val rules: Rules) {
         if (t.none { it in skipWords } || t.any { it in veto }) return false
         return hasBadge || t.any { it in adWords }
     }
+
+    private fun offCentre(label: Label) = label.x < 0.35f || label.x > 0.65f
 
     fun hasVeto(labels: List<Label>): Boolean = labels.any { l -> tokens(l.text).any { it in veto } }
 

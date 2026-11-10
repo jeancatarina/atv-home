@@ -12,6 +12,12 @@ class Readers(context: Context) {
 
     fun wants(pkg: String, source: Source, inBreak: Boolean): Boolean = ReaderChoice.wants(known(pkg), source, inBreak)
 
+    /**
+     * The app has had a real break before. Only then may the language-free countdown start one on
+     * its own: a game clock or a shot clock in a corner also goes down.
+     */
+    fun knows(pkg: String): Boolean = known(pkg) != null
+
     fun remember(pkg: String, source: Source) {
         val known = known(pkg)
         if (known == null || source.ordinal < known.ordinal) prefs.edit().putString(pkg, source.name).apply()

@@ -46,6 +46,7 @@ class AdGuardService : AccessibilityService() {
     private var ticks = 0
     private var breakTicks = 0
     private var revealUntil = 0L
+    private var soundByPerson = false
     private var keyboards: Set<String> = emptySet()
 
     private val tick = object : Runnable {
@@ -91,6 +92,8 @@ class AdGuardService : AccessibilityService() {
         if (event.action == KeyEvent.ACTION_DOWN && state.inBreak) {
             revealUntil = SystemClock.elapsedRealtime() + REVEAL_MS
             cover.hide()
+            // The person took the sound in hand: theirs until this break ends, never undone by us
+            if (event.keyCode in VOLUME_KEYS) { soundByPerson = true; mutedByGuard = false }
         }
         return false
     }
@@ -147,7 +150,7 @@ class AdGuardService : AccessibilityService() {
                 // A read is judged once: the same read on two ticks must not count as two
                 shot.seq != shotSeq -> {
                     shotSeq = shot.seq
-                    val counter = if (rules.countdownRule) countdown.feed(shot.reading) else null
+                    val counter = if (rules.countdownRule && readers.knows(pkg)) countdown.feed(shot.reading) else null
                     verdicts += signals.judge(shot.reading, counter) to Source.SCREEN
                 }
                 else -> waitingForScreen = true
@@ -208,7 +211,7 @@ class AdGuardService : AccessibilityService() {
 
     private fun mute() {
         // Already muted by the person: not ours to undo later
-        if (mutedByGuard || audio.isStreamMute(AudioManager.STREAM_MUSIC)) return
+        if (soundByPerson || mutedByGuard || audio.isStreamMute(AudioManager.STREAM_MUSIC)) return
         audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
         mutedByGuard = true
     }
@@ -222,6 +225,7 @@ class AdGuardService : AccessibilityService() {
         if (::cover.isInitialized) cover.hide()
         keep = emptyList()
         revealUntil = 0L
+        soundByPerson = false
         runCatching { filterKeys(false) }
     }
 
@@ -246,5 +250,6 @@ class AdGuardService : AccessibilityService() {
         private const val PEEK_MS = 150L
         private const val PEEK_WINDOW_MS = 20_000L
         private const val REVEAL_MS = 8_000L
+        private val VOLUME_KEYS = setOf(KeyEvent.KEYCODE_VOLUME_UP, KeyEvent.KEYCODE_VOLUME_DOWN, KeyEvent.KEYCODE_VOLUME_MUTE)
     }
 }
