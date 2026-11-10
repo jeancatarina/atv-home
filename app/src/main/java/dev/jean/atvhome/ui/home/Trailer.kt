@@ -26,6 +26,8 @@ import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTube
 import kotlinx.coroutines.delay
 
 private const val PREVIEW_MS = 30_000L
+/** Where the trailer starts, in seconds; the content clock only passes it once the trailer itself runs. */
+private const val START_AT = 4f
 
 /**
  * tvOS's Top Shelf preview: after the title has been on screen a few seconds, its trailer fades in
@@ -53,7 +55,7 @@ fun TrailerBackdrop(
         fade.snapTo(0f)
         onAlpha(0f)
         p.mute()
-        p.loadVideo(videoKey, 4f)
+        p.loadVideo(videoKey, START_AT)
     }
     DisposableEffect(Unit) { onDispose { onAlpha(0f) } }
     // The video shows only after it has really started, past YouTube's own loading frames
@@ -95,11 +97,16 @@ fun TrailerBackdrop(
                         override fun onReady(youTubePlayer: YouTubePlayer) { player = youTubePlayer }
                         override fun onStateChange(youTubePlayer: YouTubePlayer, state: PlayerConstants.PlayerState) {
                             when (state) {
-                                PlayerConstants.PlayerState.PLAYING -> playing = true
+                                // onCurrentSecond decides: an embed ad also reports PLAYING
+                                PlayerConstants.PlayerState.PLAYING -> Unit
                                 PlayerConstants.PlayerState.ENDED -> { playing = false; onEnded() }
                                 PlayerConstants.PlayerState.PAUSED, PlayerConstants.PlayerState.UNSTARTED -> playing = false
                                 else -> Unit
                             }
+                        }
+                        // During an embed ad the content time stays at START_AT: the ad plays unseen and muted
+                        override fun onCurrentSecond(youTubePlayer: YouTubePlayer, second: Float) {
+                            if (second > START_AT + 0.5f) playing = true
                         }
                         override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) {
                             // Embedding disabled or unavailable in Brazil: stay on the still image
