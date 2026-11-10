@@ -47,7 +47,7 @@ data class Floor(
 /**
  * Something the model draws that is not a room and has no lights: [kind] is one of deck, grass,
  * ceramic (finishes on the floor), jacuzzi, tank (the water tank's housing), stairs (where the stairs
- * come up), flight (a flight of stairs), bench (a built-in bench), skylight, planter. A kind the
+ * come up), flight (a flight of stairs rising towards the back; flight-front, towards the front), bench (a built-in bench), skylight, planter. A kind the
  * model does not know is skipped.
  */
 @Serializable

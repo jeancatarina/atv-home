@@ -566,11 +566,11 @@ private fun furniture(room: RoomBox, outdoor: Boolean, tv: Boolean, features: Li
             plant(x0 + 0.35f, y1 - 0.35f, 0.32f)
         }
         name.contains("cozinha") -> {
-            // Counter along the side wall, an island with stools
-            box(r.x + T / 2, y0, r.x + T / 2 + 0.62f, y1, 0f, 0.9f, Cabinet, top = Wood, radius = 0.04f)
+            // Counter along the wall opposite the stairs (the TV's wall), an island with stools
+            box(r.x + r.w - T / 2 - 0.62f, y0, r.x + r.w - T / 2, y1, 0f, 0.9f, Cabinet, top = Wood, radius = 0.04f)
             val il = minOf(2.2f, d * 0.6f)
             box(cx - 0.45f, cy - il / 2, cx + 0.45f, cy + il / 2, 0f, 0.9f, Sage, top = Cabinet, radius = 0.1f)
-            listOf(-0.6f, 0f, 0.6f).forEach { o -> round(cx + 0.78f, cy + o, 0.17f, 0f, 0.62f, Graphite) }
+            listOf(-0.6f, 0f, 0.6f).forEach { o -> round(cx - 0.78f, cy + o, 0.17f, 0f, 0.62f, Graphite) }
         }
         name.contains("quarto") || name.contains("suíte") || name.contains("suite") || name.contains("ninho") || name.contains("principal") -> {
             // A bed against the side wall: headboard, duvet, two pillows; bedside tables with lamps
@@ -672,13 +672,15 @@ private class Scene(val plan: Plan, val floor: Floor, lights: List<Light>, val t
                 "bench" -> Block(f.x, f.y, f.x + f.w, f.y + f.d, 0f, 0.45f, Color(0xFFAFA9A0), wall = false, room = host, top = Color(0xFFC4BEB5), radius = 0.04f)
                 else -> null
             }
-        } + floor.features.filter { it.kind == "flight" }.flatMap { f ->
-            // A flight of stairs along its long side, rising towards the back of the house (y = 0)
+        } + floor.features.filter { it.kind == "flight" || it.kind == "flight-front" }.flatMap { f ->
+            // A flight of stairs along its long side, rising towards the back of the house (y = 0), or
+            // towards the front ("flight-front")
             val host = roomAt(f.x + f.w / 2, f.y + f.d / 2)
             val steps = 12
+            val forward = f.kind == "flight-front"
             (0 until steps).map { i ->
                 if (f.d >= f.w) {
-                    val run = f.d / steps; val sy = f.y + f.d - (i + 1) * run
+                    val run = f.d / steps; val sy = if (forward) f.y + i * run else f.y + f.d - (i + 1) * run
                     Block(f.x, sy, f.x + f.w, sy + run, 0f, (i + 1) * 0.11f, Color(0xFFAFA9A0), wall = false, room = host, top = Color(0xFFC4BEB5), radius = 0f)
                 } else {
                     val run = f.w / steps; val sx = f.x + f.w - (i + 1) * run
