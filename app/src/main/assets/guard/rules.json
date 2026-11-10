@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "max_label_chars": 40,
+  "max_player_labels": 8,
+  "countdown_rule": true,
+  "tap_to_skip": true,
+  "screen_reader": true,
+  "ad_words": {
+    "pt": ["anúncio", "anúncios", "publicidade", "propaganda", "comercial"],
+    "en": ["ad", "ads", "advertisement", "commercial"],
+    "es": ["anuncio", "anuncios", "publicidad"],
+    "fr": ["annonce", "annonces", "publicité", "pub"],
+    "de": ["anzeige", "anzeigen", "werbung"],
+    "it": ["annuncio", "annunci", "pubblicità"]
+  },
+  "skip_words": {
+    "pt": ["pular", "ignorar"],
+    "en": ["skip"],
+    "es": ["saltar", "omitir"],
+    "fr": ["passer", "ignorer"],
+    "de": ["überspringen"],
+    "it": ["salta", "saltare"]
+  },
+  "filler_words": ["de", "di", "of", "von", "sur", "em", "in", "en", "s", "seg", "sec", "o", "the", "le", "la", "el", "die"],
+  "veto_words": ["próximo", "next", "siguiente", "suivant", "nächste", "episódio", "episode", "episodio", "abertura", "intro", "introdução", "resumo", "recap", "créditos", "credits"],
+  "ad_view_ids": ["ad_badge", "ad_label", "ad_text", "ad_countdown", "ad_progress", "ad_indicator"],
+  "skip_view_ids": ["skip_ad", "ad_skip"]
+}

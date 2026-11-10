@@ -164,6 +164,34 @@ adb shell settings put secure screensaver_components dev.jean.atvhome/.saver.Aer
 - **Segurar OK** num app: modo de edição (◀ ▶ mover, ▼ ocultar, OK concluir). Apps ocultos ficam no fim da tela; segure OK para mostrar de novo.
 - **MENU**: Central com as entradas HDMI. **VOLTAR** fecha qualquer tela.
 
+## Sem anúncios
+
+Com os apps oficiais, sem conhecer nenhum streaming: um app instalado amanhã entra sem código novo.
+
+1. Instale e rode uma vez, do computador: `tools/ad-guard-setup.sh`.
+2. **MENU** → **Sem anúncios**. O mesmo botão desliga.
+
+O que acontece em cada caso:
+
+- **Some**: anúncio que vem de servidor de anúncio separado, pelo DNS privado da TV (`dns.adguard-dns.com`).
+- **É pulado**: quando o app mostra um botão "Pular".
+- **Fica mudo e coberto** ("Intervalo" na tela), e volta sozinho ao filme: anúncio costurado no
+  próprio vídeo (Netflix, Prime Video, Disney+, Max nos planos com anúncios). Entra até uns 4 s depois
+  de começar e sai até uns 3 s depois de acabar; a cada 5 s a cobertura pisca por um instante.
+- **Não tem jeito**: canal ao vivo, e app que não mostra o intervalo a nenhum dos três leitores
+  (sessão de mídia, árvore de acessibilidade, OCR das bordas da tela).
+
+O que foi medido em cada app fica em [docs/anuncios/SINAIS.md](docs/anuncios/SINAIS.md).
+
+- **TV sem internet** depois de ligar: desligue na Central, ou
+  `adb shell settings put global private_dns_mode opportunistic`.
+- **TV ficou muda** depois de um travamento: a tecla de volume do controle.
+- **Outro idioma**: uma chave nova em `ad_words` e `skip_words` de `app/src/main/assets/guard/rules.json`,
+  um caso novo em `AdSignalsTest`, reinstalar. Fora das palavras, a contagem regressiva no canto vale em qualquer idioma latino.
+- **Pular por automação** pode contrariar os termos de uso do YouTube: `"tap_to_skip": false` no mesmo arquivo.
+- Nada do que a guarda lê sai da TV. Ela roda num processo próprio e só com outro app na frente:
+  a Home não fica mais lenta (`tools/ad-guard-perf.sh` mede).
+
 ## Voltar ao launcher anterior
 
 ```sh

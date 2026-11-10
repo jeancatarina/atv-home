@@ -1,12 +1,19 @@
 package dev.jean.atvhome
 
 import android.content.Intent
+import android.media.projection.MediaProjectionManager
 import android.os.Bundle
+import android.util.Log
 import android.view.KeyEvent
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
+import dev.jean.atvhome.data.AdShield
+import dev.jean.atvhome.guard.ScreenService
+import kotlinx.coroutines.launch
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -131,7 +138,7 @@ class HomeActivity : ComponentActivity() {
                     }
                     AnimatedVisibility(panelOpen, enter = fadeIn(), exit = fadeOut()) {
                         Box(Modifier.fillMaxSize().focusProperties { exit = { FocusRequester.Cancel } }.focusGroup()) {
-                            QuickPanel(onClose = { panelOpen = false }, toast = toast)
+                            QuickPanel(onClose = { panelOpen = false }, toast = toast, onAdShieldOn = ::askCapture)
                         }
                     }
                 }
@@ -170,10 +177,37 @@ class HomeActivity : ComponentActivity() {
         }
     }
 
+    /**
+     * The screen-capture token for "Sem anúncios" (guard/ScreenService). Asked by the launcher,
+     * never over another app; with the PROJECT_MEDIA appop (tools/ad-guard-setup.sh) the system
+     * answers at once, without a dialog.
+     */
+    private val capture = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        val data = result.data
+        if (result.resultCode == RESULT_OK && data != null) ScreenService.start(this, result.resultCode, data)
+    }
+    /** Once per launcher process on its own (a refusal is not asked again); the Central asks anew. */
+    private var captureAsked = false
+
+    private fun askCapture() {
+        captureAsked = true
+        if (ScreenService.running(this)) return
+        runCatching { capture.launch(getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent()) }
+            .onFailure { Log.w("AdShield", "screen capture not available", it) }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // The guard steps aside while Home is in front: browsing pays nothing for it
+        lifecycleScope.launch { AdShield.launcherInFront(this@HomeActivity, true) }
+        if (!captureAsked && AdShield.isOn(this)) askCapture()
+    }
+
     /** Another app took the screen: a Social game freezes instead of running its clocks behind the app. */
     override fun onStop() {
         super.onStop()
         if (socialUsed) social.background()
+        lifecycleScope.launch { AdShield.launcherInFront(this@HomeActivity, false) }
     }
 
     override fun onResume() {

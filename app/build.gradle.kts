@@ -72,6 +72,8 @@ dependencies {
     implementation(libs.coil.network.okhttp)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
+    // "Sem anúncios": reads the ad badge on screen in apps that show it to nothing else (guard/ScreenService)
+    implementation(libs.mlkit.text.recognition)
     implementation(libs.androidx.work.runtime)
     implementation(libs.youtube.player)
     implementation(project(":social-core"))

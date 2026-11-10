@@ -1,6 +1,9 @@
 package dev.jean.atvhome
 
+import android.app.ActivityManager
 import android.app.Application
+import android.os.Build
+import android.os.Process
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.NetworkType
@@ -29,6 +32,8 @@ class App : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
+        // The ad guard's process (docs/anuncios/SINAIS.md) uses none of the launcher's state
+        if (processName()?.endsWith(":guard") == true) return
         catalog = Catalog(TmdbClient(BuildConfig.TMDB_TOKEN, cacheDir))
         apps = Apps(this)
         myList = MyList(this)
@@ -41,6 +46,11 @@ class App : Application(), SingletonImageLoader.Factory {
                 .build(),
         )
     }
+
+    private fun processName(): String? =
+        if (Build.VERSION.SDK_INT >= 28) getProcessName()
+        else getSystemService(ActivityManager::class.java).runningAppProcesses
+            ?.firstOrNull { it.pid == Process.myPid() }?.processName
 
     /** Images are decoded at the size they're drawn and the memory cache is capped at 64 MB (2.3 GB TV). */
     override fun newImageLoader(context: PlatformContext): ImageLoader = ImageLoader.Builder(context)

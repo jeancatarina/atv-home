@@ -16,7 +16,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -25,16 +29,23 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
+import dev.jean.atvhome.data.AdShield
 import dev.jean.atvhome.data.TvSystem
+import kotlinx.coroutines.launch
 import dev.jean.atvhome.ui.components.PillButton
 import dev.jean.atvhome.ui.theme.Tv
 
-/** tvOS's Control Center, on the MENU key: TV inputs and the settings people reach for. */
+/**
+ * tvOS's Control Center, on the MENU key: TV inputs and the settings people reach for.
+ * [onAdShieldOn]: "Sem anúncios" was just switched on (the caller asks for the screen-capture token).
+ */
 @Composable
-fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit) {
+fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit, onAdShieldOn: () -> Unit = {}) {
     val context = LocalContext.current
     val inputs = remember { TvSystem.inputs(context) }
     val first = remember { FocusRequester() }
+    val scope = rememberCoroutineScope()
+    var shield by remember { mutableStateOf(AdShield.isOn(context)) }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))) {
         Column(
@@ -57,6 +68,17 @@ fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit) {
                     PillButton("Protetor de tela agora", {
                         onClose(); if (!TvSystem.startScreensaver(context)) toast("Esta TV não deixa iniciar o protetor de tela")
                     }, modifier = Modifier.fillMaxWidth().let { if (inputs.isEmpty()) it.focusRequester(first) else it })
+                }
+                item {
+                    // Stays open on purpose: the label is the feedback
+                    PillButton(if (shield) "Sem anúncios: ligado" else "Sem anúncios: desligado", {
+                        if (!AdShield.allowed(context)) toast("Falta liberar pelo computador: tools/ad-guard-setup.sh")
+                        else scope.launch {
+                            val next = !shield
+                            if (!AdShield.set(context, next)) toast("Esta TV não deixou mudar o DNS")
+                            else { shield = next; if (next) onAdShieldOn() }
+                        }
+                    }, modifier = Modifier.fillMaxWidth(), selected = shield)
                 }
                 item { PillButton("Wi-Fi", { onClose(); TvSystem.openSettings(context, Settings.ACTION_WIFI_SETTINGS) }, modifier = Modifier.fillMaxWidth()) }
                 item { PillButton("Imagem e som", { onClose(); TvSystem.openSettings(context, Settings.ACTION_DISPLAY_SETTINGS) }, modifier = Modifier.fillMaxWidth()) }
