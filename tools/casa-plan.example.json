@@ -6,9 +6,9 @@
       "name": "1º andar",
       "open": true,
       "rooms": [
-        { "room": "Sala de Estar", "x": 0, "y": 0, "w": 7, "d": 5 },
-        { "room": "Sala de Jantar", "x": 0, "y": 5, "w": 7, "d": 3.5 },
-        { "room": "Cozinha", "x": 0, "y": 8.5, "w": 7, "d": 3.5 }
+        { "room": "Cozinha", "x": 0, "y": 0, "w": 7, "d": 3.5 },
+        { "room": "Sala de Jantar", "x": 0, "y": 3.5, "w": 7, "d": 3.5 },
+        { "room": "Sala de Estar", "x": 0, "y": 7, "w": 7, "d": 5 }
       ]
     },
     {

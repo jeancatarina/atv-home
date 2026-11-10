@@ -79,13 +79,11 @@ class MapShotsTest {
         rule.onNodeWithText("2 de 4 acesas").assertExists() // the living room, first on the ground floor
         rule.onNodeWithText("21:30", substring = true).assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-model-1.png")
-        rule.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
-        rule.mainClock.advanceTimeBy(1_500)
+        rule.onRoot().performKeyInput { pressKey(Key.ChannelUp) }
+        rule.mainClock.advanceTimeBy(1_900)
         rule.waitForIdle()
         rule.onNodeWithText("2º andar").assertExists()
-        // From the front bedroom: left to the half bath behind it, down to the suite at the back
-        rule.onRoot().performKeyInput { pressKey(Key.DirectionLeft); pressKey(Key.DirectionDown) }
-        rule.waitForIdle()
+        // Up from the living room at the back is the suite right above it
         rule.onNodeWithText("Quarto principal").assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-model-suite.png")
         // ▲ climbs to the room above on screen first; Channel + goes straight up a floor

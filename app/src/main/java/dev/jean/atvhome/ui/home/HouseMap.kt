@@ -117,8 +117,10 @@ fun HouseMap(
     val statesState = home.states.collectAsState()
     val states = statesState.value
     val scope = rememberCoroutineScope()
-    var floor by remember { mutableIntStateOf(0) }
-    var chosen by remember { mutableStateOf(plan.floors.firstOrNull()?.rooms?.firstOrNull()) }
+    // It opens where you are: the TV's room and floor
+    val tvAt = home.lights.firstOrNull()?.room?.let { tv -> plan.floors.indexOfFirst { f -> f.rooms.any { it.room == tv } } }?.takeIf { it >= 0 } ?: 0
+    var floor by remember { mutableIntStateOf(tvAt) }
+    var chosen by remember { mutableStateOf(plan.floors.getOrNull(tvAt)?.let { f -> f.rooms.firstOrNull { it.room == home.lights.firstOrNull()?.room } ?: f.rooms.firstOrNull() }) }
     var focused by remember { mutableStateOf(false) }
     val mapFocus = remember { FocusRequester() }
     val floorRooms = plan.floors.getOrNull(floor)?.rooms.orEmpty()
