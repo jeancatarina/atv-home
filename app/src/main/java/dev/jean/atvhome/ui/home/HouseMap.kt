@@ -313,7 +313,7 @@ private fun FloorStack(floors: List<Floor>, current: Int, lights: List<Light>, s
 private const val COS = 0.866f
 private const val SIN = 0.5f
 private const val SLAB = 0.42f
-private const val T = 0.16f
+private const val T = 0.12f
 private const val BACK = 1.45f
 private const val INNER = 0.62f
 private const val FRONT = 0.3f
@@ -325,32 +325,41 @@ private const val TOUR_STEP_MS = 8_000L
 private const val PENDANT = 1.18f
 
 private val Warm = Color(0xFFFFB861)
-private val Pool = Color(0xFFFFC77A)
+// Saturated enough to show on light oak by day: which lights are on must read at any hour
+private val Pool = Color(0xFFFFAE4D)
 private val Bulb = Color(0xFFFFF1CC)
 
-private val FloorDry = Color(0xFF2A2C32)
-private val FloorWood = Color(0xFF332B29)
-private val FloorWet = Color(0xFF262B31)
-private val FloorDeck = Color(0xFF30291F)
-private val SlabLeft = Color(0xFF17191C)
-private val SlabRight = Color(0xFF111214)
-private val Wall = Color(0xFF4C515B)
+// An interior designer's model: warm off-white walls, light oak, terrazzo where it gets wet. The
+// hour washes it (blue at night, so the lamps' warmth shows)
+private val FloorDry = Color(0xFFD3BB97)
+private val FloorWood = Color(0xFFC6A784)
+private val FloorWet = Color(0xFFDAD5CD)
+private val FloorDeck = Color(0xFFAE8862)
+private val SlabLeft = Color(0xFF3B3732)
+private val SlabRight = Color(0xFF2E2B27)
+private val Wall = Color(0xFFE7E2D9)
+private val WallCap = Color(0xFFF6F3EE)
+private val Grain = Color.Black.copy(alpha = 0.06f)
 
-// Furniture: soft, slightly warm tones, like a designer's model
-private val Wood = Color(0xFF8A6B4E)
-private val Walnut = Color(0xFF5E4636)
-private val Fabric = Color(0xFF5D6B7E)
-private val Cushion = Color(0xFF7686A0)
-private val Linen = Color(0xFFE2DBCE)
-private val Duvet = Color(0xFFC9D2DE)
-private val Stone = Color(0xFFA29C94)
-private val Porcelain = Color(0xFFE0E3E7)
+// Furniture: oat, terracotta, mustard, sage and oak, like a page of an interiors magazine
+private val Wood = Color(0xFFC9A57A)
+private val Walnut = Color(0xFF8B6448)
+private val Fabric = Color(0xFFDAD0C0)
+private val Terracotta = Color(0xFFCF8B6C)
+private val Mustard = Color(0xFFD9B25C)
+private val Sage = Color(0xFFA7B59C)
+private val Linen = Color(0xFFF1ECE4)
+private val Duvet = Color(0xFFB7C6D6)
+private val Cabinet = Color(0xFFEDEAE4)
+private val Porcelain = Color(0xFFF3F4F6)
 private val Black = Color(0xFF1C1D20)
 private val Graphite = Color(0xFF3A3D44)
 private val Leaf = Color(0xFF5E9159)
-private val LeafLight = Color(0xFF7DB26F)
-private val Planter = Color(0xFFB9A58C)
-private val Rug = Color(0xFF3F3D4A)
+private val LeafLight = Color(0xFF86B874)
+private val Planter = Color(0xFFC77D5B)
+private val Rug = Color(0xFFE6DCCB)
+private val Brass = Color(0xFFC9A15A)
+private val Art = listOf(Terracotta to Mustard, Sage to Linen, Duvet to Terracotta, Mustard to Sage)
 
 /** [dz]: the whole floor raised, while it settles into place. */
 private class Iso(val s: Float, val ox: Float, val oy: Float, val dz: Float = 0f) {
@@ -367,10 +376,10 @@ private class Sky(
 private fun ambience(t: LocalTime): Sky {
     val h = t.hour + t.minute / 60f
     return when {
-        h < 5f || h >= 20f -> Sky("noite", Icons.Rounded.DarkMode, Color(0xFF9DB4FF), Color(0xFF3550A0), Color(0xFF1A2444), 0.3f, 1.25f, Color(0xFF16203D), Color(0xFF8FA8FF).copy(alpha = 0.05f))
-        h < 7f -> Sky("amanhecer", Icons.Rounded.WbTwilight, Color(0xFFFFB3A1), Color(0xFF8A5A7A), Color(0xFF3A2C44), 0.16f, 1f, Color(0xFFE9A7A0), Color(0xFFFFC2B0).copy(alpha = 0.1f))
-        h < 17f -> Sky("dia", Icons.Rounded.WbSunny, Color(0xFFFFE08A), Color(0xFFC8D4E6), Color(0xFF8C9AB0), 0.07f, 0.8f, Color(0xFFAFCFEA), Color(0xFFFFF4D6).copy(alpha = 0.13f))
-        else -> Sky("pôr do sol", Icons.Rounded.WbTwilight, Color(0xFFFFB066), Color(0xFFC0682E), Color(0xFF4C2E1E), 0.2f, 1.05f, Color(0xFFF2A15E), Color(0xFFFFB066).copy(alpha = 0.14f))
+        h < 5f || h >= 20f -> Sky("noite", Icons.Rounded.DarkMode, Color(0xFF9DB4FF), Color(0xFF3550A0), Color(0xFF1A2444), 0.62f, 1.45f, Color(0xFF16203D), Color(0xFF8FA8FF).copy(alpha = 0.05f))
+        h < 7f -> Sky("amanhecer", Icons.Rounded.WbTwilight, Color(0xFFFFB3A1), Color(0xFF8A5A7A), Color(0xFF3A2C44), 0.34f, 1.1f, Color(0xFFE9A7A0), Color(0xFFFFC2B0).copy(alpha = 0.1f))
+        h < 17f -> Sky("dia", Icons.Rounded.WbSunny, Color(0xFFFFE08A), Color(0xFFC8D4E6), Color(0xFF8C9AB0), 0.05f, 1.25f, Color(0xFFAFCFEA), Color(0xFFFFF4D6).copy(alpha = 0.13f))
+        else -> Sky("pôr do sol", Icons.Rounded.WbTwilight, Color(0xFFFFB066), Color(0xFFC0682E), Color(0xFF4C2E1E), 0.36f, 1.2f, Color(0xFFF2A15E), Color(0xFFFFB066).copy(alpha = 0.14f))
     }
 }
 
@@ -518,7 +527,7 @@ private fun furniture(r: RoomBox, outdoor: Boolean, tv: Boolean): List<Block> {
             box(sx + 0.68f, cy - sl / 2, sx + 0.95f, cy + sl / 2, 0.3f, 0.78f, Fabric, radius = 0.13f) // back
             box(sx, cy - sl / 2, sx + 0.95f, cy - sl / 2 + 0.24f, 0.3f, 0.58f, Fabric, radius = 0.11f) // arms
             box(sx, cy + sl / 2 - 0.24f, sx + 0.95f, cy + sl / 2, 0.3f, 0.58f, Fabric, radius = 0.11f)
-            listOf(-0.5f, 0.5f).forEach { o -> box(sx + 0.12f, cy + o * (sl - 0.6f) / 2 - (sl - 0.6f) / 4 + 0.02f, sx + 0.66f, cy + o * (sl - 0.6f) / 2 + (sl - 0.6f) / 4 - 0.02f, 0.36f, 0.46f, Cushion, radius = 0.14f) }
+            listOf(-0.5f to Terracotta, 0.5f to Mustard).forEach { (o, c) -> box(sx + 0.12f, cy + o * (sl - 0.6f) / 2 - (sl - 0.6f) / 4 + 0.02f, sx + 0.66f, cy + o * (sl - 0.6f) / 2 + (sl - 0.6f) / 4 - 0.02f, 0.36f, 0.48f, c, radius = 0.14f) }
             round((r.x + 0.5f + sx) / 2 + 0.2f, cy, 0.42f, 0f, 0.3f, Wood, top = Linen)
             plant(x0 + 0.3f, y1 - 0.3f, 0.3f)
             round(sx + 0.5f, y0 + 0.3f, 0.2f, 0f, 1.05f, Walnut, lamp = true) // a floor lamp by the sofa
@@ -529,20 +538,20 @@ private fun furniture(r: RoomBox, outdoor: Boolean, tv: Boolean): List<Block> {
             val ty = cy - td / 2
             (0 until 3).forEach { i ->
                 val chx = cx - tl / 2 + tl * (i + 0.5f) / 3
-                round(chx, ty - 0.35f, 0.2f, 0f, 0.46f, Walnut)
+                round(chx, ty - 0.35f, 0.2f, 0f, 0.46f, Linen)
             }
-            box(cx - tl / 2, ty, cx + tl / 2, ty + td, 0f, 0.56f, Wood, top = Color(0xFF9C7B5B), radius = 0.12f)
+            box(cx - tl / 2, ty, cx + tl / 2, ty + td, 0f, 0.56f, Wood, top = Color(0xFFD8B78C), radius = 0.12f)
             (0 until 3).forEach { i ->
                 val chx = cx - tl / 2 + tl * (i + 0.5f) / 3
-                round(chx, ty + td + 0.35f, 0.2f, 0f, 0.46f, Walnut)
+                round(chx, ty + td + 0.35f, 0.2f, 0f, 0.46f, Linen)
             }
             plant(x1 - 0.35f, y0 + 0.35f, 0.32f)
         }
         name.contains("cozinha") -> {
             // Counter along the side wall, an island with stools
-            box(r.x + T / 2, y0, r.x + T / 2 + 0.62f, y1, 0f, 0.9f, Stone, top = Porcelain, radius = 0.04f)
+            box(r.x + T / 2, y0, r.x + T / 2 + 0.62f, y1, 0f, 0.9f, Cabinet, top = Wood, radius = 0.04f)
             val il = minOf(2.2f, d * 0.6f)
-            box(cx - 0.45f, cy - il / 2, cx + 0.45f, cy + il / 2, 0f, 0.9f, Wood, top = Porcelain, radius = 0.1f)
+            box(cx - 0.45f, cy - il / 2, cx + 0.45f, cy + il / 2, 0f, 0.9f, Sage, top = Cabinet, radius = 0.1f)
             listOf(-0.6f, 0f, 0.6f).forEach { o -> round(cx + 0.78f, cy + o, 0.17f, 0f, 0.62f, Graphite) }
         }
         name.contains("quarto") || name.contains("suíte") || name.contains("suite") || name.contains("ninho") || name.contains("principal") -> {
@@ -551,6 +560,7 @@ private fun furniture(r: RoomBox, outdoor: Boolean, tv: Boolean): List<Block> {
             val bl = minOf(2.1f, w * 0.6f)
             box(r.x + T / 2, cy - bw / 2 - 0.05f, r.x + T / 2 + 0.12f, cy + bw / 2 + 0.05f, 0f, 0.92f, Walnut, radius = 0.05f)
             box(r.x + T / 2 + 0.12f, cy - bw / 2, r.x + T / 2 + 0.12f + bl, cy + bw / 2, 0f, 0.42f, Linen, radius = 0.12f)
+            box(r.x + T / 2 + 0.12f + bl * 0.72f, cy - bw / 2 - 0.02f, r.x + T / 2 + 0.12f + bl * 0.92f, cy + bw / 2 + 0.02f, 0.42f, 0.53f, Terracotta, radius = 0.06f) // a throw
             box(r.x + T / 2 + 0.7f, cy - bw / 2 + 0.02f, r.x + T / 2 + 0.12f + bl, cy + bw / 2 - 0.02f, 0.42f, 0.5f, Duvet, radius = 0.12f)
             val pw = if (bw > 1.3f) 2 else 1
             (0 until pw).forEach { i ->
@@ -583,7 +593,7 @@ private fun furniture(r: RoomBox, outdoor: Boolean, tv: Boolean): List<Block> {
             val run = minOf(w * 0.75f, 3.2f) / steps
             (0 until steps).forEach { i ->
                 val sx = x1 - (i + 1) * run
-                box(sx, cy - sw / 2, sx + run, cy + sw / 2, 0f, (i + 1) * 0.15f, Stone, radius = 0f)
+                box(sx, cy - sw / 2, sx + run, cy + sw / 2, 0f, (i + 1) * 0.15f, Wood, top = Color(0xFFD8B78C), radius = 0f)
             }
             plant(x1 - 0.25f, y1 - 0.25f, 0.22f)
         }
@@ -642,10 +652,11 @@ private fun DrawScope.drawFloor(
     floor.rooms.forEach { r ->
         val wet = WET.containsMatchIn(r.room)
         val bedroom = Regex("(?i)quarto|suíte|suite|ninho|principal|escritório").containsMatchIn(r.room)
-        val base = washed(when { floor.outdoor -> FloorDeck; wet -> FloorWet; bedroom -> FloorWood; else -> FloorDry }, sky.amount * 0.6f)
+        val base = washed(when { floor.outdoor -> FloorDeck; wet -> FloorWet; bedroom -> FloorWood; else -> FloorDry })
         val shape = iso.rect(r.x, r.y, r.x + r.w, r.y + r.d)
-        drawPath(shape, lerp(base, Color(0xFF3D3122), warmth(r)), alpha = settle)
-        val line = Color.White.copy(alpha = (if (floor.outdoor) 0.05f else 0.035f) * settle)
+        // A lit room's floor warms towards the lamplight; a dark one keeps the hour's colour
+        drawPath(shape, lerp(base, Color(0xFFE9C79A), warmth(r) * sky.amount * 0.9f), alpha = settle)
+        val line = Grain.copy(alpha = Grain.alpha * settle)
         if (floor.outdoor || bedroom) {
             var x = r.x + if (floor.outdoor) 0.5f else 0.35f
             while (x < r.x + r.w) { drawLine(line, iso.p(x, r.y), iso.p(x, r.y + r.d), 1f); x += if (floor.outdoor) 0.5f else 0.35f }
@@ -655,11 +666,13 @@ private fun DrawScope.drawFloor(
             var y = r.y + 0.6f
             while (y < r.y + r.d) { drawLine(line, iso.p(r.x, y), iso.p(r.x + r.w, y), 1f); y += 0.6f }
         }
-        if (floor.open) drawPath(shape, Color.White.copy(alpha = 0.05f * settle), style = Stroke(1f))
+        if (floor.open) drawPath(shape, Color.Black.copy(alpha = 0.06f * settle), style = Stroke(1f))
         // A soft rug under the living room's table
         if (!floor.outdoor && (r.room == tvRoom || r.room.contains("estar", true))) {
             val cy = r.y + r.d / 2; val rl = minOf(3f, r.d * 0.62f)
-            drawPath(path(rounded(r.x + 0.8f, cy - rl / 2, r.x + r.w * 0.78f, cy + rl / 2, 0.35f).map { (x, y) -> iso.p(x, y) }), Rug.copy(alpha = 0.9f * settle))
+            val rug = path(rounded(r.x + 0.8f, cy - rl / 2, r.x + r.w * 0.78f, cy + rl / 2, 0.35f).map { (x, y) -> iso.p(x, y) })
+            drawPath(rug, washed(Rug).copy(alpha = settle))
+            drawPath(path(rounded(r.x + 0.95f, cy - rl / 2 + 0.15f, r.x + r.w * 0.78f - 0.15f, cy + rl / 2 - 0.15f, 0.25f).map { (x, y) -> iso.p(x, y) }), washed(Terracotta).copy(alpha = 0.45f * settle), style = Stroke(1.5f))
         }
     }
 
@@ -719,6 +732,17 @@ private fun DrawScope.drawFloor(
 
     // Walls and furniture, far to near; a face catches the light of the room it faces
     val furnish = floor.rooms.flatMap { furniture(it, floor.outdoor, it.room == tvRoom) }
+    // Soft contact shadows under every piece, as in a photograph of a model (a radial fill, no blur)
+    furnish.forEach { b ->
+        if (b.screen || b.z0 > 0.05f) return@forEach
+        val depth = (b.x0 + b.x1 + b.y0 + b.y1) / 2f / (w + d)
+        val shown = stage(build, 0.42f + depth * 0.2f, 0.66f + depth * 0.2f)
+        if (shown <= 0.01f) return@forEach
+        val outline = rounded(b.x0 - 0.1f, b.y0 - 0.06f, b.x1 + 0.16f, b.y1 + 0.18f, b.radius + 0.12f).map { (x, y) -> iso.p(x, y) }
+        val c = iso.p((b.x0 + b.x1) / 2 + 0.05f, (b.y0 + b.y1) / 2 + 0.06f)
+        val r = maxOf(b.x1 - b.x0, b.y1 - b.y0) * 0.75f * iso.s + 6.dp.toPx()
+        drawPath(path(outline), Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.3f * shown), Color.Black.copy(alpha = 0.12f * shown), Color.Transparent), c, r))
+    }
     (walls(plan, floor) + furnish).sortedBy { it.depth }.forEach { b ->
         val depth = (b.x0 + b.x1 + b.y0 + b.y1) / 2f / (w + d)
         val rise = if (b.wall) stage(build, 0.15f + depth * 0.25f, 0.5f + depth * 0.25f) else stage(build, 0.42f + depth * 0.2f, 0.66f + depth * 0.2f)
@@ -780,8 +804,20 @@ private fun DrawScope.drawFloor(
         val frontFace = iso.poly(Triple(x0, y1, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x0, y1, z1))
         drawPath(frontFace, Brush.verticalGradient(listOf(faceY, lerp(faceY, Color.Black, 0.25f)), iso.p(x0, y1, z1).y, iso.p(x0, y1, z0).y))
         drawPath(iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1)), Brush.verticalGradient(listOf(faceX, lerp(faceX, Color.Black, 0.25f)), iso.p(x1, y0, z1).y, iso.p(x1, y0, z0).y))
-        drawPath(iso.rect(x0, y0, x1, y1, z1), top)
+        drawPath(iso.rect(x0, y0, x1, y1, z1), washed(WallCap, sky.amount * 0.8f))
         drawLine(Color.White.copy(alpha = 0.16f), iso.p(x0, y1, z1), iso.p(x1, y1, z1), 1f)
+        // Framed prints on the side wall, over the bed or the table (never over the TV)
+        if (b.order == -1000f && y1 - y0 > x1 - x0 && rise > 0.9f) {
+            floor.rooms.filter { it.x < 0.01f && it.room != tvRoom && !WET.containsMatchIn(it.room) && it.d >= 2f }.forEachIndexed { i, r ->
+                val (outer, inner) = Art[i % Art.size]
+                val fw = minOf(1.1f, r.d * 0.32f); val cy = r.y + r.d / 2
+                val frame = iso.poly(Triple(x1, cy - fw / 2, 0.98f), Triple(x1, cy + fw / 2, 0.98f), Triple(x1, cy + fw / 2, 1.34f), Triple(x1, cy - fw / 2, 1.34f))
+                drawPath(frame, washed(Linen))
+                drawPath(frame, washed(Walnut), style = Stroke(1.5f))
+                drawPath(iso.poly(Triple(x1, cy - fw / 2 + 0.08f, 1.04f), Triple(x1, cy + fw / 2 - 0.08f, 1.04f), Triple(x1, cy + fw / 2 - 0.08f, 1.28f), Triple(x1, cy - fw / 2 + 0.08f, 1.28f)), washed(outer))
+                drawPath(iso.poly(Triple(x1, cy - fw * 0.05f, 1.04f), Triple(x1, cy + fw / 2 - 0.08f, 1.04f), Triple(x1, cy + fw / 2 - 0.08f, 1.18f), Triple(x1, cy - fw * 0.05f, 1.18f)), washed(inner))
+            }
+        }
         drawLine(Color.White.copy(alpha = 0.1f), iso.p(x1, y0, z1), iso.p(x1, y1, z1), 1f)
         // Windows on the street wall, their glass taking the hour, with a sill and a mullion
         if (b.order == -1000f && x1 - x0 > y1 - y0) {
@@ -805,12 +841,14 @@ private fun DrawScope.drawFloor(
             val shown = stage(build, 0.55f, 0.75f)
             if (shown <= 0.01f) return@forEach
             val c = iso.p(spot.first, spot.second, PENDANT)
-            drawLine(Color.White.copy(alpha = 0.14f * shown), c, iso.p(spot.first, spot.second, PENDANT + 0.3f), 1f)
+            drawLine(Color.Black.copy(alpha = 0.35f * shown), c, iso.p(spot.first, spot.second, PENDANT + 0.32f), 1f)
             if (k > 0.01f) {
-                drawCircle(Bulb.copy(alpha = 0.18f * k.coerceAtMost(1f)), radius = 11.dp.toPx() * (0.6f + 0.4f * k), center = c)
-                drawCircle(Bulb.copy(alpha = 0.4f * k.coerceAtMost(1f)), radius = 5.5.dp.toPx(), center = c)
+                drawCircle(Brush.radialGradient(listOf(Bulb.copy(alpha = 0.5f * k.coerceAtMost(1f)), Color.Transparent), c + Offset(0f, 3.dp.toPx()), 16.dp.toPx() * (0.6f + 0.4f * k)), 16.dp.toPx() * (0.6f + 0.4f * k), c + Offset(0f, 3.dp.toPx()))
             }
-            drawCircle(lerp(Color(0xFF5A5E66), Bulb, k.coerceIn(0f, 1f)), radius = 3.dp.toPx(), center = c, alpha = shown)
+            // A brass dome shade over the bulb
+            val sr = 5.dp.toPx()
+            drawArc(washed(Brass).copy(alpha = shown), 180f, 180f, true, topLeft = c - Offset(sr, sr * 0.9f), size = Size(sr * 2, sr * 1.8f))
+            drawOval(lerp(Color(0xFF6B6255), Bulb, k.coerceIn(0f, 1f)).copy(alpha = shown), topLeft = c - Offset(sr * 0.8f, sr * 0.22f), size = Size(sr * 1.6f, sr * 0.44f))
         }
     }
 

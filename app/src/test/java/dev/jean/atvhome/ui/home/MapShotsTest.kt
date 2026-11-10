@@ -101,6 +101,13 @@ class MapShotsTest {
         rule.onRoot().captureRoboImage("build/shots/casa-model-building.png")
     }
 
+    @Test fun `by day the model is light and airy`() {
+        show(LocalTime.of(14, 0))
+        rule.mainClock.advanceTimeBy(1_900)
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage("build/shots/casa-model-day.png")
+    }
+
     @Test fun `at sunset the model turns gold`() {
         show(LocalTime.of(18, 10))
         rule.mainClock.advanceTimeBy(1_500)
