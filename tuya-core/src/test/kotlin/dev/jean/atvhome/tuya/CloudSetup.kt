@@ -79,7 +79,12 @@ fun main(args: Array<String>) = runBlocking {
     if (seen == null) println("Não vi o hub na rede: a TV vai procurá-lo sozinha.")
     else println("Hub em ${seen.ip}, protocolo ${seen.version.wire}")
 
-    val config = HomeConfig(Hub(id = hubId, key = localKey, ip = seen?.ip, version = seen?.version?.wire), lights)
+    // The floor plan for the model, written by hand (tools/casa-plan.example.json); git-ignored like the keys
+    val plan = File("casa-plan.json").takeIf { it.isFile }?.let { TuyaJson.decodeFromString(Plan.serializer(), it.readText()) }
+    plan?.unknownRooms(lights.map { it.room })?.takeIf { it.isNotEmpty() }?.let { println("Na planta, sem nenhuma luz no app Tuya (confira o nome se o cômodo tem luzes): ${it.joinToString()}") }
+    if (plan != null) println("Planta: ${plan.floors.joinToString { "${it.name} (${it.rooms.size})" }}")
+
+    val config = HomeConfig(Hub(id = hubId, key = localKey, ip = seen?.ip, version = seen?.version?.wire), lights, plan)
     out.parentFile?.mkdirs()
     out.writeText(config.encode())
     println("${lights.size} teclas (${lights.count { it.load }} na fileira Casa) em ${devices.count { it.bool("sub") == true }} interruptores → ${out.path}")

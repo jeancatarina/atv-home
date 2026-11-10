@@ -1,0 +1,39 @@
+package dev.jean.atvhome.tuya
+
+import kotlinx.serialization.Serializable
+
+/**
+ * The house's floor plan for the model ("Maquete"): floors from the ground up, each with its rooms
+ * as rectangles on one footprint ([width] × [depth], any unit: metres or squares). Written by hand
+ * in casa-plan.json (tools/casa-plan.example.json), embedded in tuya.json by the setup; without it
+ * the model lays the rooms out on one floor by itself ([auto]).
+ */
+@Serializable
+data class Plan(val width: Float, val depth: Float, val floors: List<Floor>) {
+    /** Room names on the plan that the Tuya app does not know (a typo, or a room renamed in the app). */
+    fun unknownRooms(known: Collection<String>): List<String> =
+        floors.flatMap { f -> f.rooms.map { it.room } }.filter { it !in known }.distinct()
+
+    companion object {
+        /** No plan written: every room with lights on one floor, in rows of four. */
+        fun auto(rooms: List<String>): Plan {
+            val cols = 4
+            val rows = (rooms.size + cols - 1) / cols
+            val w = 3f
+            val d = 3f
+            return Plan(
+                width = cols * w,
+                depth = maxOf(1, rows) * d,
+                floors = listOf(Floor("Casa", rooms.mapIndexed { i, r -> RoomBox(r, (i % cols) * w, (i / cols) * d, w, d) })),
+            )
+        }
+    }
+}
+
+/** One floor. [open]: rooms without walls between them (an integrated living and kitchen). */
+@Serializable
+data class Floor(val name: String, val rooms: List<RoomBox>, val open: Boolean = false)
+
+/** A room's rectangle on the footprint: [x] along the width, [y] along the depth, from the back corner. */
+@Serializable
+data class RoomBox(val room: String, val x: Float, val y: Float, val w: Float, val d: Float)

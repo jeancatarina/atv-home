@@ -34,6 +34,7 @@ import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.NightsStay
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.material.icons.rounded.SpaceDashboard
+import androidx.compose.material.icons.rounded.ViewInAr
 import androidx.compose.material.icons.rounded.WbSunny
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -239,6 +240,7 @@ fun HousePanel(
     shortcut: Pair<String, () -> Unit>? = null,
     shortcutFocus: FocusRequester = remember { FocusRequester() },
     compact: Boolean = false,
+    onModel: (() -> Unit)? = null,
 ) {
     val states = home.states.collectAsState()
     val now = states.value
@@ -307,6 +309,9 @@ fun HousePanel(
                     item(key = "roomOn") {
                         SceneButton(Icons.Rounded.WbSunny, "Acender", { group(inRoom, true) }, detail = focusRoom)
                     }
+                }
+                if (onModel != null) item(key = "model") {
+                    SceneButton(Icons.Rounded.ViewInAr, "Maquete", onModel, detail = "${home.plan.floors.size} ${if (home.plan.floors.size == 1) "andar" else "andares"}", tint = Casa.Scene)
                 }
                 if (shortcut != null) item(key = "shortcut") {
                     SceneButton(Icons.Rounded.Keyboard, "Atalho no filme", shortcut.second, detail = shortcut.first,
@@ -391,7 +396,14 @@ fun HouseScreen(home: HouseModel, toast: (String) -> Unit) {
     // Back from the picker, focus returns to the button that opened it (the picker's chips are gone)
     var pickedOnce by remember { mutableStateOf(false) }
     LaunchedEffect(picking) { if (!picking && pickedOnce) shortcutFocus.requestWhenReady() }
+    var model by remember { mutableStateOf(false) }
+    // Back from the model goes to the list, not out of the house
+    androidx.activity.compose.BackHandler(enabled = model) { model = false }
     Box(Modifier.fillMaxSize().background(LocalAccent.current.screen())) {
+        if (model) {
+            HouseMap(home, home.plan, toast)
+            return@Box
+        }
         HousePanel(
             home, toast,
             onRowToggle = { light, add ->
@@ -400,6 +412,7 @@ fun HouseScreen(home: HouseModel, toast: (String) -> Unit) {
             },
             shortcut = Shortcut.name(key) to { picking = true; pickedOnce = true },
             shortcutFocus = shortcutFocus,
+            onModel = { model = true },
         )
         if (picking) {
             ShortcutPicker(

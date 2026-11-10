@@ -8,7 +8,7 @@ import kotlinx.serialization.json.Json
  * Tuya cloud and pushed to the TV as tuya.json. The TV never talks to the cloud.
  */
 @Serializable
-data class HomeConfig(val hub: Hub, val lights: List<Light>) {
+data class HomeConfig(val hub: Hub, val lights: List<Light>, val plan: Plan? = null) {
     /** Zigbee sub-devices to query on connect, in the order of [lights]. */
     val cids: List<String> get() = lights.map { it.cid }.distinct()
 

@@ -13,6 +13,7 @@ import dev.jean.atvhome.tuya.Light
 import dev.jean.atvhome.tuya.Link
 import dev.jean.atvhome.tuya.Located
 import dev.jean.atvhome.tuya.Panel
+import dev.jean.atvhome.tuya.Plan
 import dev.jean.atvhome.tuya.Usage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,8 @@ interface HouseModel {
     val link: StateFlow<Link>
     /** The Casa row: most used first, without the hidden lights. */
     val row: StateFlow<List<Light>>
+    /** The floor plan for the model: the one in tuya.json, or every room on one floor. */
+    val plan: Plan get() = Plan.auto(rooms)
     suspend fun toggle(light: Light): Boolean
     suspend fun switchAll(group: List<Light>, on: Boolean): Boolean
     fun setHidden(light: Light, hide: Boolean)
@@ -68,6 +71,7 @@ class SmartHome private constructor(
     private var idle: Job? = null
 
     override val lights: List<Light> get() = config.lights
+    override val plan: Plan get() = config.plan ?: Plan.auto(rooms)
     override val states: StateFlow<Map<String, Boolean>> = gateway.states
     override val link: StateFlow<Link> = gateway.link
 
