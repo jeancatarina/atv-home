@@ -211,6 +211,14 @@ o cômodo inteiro, e ao lado ficam as luzes do cômodo. A planta é sua: copie
 os retângulos dos cômodos (os nomes iguais aos do app Tuya) e rode `tools/tuya-setup.sh`. Sem planta, a
 maquete põe todos os cômodos num andar só.
 
+Cada cômodo tem seus móveis, reconhecidos pelo nome: o sofá voltado para a TV, que está ligada e
+diz "Você está aqui"; mesa e cadeiras no jantar; bancada e ilha na cozinha; camas com travesseiro nos
+quartos; mesa e estante no escritório; pia e vaso nos banheiros; a escada no corredor;
+espreguiçadeiras e vasos no terraço. As luzes são pendentes sobre a poça que fazem no piso, e as
+janelas do fundo seguem a hora (sol no piso de dia, dourado no fim da tarde, luar à noite). As setas
+vão para o cômodo naquela direção da tela; no alto ou embaixo do andar, trocam de andar, e **CH ±**
+trocam direto. Acender ou apagar solta um anel pelo piso.
+
 A maquete é viva: o andar se monta ao aparecer (a laje assenta, as paredes sobem do fundo para a
 frente e as luzes acendem uma a uma), uma luz que acende "floresce" como lâmpada esquentando, e o
 ambiente segue a hora: azul de noite, dourado no pôr do sol.

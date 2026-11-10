@@ -87,9 +87,11 @@ class MapShotsTest {
         rule.waitForIdle()
         rule.onNodeWithText("Quarto principal").assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-model-suite.png")
-        rule.onRoot().performKeyInput { pressKey(Key.DirectionUp) }
-        rule.mainClock.advanceTimeBy(1_500)
+        // ▲ climbs to the room above on screen first; Channel + goes straight up a floor
+        rule.onRoot().performKeyInput { pressKey(Key.ChannelUp) }
+        rule.mainClock.advanceTimeBy(1_900)
         rule.waitForIdle()
+        rule.onNodeWithText("TERRAÇO").assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-model-terraco.png")
     }
 
