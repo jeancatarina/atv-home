@@ -96,6 +96,9 @@ object Shortcut {
         val tmp = File(f.parentFile, "${f.name}.tmp")
         tmp.writeText(code.toString())
         tmp.renameTo(f)
+        // This process sees it now, even on a file system that keeps dates in whole seconds
+        cached = code
+        stamp = f.lastModified()
     }
 }
 

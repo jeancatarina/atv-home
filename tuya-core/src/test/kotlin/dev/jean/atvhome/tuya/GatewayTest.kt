@@ -3,6 +3,7 @@ package dev.jean.atvhome.tuya
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -62,6 +63,20 @@ class GatewayTest {
         assertFalse(gw.set("estar", 2, true))
         assertEquals(false, gw.states.value["estar:2"])
         hub.answering = true
+    }
+
+    @Test fun `each answer goes to its own command when several are out at once`() = each { hub, gw ->
+        hub.silent += "estar"
+        hub.states["lavabo"] = mutableMapOf(1 to false)
+        val results = kotlinx.coroutines.coroutineScope {
+            val silent = async { gw.set("estar", 2, true) }
+            kotlinx.coroutines.delay(20) // the silent one is the oldest waiting
+            val answered = async { gw.set("lavabo", 1, true) }
+            listOf(silent.await(), answered.await())
+        }
+        // 3.5 hubs number their answers their own way: there, the oldest waiting takes it
+        if (hub.version != Version.V35) assertEquals(listOf(false, true), results)
+        hub.silent.clear()
     }
 
     @Test fun `heartbeats keep the connection and a dropped one comes back`() = each { hub, gw ->

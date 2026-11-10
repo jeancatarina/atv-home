@@ -48,6 +48,7 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.jean.atvhome.data.SmartHome
 import dev.jean.atvhome.ui.components.TvScroll
+import dev.jean.atvhome.ui.components.requestWhenReady
 import dev.jean.atvhome.ui.home.HousePanel
 import dev.jean.atvhome.ui.home.PanelState
 import dev.jean.atvhome.ui.theme.InicioTheme
@@ -67,25 +68,42 @@ import kotlinx.coroutines.delay
 class HouseKeyService : AccessibilityService() {
 
     private var home: SmartHome? = null
+    /** When the tuya.json in use was written: tools/tuya-setup.sh can bring a new one at any time. */
+    private var loaded = Long.MIN_VALUE
     private var overlay: Overlay? = null
     private val main = Handler(Looper.getMainLooper())
 
     private val screen = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                Intent.ACTION_SCREEN_ON -> home?.connect(true)
+                Intent.ACTION_SCREEN_ON -> ensureHome()?.connect(true)
                 Intent.ACTION_SCREEN_OFF -> { overlay?.hide(); home?.connect(false, graceMs = 0) }
             }
         }
     }
 
     override fun onServiceConnected() {
-        val h = SmartHome.forOverlay(this) ?: return Unit.also { Log.i(TAG, "no tuya.json: the yellow key stays with the apps") }
-        home = h
-        h.connect(true)
         registerReceiver(screen, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF) })
-        // Built once, a while after start, and kept hidden: the first yellow press opens it at once
+        if (ensureHome() == null) Log.i(TAG, "no tuya.json yet: the shortcut key stays with the apps")
+        // Built once, a while after start, and kept hidden: the first press opens it at once
         main.postDelayed({ ensureOverlay() }, WARM_UP_MS)
+    }
+
+    /**
+     * The house, loaded the first time it is needed and again when tuya.json changes (the setup ran
+     * while this service was up, or the launcher imported it after this started). One stat per call.
+     */
+    private fun ensureHome(): SmartHome? {
+        SmartHome.importPushed(this)
+        val stamp = SmartHome.configStamp(this)
+        if (stamp == loaded && home != null) return home
+        if (stamp == 0L) return null
+        overlay?.destroy()
+        overlay = null
+        home?.close()
+        home = SmartHome.forOverlay(this)?.also { it.connect(true) }
+        loaded = stamp
+        return home
     }
 
     private val hold = Hold()
@@ -93,9 +111,11 @@ class HouseKeyService : AccessibilityService() {
     private var replayingUntil = 0L
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (home == null) return false
+        // HOME leaves whatever is open: the sheet must not stay over the launcher
+        if (event.keyCode == KeyEvent.KEYCODE_HOME) { overlay?.hide(); return false }
         val choice = Shortcut.get(this)
         if (choice == Shortcut.NONE || event.keyCode != Shortcut.keyOf(choice)) return false
+        if (ensureHome() == null) return false
         if (!Shortcut.isHold(choice)) {
             if (event.action == KeyEvent.ACTION_UP) ensureOverlay()?.toggle()
             return true
@@ -136,7 +156,8 @@ class HouseKeyService : AccessibilityService() {
         runCatching { unregisterReceiver(screen) }
         overlay?.destroy()
         overlay = null
-        home?.connect(false, graceMs = 0)
+        home?.close()
+        home = null
         super.onDestroy()
     }
 
@@ -191,7 +212,7 @@ class HouseKeyService : AccessibilityService() {
                     }
                 }
                 // Every opening starts on "Apagar tudo"; nobody touching it for a while: back to the film
-                LaunchedEffect(opened) { if (opened > 0) runCatching { first.requestFocus() } }
+                LaunchedEffect(opened) { if (opened > 0) first.requestWhenReady() }
                 LaunchedEffect(shown, keys) { if (shown) { delay(IDLE_MS); hide() } }
             }
         }
@@ -209,6 +230,7 @@ class HouseKeyService : AccessibilityService() {
             params.flags = SHOWN_FLAGS
             view.visibility = View.VISIBLE
             wm.updateViewLayout(view, params)
+            view.requestFocus()
             registry.currentState = Lifecycle.State.RESUMED
             shown = true
             opened++

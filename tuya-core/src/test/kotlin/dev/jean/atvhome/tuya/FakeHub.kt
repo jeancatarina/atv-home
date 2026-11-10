@@ -35,6 +35,8 @@ class FakeHub(
     private val clients = CopyOnWriteArrayList<Client>()
     /** Off: the hub stops answering commands (a frozen hub), to test the rollback. */
     @Volatile var answering = true
+    /** Switches whose commands the hub never answers (one out of Zigbee range). */
+    val silent: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     init {
         thread(isDaemon = true, name = "fake-hub") {
@@ -76,7 +78,8 @@ class FakeHub(
             out.write(codec.encode(seqNo, cmd, payload, retcode = 0)); out.flush()
         }
 
-        fun push(cid: String, dps: Map<Int, Boolean>) = runCatching { send(seq.getAndIncrement(), Cmd.STATUS, status(cid, dps)) }
+        // Like the real hub: one push per key, numbered 0
+        fun push(cid: String, dps: Map<Int, Boolean>) = runCatching { dps.forEach { (dp, on) -> send(0, Cmd.STATUS, status(cid, mapOf(dp to on))) } }
 
         private fun status(cid: String, dps: Map<Int, Boolean>): ByteArray {
             val values = buildJsonObject { dps.forEach { (dp, on) -> put(dp.toString(), on) } }
@@ -93,7 +96,7 @@ class FakeHub(
                     send(frame.seq, Cmd.SESS_RESP, Handshake.answer(codec.localKey, nonce!!, hubNonce))
                 }
                 Cmd.SESS_FINISH -> codec.key = Handshake.sessionKey(version, codec.localKey, nonce!!, hubNonce)
-                Cmd.HEARTBEAT -> send(frame.seq, Cmd.HEARTBEAT, ByteArray(0))
+                Cmd.HEARTBEAT -> send(0, Cmd.HEARTBEAT, ByteArray(0))
                 Cmd.DP_QUERY, Cmd.DP_QUERY_NEW -> {
                     val cid = json(frame)["cid"].str() ?: return
                     send(frame.seq, frame.cmd, status(cid, states[cid] ?: mapOf(1 to false)))
@@ -103,6 +106,7 @@ class FakeHub(
                     val root = json(frame)
                     val data = if (version == Version.V33) root else root["data"]!!.jsonObject
                     val cid = data["cid"].str()!!
+                    if (cid in silent) return
                     val dps = (data["dps"] as JsonObject).mapNotNull { (k, v) -> (v as JsonPrimitive).booleanOrNull?.let { k.toInt() to it } }.toMap()
                     states.getOrPut(cid) { ConcurrentHashMap() }.putAll(dps)
                     send(frame.seq, frame.cmd, ByteArray(0))

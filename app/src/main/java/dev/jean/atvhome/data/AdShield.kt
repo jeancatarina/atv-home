@@ -170,14 +170,14 @@ object AdShield {
     private fun guardService(context: Context, on: Boolean) = listService(context, AdGuardService::class.java, on)
 
     /**
-     * Keeps another of our accessibility services listed ("Casa no filme"), on the same writer as the
-     * guard's so neither overwrites the other's change to the list. Without WRITE_SECURE_SETTINGS it
-     * does nothing.
+     * Lists or unlists another of our accessibility services ("Casa no filme"), on the same writer as
+     * the guard's so neither overwrites the other's change to the list. Without WRITE_SECURE_SETTINGS
+     * it does nothing.
      */
-    fun keepListed(context: Context, service: Class<*>) {
+    fun keepListed(context: Context, service: Class<*>, on: Boolean = true) {
         if (!allowed(context)) return
         val app = context.applicationContext
-        scope.launch { runCatching { listService(app, service, true) }.onFailure { Log.w(TAG, "list ${service.simpleName}", it) } }
+        scope.launch { runCatching { listService(app, service, on) }.onFailure { Log.w(TAG, "list ${service.simpleName}", it) } }
     }
 
     /** Adds or removes one of our accessibility services in the system's colon-separated list. */

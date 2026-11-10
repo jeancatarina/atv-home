@@ -94,11 +94,12 @@ class Gateway(
         val keys = dps.mapKeys { keyOf(cid, it.key) }
         val before = _states.value
         _states.update { it + keys }
-        val pending = Pending(cid, dps)
+        // The seq is taken before the frame goes out: the hub's acknowledgement can arrive before send returns
+        val pending = Pending(cid, dps, s.nextSeq())
         s.pending.add(pending)
         val ok = try {
             val started = System.nanoTime()
-            withContext(Dispatchers.IO) { s.control(cid, dps) }
+            withContext(Dispatchers.IO) { s.control(cid, dps, pending.seq) }
             (withTimeoutOrNull(confirmMs) { pending.done.await() } == true)
                 .also { log("set $cid $dps: ${if (it) "ok" else "no answer"} in ${(System.nanoTime() - started) / 1_000_000} ms") }
         } catch (e: IOException) {
@@ -201,13 +202,15 @@ class Gateway(
             _states.update { it + dps.mapKeys { (dp, _) -> keyOf(cid, dp) } }
             s.pending.filter { it.cid == cid && it.dps.all { (dp, on) -> dps[dp] == on } }.forEach { it.done.complete(true) }
         }
-        // The hub acknowledges a command with an empty frame of the same type before the status push
+        // The hub acknowledges a command with an empty frame of the same type, and the command's seq,
+        // before the status push. 3.5 hubs number their frames their own way: then the oldest waiting
         if ((frame.cmd == Cmd.CONTROL || frame.cmd == Cmd.CONTROL_NEW) && frame.payload.isEmpty()) {
-            s.pending.firstOrNull { !it.done.isCompleted }?.done?.complete(frame.retcode == null || frame.retcode == 0)
+            val ok = frame.retcode == null || frame.retcode == 0
+            (s.pending.firstOrNull { it.seq == frame.seq } ?: s.pending.firstOrNull { !it.done.isCompleted })?.done?.complete(ok)
         }
     }
 
-    private class Pending(val cid: String, val dps: Map<Int, Boolean>) {
+    private class Pending(val cid: String, val dps: Map<Int, Boolean>, val seq: Int) {
         val done = CompletableDeferred<Boolean>()
     }
 
@@ -219,14 +222,16 @@ class Gateway(
 
         fun read(): Frame = codec.read(input, fromDevice = true)
 
-        fun send(cmd: Int, payload: ByteArray) {
+        fun nextSeq(): Int = seq.getAndIncrement()
+
+        fun send(cmd: Int, payload: ByteArray, seqNo: Int = nextSeq()) {
             synchronized(output) {
-                output.write(codec.encode(seq.getAndIncrement(), cmd, payload))
+                output.write(codec.encode(seqNo, cmd, payload))
                 output.flush()
             }
         }
 
-        fun send(cmd: Int, json: JsonObject) = send(cmd, json.toString().toByteArray(Charsets.UTF_8))
+        fun send(cmd: Int, json: JsonObject, seqNo: Int = nextSeq()) = send(cmd, json.toString().toByteArray(Charsets.UTF_8), seqNo)
 
         fun negotiate() {
             val nonce = Handshake.nonce()
@@ -246,18 +251,18 @@ class Gateway(
             codec.key = key
         }
 
-        fun control(cid: String, dps: Map<Int, Boolean>) {
+        fun control(cid: String, dps: Map<Int, Boolean>, seqNo: Int) {
             val t = System.currentTimeMillis() / 1000
             val values = buildJsonObject { dps.forEach { (dp, on) -> put(dp.toString(), on) } }
             if (codec.version == Version.V33) {
-                send(Cmd.CONTROL, buildJsonObject { put("t", t); put("cid", cid); put("dps", values) })
+                send(Cmd.CONTROL, buildJsonObject { put("t", t); put("cid", cid); put("dps", values) }, seqNo)
             } else {
                 send(Cmd.CONTROL_NEW, buildJsonObject {
                     put("protocol", 5)
                     put("t", t)
                     putJsonObject("data") { put("cid", cid); put("ctype", 0); put("dps", values) }
                     put("cid", cid)
-                })
+                }, seqNo)
             }
         }
 

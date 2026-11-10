@@ -305,3 +305,14 @@ fun PersonCard(photo: String?, name: String, role: String?, onClick: () -> Unit)
 
 val RowPadding = PaddingValues(horizontal = Tv.Edge)
 val RowSpacing = Arrangement.spacedBy(Tv.Gap)
+
+/**
+ * Focus for a node that may not exist yet: inside a lazy list or grid, items are only there after the
+ * first layout, and a hidden window lays nothing out. Tries once a frame, up to [frames] times.
+ */
+suspend fun FocusRequester.requestWhenReady(frames: Int = 60) {
+    repeat(frames) {
+        if (runCatching { requestFocus() }.isSuccess) return
+        androidx.compose.runtime.withFrameNanos { }
+    }
+}

@@ -20,6 +20,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -105,6 +106,13 @@ class SmartHome private constructor(
         }
     }
 
+    /** For good: disconnects and stops everything this instance runs (the overlay replaces it with a new house). */
+    fun close() {
+        idle?.cancel()
+        gateway.stop()
+        scope.cancel()
+    }
+
     fun isOn(light: Light) = Panel.isOn(light, states.value)
 
     /** A whole switch ("Lavabo") turns all its keys off when any is on, and all on when none is. */
@@ -127,8 +135,17 @@ class SmartHome private constructor(
 
     // --- The row ---------------------------------------------------------------------------------
 
-    /** Hidden by the person; before any choice, what the setup left off the row (scenes, spares, offline). */
-    fun hidden(): Set<String> = prefs.getStringSet("hidden", null) ?: lights.filterNot { it.load }.map { it.key }.toSet()
+    /**
+     * Hidden by the person; before any choice, what the setup left off the row (scenes, spares,
+     * offline). A choice made for other lights (the setup found a new switch, or new names) starts over.
+     */
+    fun hidden(): Set<String> {
+        val chosen = prefs.getStringSet("hidden", null)?.takeIf { prefs.getString("hiddenFor", null) == lightsStamp() }
+        return chosen ?: lights.filterNot { it.load }.map { it.key }.toSet()
+    }
+
+    /** Same lights, same stamp, in any process and after any restart (no enum or object hash codes). */
+    private fun lightsStamp(): String = lights.joinToString("|") { "${it.key}=${it.name}/${it.kind.name}/${it.load}" }.hashCode().toString()
 
     private fun arrange(): List<Light> {
         val hidden = hidden()
@@ -137,7 +154,7 @@ class SmartHome private constructor(
 
     override fun setHidden(light: Light, hide: Boolean) {
         val set = hidden().toMutableSet().apply { if (hide) add(light.key) else remove(light.key) }
-        prefs.edit().putStringSet("hidden", set).apply()
+        prefs.edit().putStringSet("hidden", set).putString("hiddenFor", lightsStamp()).apply()
         _row.value = arrange()
     }
 
@@ -166,25 +183,30 @@ class SmartHome private constructor(
         private const val CONFIG = "tuya.json"
         private const val USAGE = "casa-usage.txt"
 
+        /** The launcher's: it counts uses only while the film overlay does not. */
+        fun forLauncher(context: Context): SmartHome? = open(context) { !overlayListed(context) }
+
+        /** The film overlay's. */
+        fun forOverlay(context: Context): SmartHome? = open(context) { true }
+
+        /** When the house in use was written: the overlay reloads when it changes. */
+        fun configStamp(context: Context): Long = File(context.filesDir, CONFIG).lastModified()
+
         /**
-         * The launcher's. tools/tuya-setup.sh pushes tuya.json to the app's external folder (the only
-         * one adb can write); it is moved to internal storage, where no other app can read the hub's key.
+         * tools/tuya-setup.sh pushes tuya.json to the app's external folder (the only one adb can
+         * write); whichever process starts first moves it to internal storage, where no other app can
+         * read the hub's key. The row's choices and the use counts stay: they are kept by light.
          */
-        fun forLauncher(context: Context): SmartHome? {
-            val file = File(context.filesDir, CONFIG)
-            val pushed = context.getExternalFilesDir(null)?.let { File(it, CONFIG) }
-            if (pushed != null && pushed.isFile) {
-                runCatching { pushed.copyTo(file, overwrite = true); pushed.delete() }.onFailure { Log.w(TAG, "import", it) }
-                context.getSharedPreferences("casa", Context.MODE_PRIVATE).edit().clear().apply()
-                File(context.filesDir, USAGE).delete()
-            }
-            return open(context, file) { !overlayListed(context) }
+        @Synchronized
+        fun importPushed(context: Context) {
+            val pushed = context.getExternalFilesDir(null)?.let { File(it, CONFIG) }?.takeIf { it.isFile } ?: return
+            runCatching { write(File(context.filesDir, CONFIG), pushed.readText()); pushed.delete() }
+                .onFailure { Log.w(TAG, "import", it) }
         }
 
-        /** The film overlay's: reads what the launcher imported. */
-        fun forOverlay(context: Context): SmartHome? = open(context, File(context.filesDir, CONFIG)) { true }
-
-        private fun open(context: Context, file: File, counts: () -> Boolean): SmartHome? {
+        private fun open(context: Context, counts: () -> Boolean): SmartHome? {
+            importPushed(context)
+            val file = File(context.filesDir, CONFIG)
             if (!file.isFile) return null
             return runCatching { SmartHome(context, file, HomeConfig.decode(file.readText()), counts) }
                 .onFailure { Log.w(TAG, CONFIG, it) }.getOrNull()

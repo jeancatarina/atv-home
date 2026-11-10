@@ -48,7 +48,10 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.platform.LocalContext
+import dev.jean.atvhome.casa.HouseKeyService
 import dev.jean.atvhome.casa.Shortcut
+import dev.jean.atvhome.data.AdShield
+import dev.jean.atvhome.ui.components.requestWhenReady
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -220,6 +223,7 @@ fun HousePanel(
     firstFocus: FocusRequester = remember { FocusRequester() },
     onRowToggle: ((Light, Boolean) -> Unit)? = null,
     shortcut: Pair<String, () -> Unit>? = null,
+    shortcutFocus: FocusRequester = remember { FocusRequester() },
 ) {
     val states = home.states.collectAsState()
     val now = states.value
@@ -236,7 +240,7 @@ fun HousePanel(
     fun group(of: List<Light>, on: Boolean) = scope.launch {
         if (!home.switchAll(of, on)) toast("Algumas luzes não responderam")
     }
-    LaunchedEffect(Unit) { runCatching { firstFocus.requestFocus() } }
+    LaunchedEffect(Unit) { firstFocus.requestWhenReady() }
 
     LazyVerticalGrid(
         columns = columns,
@@ -268,7 +272,7 @@ fun HousePanel(
                     item(key = "roomOff") { PillButton("Apagar $focusRoom", { group(inRoom, false) }) }
                     item(key = "roomOn") { PillButton("Acender $focusRoom", { group(inRoom, true) }) }
                 }
-                if (shortcut != null) item(key = "shortcut") { PillButton(shortcut.first, shortcut.second) }
+                if (shortcut != null) item(key = "shortcut") { PillButton(shortcut.first, shortcut.second, modifier = Modifier.focusRequester(shortcutFocus)) }
             }
         }
         item(span = { GridItemSpan(maxLineSpan) }, key = "filters") {
@@ -323,6 +327,10 @@ fun HouseScreen(home: HouseModel, toast: (String) -> Unit) {
     val context = LocalContext.current
     var key by remember { mutableIntStateOf(Shortcut.get(context)) }
     var picking by remember { mutableStateOf(false) }
+    val shortcutFocus = remember { FocusRequester() }
+    // Back from the picker, focus returns to the button that opened it (the picker's chips are gone)
+    var pickedOnce by remember { mutableStateOf(false) }
+    LaunchedEffect(picking) { if (!picking && pickedOnce) shortcutFocus.requestWhenReady() }
     Box(Modifier.fillMaxSize().background(LocalAccent.current.screen())) {
         HousePanel(
             home, toast,
@@ -330,13 +338,16 @@ fun HouseScreen(home: HouseModel, toast: (String) -> Unit) {
                 home.setHidden(light, !add)
                 toast(if (add) "${light.name} está na fileira Casa" else "${light.name} saiu da fileira")
             },
-            shortcut = "Atalho no filme: ${Shortcut.name(key)}" to { picking = true },
+            shortcut = "Atalho no filme: ${Shortcut.name(key)}" to { picking = true; pickedOnce = true },
+            shortcutFocus = shortcutFocus,
         )
         if (picking) {
             ShortcutPicker(
                 current = key,
                 onPick = { code ->
                     Shortcut.set(context, code)
+                    // No shortcut, no service: nothing watches the remote and nothing stays connected
+                    AdShield.keepListed(context, HouseKeyService::class.java, on = code != Shortcut.NONE)
                     key = code
                     picking = false
                     toast(if (code == Shortcut.NONE) "Atalho no filme desligado" else "${Shortcut.name(code)} abre a Casa em qualquer app")
@@ -361,7 +372,7 @@ fun ShortcutPicker(current: Int, onPick: (Int) -> Unit, onCancel: () -> Unit) {
         Shortcut.capturing = true
         onDispose { Shortcut.capturing = false }
     }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) { first.requestWhenReady() }
     Box(
         Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f))
             .focusProperties { exit = { FocusRequester.Cancel } }.focusGroup()
