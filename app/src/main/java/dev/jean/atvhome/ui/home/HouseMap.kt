@@ -649,6 +649,13 @@ private class Scene(val plan: Plan, val floor: Floor, lights: List<Light>, val t
 
     val pieces: List<Piece>
     val windows: List<Pair<Float, Float>>
+
+    /**
+     * Projected paths, kept once the floor has settled and a piece has risen: from then on a frame
+     * only changes colours, so moving between rooms or a light coming on allocates nothing.
+     */
+    val cache = androidx.collection.MutableIntObjectMap<Path>()
+    var cacheFor = Size.Zero
     val rugs: List<Pair<List<Pair<Float, Float>>, List<Pair<Float, Float>>>>
     val art: List<RoomBox>
 
@@ -736,7 +743,6 @@ private fun DrawScope.drawFloor(
     val settle = stage(build, 0f, 0.35f)
     val iso = fit(scene.plan, dz = (1f - settle) * 0.9f)
     val w = scene.w; val d = scene.d
-    val centre = iso.p(w / 2, d / 2)
     fun g(l: Light): Float {
         val i = scene.order[l.key] ?: 0
         return (glow[l.key] ?: 0f) * stage(build, 0.62f + i * 0.03f, 0.82f + i * 0.03f)
@@ -751,73 +757,81 @@ private fun DrawScope.drawFloor(
     fun warmth(r: RoomBox?) = if (r == null) 0f else heat[r] ?: 0f
     fun washed(c: Color, amount: Float = sky.amount) = lerp(c, sky.wash, amount)
     fun pts(outline: List<Pair<Float, Float>>, z: Float = 0f) = outline.map { (x, y) -> iso.p(x, y, z) }
+    val stable = settle >= 0.999f
+    if (scene.cacheFor != size) { scene.cache.clear(); scene.cacheFor = size }
+    fun cached(id: Int, done: Boolean = true, make: () -> Path): Path =
+        if (stable && done) scene.cache.getOrPut(id, make) else make()
+    /** Many short lines as one path: one draw call instead of one each. */
+    fun lines(segments: List<Pair<Offset, Offset>>) = Path().apply { segments.forEach { (a, b) -> moveTo(a.x, a.y); lineTo(b.x, b.y) } }
 
-    // The hour's light behind the model, not the whole screen: it lifts the model off the page
-    drawCircle(
-        Brush.radialGradient(listOf(sky.glow.copy(alpha = 0.22f), sky.glow.copy(alpha = 0.05f), Color.Transparent), centre, size.minDimension * 0.72f),
-        radius = size.minDimension * 0.72f, center = centre,
-    )
-    // A soft shadow under the model, on the "table" it stands on
+    // A soft shadow under the model, on the "table" it stands on (the hour's colour is the screen's own:
+    // a gradient across the whole screen cost this TV's GPU a frame's budget)
     scale(1f, SIN / COS, pivot = iso.p(w / 2, d / 2, -SLAB)) {
         val c = iso.p(w / 2, d / 2, -SLAB)
-        val r = (w + d) * 0.55f * COS * iso.s
-        drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.35f * settle), Color.Transparent), c, r), r, c)
+        val r = (w + d) * 0.44f * COS * iso.s
+        drawCircle(Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.32f * settle), Color.Transparent), c, r), r, c)
     }
-    drawPath(iso.poly(Triple(0f, d, 0f), Triple(w, d, 0f), Triple(w, d, -SLAB), Triple(0f, d, -SLAB)), SlabLeft, alpha = settle)
-    drawPath(iso.poly(Triple(w, 0f, 0f), Triple(w, d, 0f), Triple(w, d, -SLAB), Triple(w, 0f, -SLAB)), SlabRight, alpha = settle)
+    drawPath(cached(600) { iso.poly(Triple(0f, d, 0f), Triple(w, d, 0f), Triple(w, d, -SLAB), Triple(0f, d, -SLAB)) }, SlabLeft, alpha = settle)
+    drawPath(cached(601) { iso.poly(Triple(w, 0f, 0f), Triple(w, d, 0f), Triple(w, d, -SLAB), Triple(w, 0f, -SLAB)) }, SlabRight, alpha = settle)
     drawLine(Color.White.copy(alpha = 0.1f * settle), iso.p(0f, d), iso.p(w, d), 1.2f)
     drawLine(Color.White.copy(alpha = 0.07f * settle), iso.p(w, 0f), iso.p(w, d), 1.2f)
 
     // Floors and their finish: wood in the bedrooms, tiles where it gets wet, a deck outside
-    floor.rooms.forEach { r ->
+    floor.rooms.forEachIndexed { i, r ->
         val wet = WET.containsMatchIn(r.room)
         val bedroom = BEDROOM.containsMatchIn(r.room)
         val base = washed(when { floor.outdoor -> FloorDeck; wet -> FloorWet; bedroom -> FloorWood; else -> FloorDry })
-        val shape = iso.rect(r.x, r.y, r.x + r.w, r.y + r.d)
+        val shape = cached(i) { iso.rect(r.x, r.y, r.x + r.w, r.y + r.d) }
         // A lit room's floor warms towards the lamplight; a dark one keeps the hour's colour
         drawPath(shape, lerp(base, Color(0xFFE9C79A), warmth(r) * sky.amount * 0.9f), alpha = settle)
-        val line = Grain.copy(alpha = Grain.alpha * settle)
-        if (floor.outdoor || bedroom) {
-            var x = r.x + if (floor.outdoor) 0.5f else 0.35f
-            while (x < r.x + r.w) { drawLine(line, iso.p(x, r.y), iso.p(x, r.y + r.d), 1f); x += if (floor.outdoor) 0.5f else 0.35f }
-        } else if (wet) {
-            var x = r.x + 0.6f
-            while (x < r.x + r.w) { drawLine(line, iso.p(x, r.y), iso.p(x, r.y + r.d), 1f); x += 0.6f }
-            var y = r.y + 0.6f
-            while (y < r.y + r.d) { drawLine(line, iso.p(r.x, y), iso.p(r.x + r.w, y), 1f); y += 0.6f }
+        val grain = cached(100 + i) {
+            val seg = ArrayList<Pair<Offset, Offset>>()
+            if (floor.outdoor || bedroom) {
+                val step = if (floor.outdoor) 0.5f else 0.35f
+                var x = r.x + step
+                while (x < r.x + r.w) { seg += iso.p(x, r.y) to iso.p(x, r.y + r.d); x += step }
+            } else if (wet) {
+                var x = r.x + 0.6f
+                while (x < r.x + r.w) { seg += iso.p(x, r.y) to iso.p(x, r.y + r.d); x += 0.6f }
+                var y = r.y + 0.6f
+                while (y < r.y + r.d) { seg += iso.p(r.x, y) to iso.p(r.x + r.w, y); y += 0.6f }
+            }
+            lines(seg)
         }
+        drawPath(grain, Grain.copy(alpha = Grain.alpha * settle), style = Stroke(1f))
         if (floor.open) drawPath(shape, Color.Black.copy(alpha = 0.06f * settle), style = Stroke(1f))
     }
     // A soft rug under the living room's table
-    scene.rugs.forEach { (rug, border) ->
-        drawPath(path(pts(rug)), washed(Rug).copy(alpha = settle))
-        drawPath(path(pts(border)), washed(Terracotta).copy(alpha = 0.45f * settle), style = Stroke(1.5f))
+    scene.rugs.forEachIndexed { i, (rug, border) ->
+        drawPath(cached(200 + 2 * i) { path(pts(rug)) }, washed(Rug).copy(alpha = settle))
+        drawPath(cached(201 + 2 * i) { path(pts(border)) }, washed(Terracotta).copy(alpha = 0.45f * settle), style = Stroke(1.5f))
     }
 
     // The plan's finishes on the floor: a deck, a lawn, tiles; where the stairs come up; a skylight
-    floor.features.forEach { f ->
-        val shape = iso.rect(f.x, f.y, f.x + f.w, f.y + f.d)
+    floor.features.forEachIndexed { fi, f ->
+        val shape = cached(300 + fi) { iso.rect(f.x, f.y, f.x + f.w, f.y + f.d) }
+        fun stripes(step: Float, alongX: Boolean, crossToo: Boolean = false) = cached(400 + fi) {
+            val seg = ArrayList<Pair<Offset, Offset>>()
+            if (alongX || crossToo) { var x = f.x + step; while (x < f.x + f.w) { seg += iso.p(x, f.y) to iso.p(x, f.y + f.d); x += step } }
+            if (!alongX || crossToo) { var y = f.y + step; while (y < f.y + f.d) { seg += iso.p(f.x, y) to iso.p(f.x + f.w, y); y += step } }
+            lines(seg)
+        }
         when (f.kind) {
             "deck" -> {
                 drawPath(shape, washed(Color(0xFFB08A60)), alpha = settle)
-                var x = f.x + 0.32f
-                while (x < f.x + f.w) { drawLine(Grain.copy(alpha = 0.1f * settle), iso.p(x, f.y), iso.p(x, f.y + f.d), 1f); x += 0.32f }
+                drawPath(stripes(0.32f, alongX = true), Grain.copy(alpha = 0.1f * settle), style = Stroke(1f))
             }
             "grass" -> {
                 drawPath(shape, washed(Color(0xFF86AE6E)), alpha = settle)
-                var y = f.y + 0.6f
-                while (y < f.y + f.d) { drawLine(Color.White.copy(alpha = 0.06f * settle), iso.p(f.x, y), iso.p(f.x + f.w, y), 3f); y += 1.2f }
+                drawPath(stripes(1.2f, alongX = false), Color.White.copy(alpha = 0.06f * settle), style = Stroke(3f))
             }
             "ceramic" -> {
                 drawPath(shape, washed(Color(0xFFDCD3C6)), alpha = settle)
-                var x = f.x + 0.6f
-                while (x < f.x + f.w) { drawLine(Grain.copy(alpha = 0.08f * settle), iso.p(x, f.y), iso.p(x, f.y + f.d), 1f); x += 0.6f }
-                var y = f.y + 0.6f
-                while (y < f.y + f.d) { drawLine(Grain.copy(alpha = 0.08f * settle), iso.p(f.x, y), iso.p(f.x + f.w, y), 1f); y += 0.6f }
+                drawPath(stripes(0.6f, alongX = true, crossToo = true), Grain.copy(alpha = 0.08f * settle), style = Stroke(1f))
             }
             "stairs" -> {
                 drawPath(shape, washed(Color(0xFF6E665C)), alpha = settle)
-                (1 until 6).forEach { i -> val yy = f.y + f.d * i / 6; drawLine(Color.White.copy(alpha = 0.18f * settle), iso.p(f.x, yy), iso.p(f.x + f.w, yy), 1.2f) }
+                drawPath(stripes(f.d / 6, alongX = false), Color.White.copy(alpha = 0.18f * settle), style = Stroke(1.2f))
             }
             "skylight" -> {
                 drawPath(shape, Brush.linearGradient(listOf(lerp(sky.glass, Color.White, 0.35f), sky.glass), iso.p(f.x, f.y), iso.p(f.x + f.w, f.y + f.d)), alpha = settle)
@@ -829,14 +843,14 @@ private fun DrawScope.drawFloor(
 
     val wallsUp = stage(build, 0.15f, 0.55f)
     // The sun or the moon through the back windows, on the floor, before anything stands on it
-    scene.windows.forEach { (mid, len) ->
+    scene.windows.forEachIndexed { i, (mid, len) ->
         val a = mid - len / 2; val b = mid + len / 2
-        drawPath(iso.poly(Triple(a, T / 2, 0f), Triple(b, T / 2, 0f), Triple(b + 0.8f, 1.9f, 0f), Triple(a + 0.8f, 1.9f, 0f)), sky.sun.copy(alpha = sky.sun.alpha * wallsUp))
+        drawPath(cached(500 + i) { iso.poly(Triple(a, T / 2, 0f), Triple(b, T / 2, 0f), Triple(b + 0.8f, 1.9f, 0f), Triple(a + 0.8f, 1.9f, 0f)) }, sky.sun.copy(alpha = sky.sun.alpha * wallsUp))
     }
     // Shadow where the floor meets the back walls
     val ao = Color.Black.copy(alpha = 0.32f * wallsUp)
-    drawPath(iso.rect(0f, T / 2, w, T / 2 + 0.5f), Brush.linearGradient(listOf(ao, Color.Transparent), iso.p(w / 2, T / 2), iso.p(w / 2, T / 2 + 0.5f)))
-    drawPath(iso.rect(T / 2, 0f, T / 2 + 0.5f, d), Brush.linearGradient(listOf(ao, Color.Transparent), iso.p(T / 2, d / 2), iso.p(T / 2 + 0.5f, d / 2)))
+    drawPath(cached(510) { iso.rect(0f, T / 2, w, T / 2 + 0.5f) }, Brush.linearGradient(listOf(ao, Color.Transparent), iso.p(w / 2, T / 2), iso.p(w / 2, T / 2 + 0.5f)))
+    drawPath(cached(511) { iso.rect(T / 2, 0f, T / 2 + 0.5f, d) }, Brush.linearGradient(listOf(ao, Color.Transparent), iso.p(T / 2, d / 2), iso.p(T / 2 + 0.5f, d / 2)))
 
     // Pools of light: a radial fill squashed into the floor's ellipse (no blur), blooming as they come on
     floor.rooms.forEach { r ->
@@ -876,27 +890,29 @@ private fun DrawScope.drawFloor(
     }
 
     // Soft contact shadows under every piece, as in a photograph of a model: two flat fills
-    scene.pieces.forEach { pc ->
-        val outline = pc.shadow ?: return@forEach
+    scene.pieces.forEachIndexed { pi, pc ->
+        val outline = pc.shadow ?: return@forEachIndexed
         val shown = stage(build, 0.42f + pc.depth * 0.2f, 0.66f + pc.depth * 0.2f)
-        if (shown <= 0.01f) return@forEach
-        drawPath(path(pts(outline)), Color.Black.copy(alpha = 0.16f * shown))
+        if (shown <= 0.01f) return@forEachIndexed
+        drawPath(cached(1000 + pi * 8) { path(pts(outline)) }, Color.Black.copy(alpha = 0.16f * shown))
     }
     // Walls and furniture, far to near; a face catches the light of the room it faces
-    scene.pieces.forEach { pc ->
+    scene.pieces.forEachIndexed { pi, pc ->
         val b = pc.b
         val rise = if (b.wall) stage(build, 0.15f + pc.depth * 0.25f, 0.5f + pc.depth * 0.25f) else stage(build, 0.42f + pc.depth * 0.2f, 0.66f + pc.depth * 0.2f)
-        if (rise <= 0.01f) return@forEach
+        if (rise <= 0.01f) return@forEachIndexed
         val x0 = b.x0; val y0 = b.y0; val x1 = b.x1; val y1 = b.y1
         val z0 = b.z0 * rise; val z1 = b.z1 * rise
+        val up = rise >= 0.999f
+        val id = 1000 + pi * 8
         if (b.glass) {
-            drawPath(iso.poly(Triple(x0, y1, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x0, y1, z1)), Color(0xFF9FC6D8).copy(alpha = 0.09f))
-            drawPath(iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1)), Color(0xFF9FC6D8).copy(alpha = 0.07f))
+            drawPath(cached(id + 6, up) { iso.poly(Triple(x0, y1, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x0, y1, z1)) }, Color(0xFF9FC6D8).copy(alpha = 0.09f))
+            drawPath(cached(id + 7, up) { iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1)) }, Color(0xFF9FC6D8).copy(alpha = 0.07f))
             val alongX = x1 - x0 > y1 - y0
             val a = if (alongX) iso.p(x0, (y0 + y1) / 2, z1) else iso.p((x0 + x1) / 2, y0, z1)
             val c = if (alongX) iso.p(x1, (y0 + y1) / 2, z1) else iso.p((x0 + x1) / 2, y1, z1)
             drawLine(Color.White.copy(alpha = 0.45f), a, c, 1.5.dp.toPx())
-            return@forEach
+            return@forEachIndexed
         }
         val heatY = warmth(pc.faceRoomY)
         val heatX = warmth(pc.faceRoomX)
@@ -907,25 +923,27 @@ private fun DrawScope.drawFloor(
         val top = lerp(washed(b.top ?: lerp(b.color, Color.White, 0.1f)), Warm, roomHeat * 0.18f)
         if (b.screen) {
             // A glowing face: the TV (you are here) or a monitor, on the side the box is thin in
-            val face = if (x1 - x0 < y1 - y0) iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1))
-            else iso.poly(Triple(x0, y1, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x0, y1, z1))
+            val face = cached(id + 3, up) {
+                if (x1 - x0 < y1 - y0) iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1))
+                else iso.poly(Triple(x0, y1, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x0, y1, z1))
+            }
             drawPath(face, Brush.linearGradient(listOf(Color(0xFFB5CFFF), Color(0xFF6E6BF2)), iso.p(x0, y0, z1), iso.p(x1, y1, z0)))
             drawPath(face, Color.White.copy(alpha = 0.55f), style = Stroke(1f))
-            return@forEach
+            return@forEachIndexed
         }
         if (pc.outline.isNotEmpty()) {
             // A soft piece: the rounded outline extruded, its silhouette shaded left to right like
             // light on a curved side; then its top
             val o = pc.outline
-            val sides = Path().apply {
+            val sides = cached(id + 1, up) { Path().apply {
                 pc.lower.forEachIndexed { i, idx -> val p = iso.p(o[idx].first, o[idx].second, z0); if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }
                 pc.upper.forEach { idx -> val p = iso.p(o[idx].first, o[idx].second, z1); lineTo(p.x, p.y) }
                 close()
-            }
+            } }
             val left = iso.p(o[pc.lower.first()].first, o[pc.lower.first()].second).x
             val right = iso.p(o[pc.lower.last()].first, o[pc.lower.last()].second).x
             drawPath(sides, Brush.horizontalGradient(listOf(faceY, lerp(faceY, faceX, 0.5f), faceX), minOf(left, right), maxOf(left, right)))
-            drawPath(path(pts(o, z1)), top)
+            drawPath(cached(id + 2, up) { path(pts(o, z1)) }, top)
             if (b.bush) {
                 // Leaves: a few overlapping discs above the pot
                 val c = iso.p((x0 + x1) / 2, (y0 + y1) / 2, z1)
@@ -941,21 +959,22 @@ private fun DrawScope.drawFloor(
                 if (roomHeat > 0.01f) drawCircle(Brush.radialGradient(listOf(Bulb.copy(alpha = 0.55f * roomHeat), Color.Transparent), c, rr * 2.6f), rr * 2.6f, c)
                 drawCircle(lerp(Linen, Bulb, roomHeat), rr * 0.75f, c)
             }
-            return@forEach
+            return@forEachIndexed
         }
         // A box: a wall (faces a little darker at the foot, a cap) or a step
-        val frontFace = iso.poly(Triple(x0, y1, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x0, y1, z1))
-        val sideFace = iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1))
+        val frontFace = cached(id + 3, up) { iso.poly(Triple(x0, y1, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x0, y1, z1)) }
+        val sideFace = cached(id + 4, up) { iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1)) }
+        val cap = cached(id + 5, up) { iso.rect(x0, y0, x1, y1, z1) }
         if (b.wall) {
             drawPath(frontFace, Brush.verticalGradient(listOf(faceY, lerp(faceY, Color.Black, 0.25f)), iso.p(x0, y1, z1).y, iso.p(x0, y1, z0).y))
             drawPath(sideFace, Brush.verticalGradient(listOf(faceX, lerp(faceX, Color.Black, 0.25f)), iso.p(x1, y0, z1).y, iso.p(x1, y0, z0).y))
-            drawPath(iso.rect(x0, y0, x1, y1, z1), washed(WallCap, sky.amount * 0.8f))
+            drawPath(cap, washed(WallCap, sky.amount * 0.8f))
             drawLine(Color.White.copy(alpha = 0.16f), iso.p(x0, y1, z1), iso.p(x1, y1, z1), 1f)
             drawLine(Color.White.copy(alpha = 0.1f), iso.p(x1, y0, z1), iso.p(x1, y1, z1), 1f)
         } else {
             drawPath(frontFace, faceY)
             drawPath(sideFace, faceX)
-            drawPath(iso.rect(x0, y0, x1, y1, z1), top)
+            drawPath(cap, top)
         }
         // Framed prints on the side wall, over the bed or the table (never over the TV)
         if (b.order == -1000f && y1 - y0 > x1 - x0 && rise > 0.9f) {
