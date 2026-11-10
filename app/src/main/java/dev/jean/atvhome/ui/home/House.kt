@@ -345,11 +345,8 @@ fun HousePanel(
                 items(rooms, key = { "room:$it" }) { r -> Segment(r, null, state.room == r, { state.room(if (state.room == r) null else r) }) }
             }
             if (compact) {
-                // One line on the sheet: the filter, then the rooms, scrolling together
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(4.dp), contentPadding = PaddingValues(vertical = 2.dp)) {
-                    item(key = "segments") { Row { segments(); Spacer(Modifier.width(8.dp)) } }
-                    roomTabs()
-                }
+                // On the sheet the sections already say the room: the filter alone
+                LazyRow(contentPadding = PaddingValues(vertical = 2.dp)) { item(key = "segments") { segments() } }
             } else {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     LazyRow(contentPadding = PaddingValues(vertical = 2.dp)) { item { segments() } }
@@ -399,34 +396,33 @@ fun HousePanel(
     }
 }
 
-/** "Ver a casa": the house panel on the whole screen, from the Casa row, with the film shortcut's setting. */
+/**
+ * "Ver a casa", laid out like the rest of the launcher, in rows: a one-line header (what is lit, the
+ * hub, and a Luzes/Acesas/Todas filter), a Scenes row (Apagar tudo, Maquete, Cinema, Boa noite, the
+ * film shortcut), then one row per room: its first tile switches the whole room, then its lights.
+ * ▲ ▼ go from room to room, ◀ ▶ along a room. Focus starts on the first light of the TV's room,
+ * never on a scene (an OK pressed by accident must not darken the house).
+ *
+ * Holding OK on a light puts it on the Casa row of Home or takes it off (dimmed when off it).
+ */
 @Composable
 fun HouseScreen(home: HouseModel, toast: (String) -> Unit) {
     val context = LocalContext.current
     var key by remember { mutableIntStateOf(Shortcut.get(context)) }
     var picking by remember { mutableStateOf(false) }
     val shortcutFocus = remember { FocusRequester() }
-    // Back from the picker, focus returns to the button that opened it (the picker's chips are gone)
+    // Back from the picker, focus returns to the card that opened it (the picker's chips are gone)
     var pickedOnce by remember { mutableStateOf(false) }
     LaunchedEffect(picking) { if (!picking && pickedOnce) shortcutFocus.requestWhenReady() }
     var model by remember { mutableStateOf(false) }
-    // Back from the model goes to the list, not out of the house
+    // Back from the model goes to the rooms, not out of the house
     androidx.activity.compose.BackHandler(enabled = model) { model = false }
     Box(Modifier.fillMaxSize().background(LocalAccent.current.screen())) {
         if (model) {
             HouseMap(home, home.plan, toast)
-            return@Box
+        } else {
+            HouseRooms(home, toast, onModel = { model = true }, shortcut = Shortcut.name(key) to { picking = true; pickedOnce = true }, shortcutFocus = shortcutFocus)
         }
-        HousePanel(
-            home, toast,
-            onRowToggle = { light, add ->
-                home.setHidden(light, !add)
-                toast(if (add) "${light.name} está na fileira Casa" else "${light.name} saiu da fileira")
-            },
-            shortcut = Shortcut.name(key) to { picking = true; pickedOnce = true },
-            shortcutFocus = shortcutFocus,
-            onModel = { model = true },
-        )
         if (picking) {
             ShortcutPicker(
                 current = key,
@@ -440,6 +436,135 @@ fun HouseScreen(home: HouseModel, toast: (String) -> Unit) {
                 },
                 onCancel = { picking = false },
             )
+        }
+    }
+}
+
+@Composable
+private fun HouseRooms(
+    home: HouseModel,
+    toast: (String) -> Unit,
+    onModel: () -> Unit,
+    shortcut: Pair<String, () -> Unit>,
+    shortcutFocus: FocusRequester,
+) {
+    val statesState = home.states.collectAsState()
+    val now = statesState.value
+    val link by home.link.collectAsState()
+    val row by home.row.collectAsState()
+    val scope = rememberCoroutineScope()
+    val state = remember { PanelState() }
+    val lights = home.lights
+    val litNow = Panel.filter(lights, now, Show.LIT)
+    if (state.show == Show.LIT && !litNow.all { it.key in state.keep }) {
+        SideEffect { state.keep = state.keep + litNow.map { it.key } }
+    }
+    val shown = if (state.show == Show.LIT) lights.filter { it.key in state.keep || Panel.isOn(it, now) } else Panel.filter(lights, now, state.show)
+    val onRow = row.map { it.key }.toSet()
+    val litAll = litNow.size
+    val litRooms = litNow.map { it.room }.distinct().size
+    // The floor beside a room's name only says something when there is more than one
+    val floorOf = home.plan.floors.takeIf { it.size > 1 }.orEmpty().flatMap { f -> f.rooms.map { it.room to f.name } }.toMap()
+    val first = remember { FocusRequester() }
+    LaunchedEffect(Unit) { first.requestWhenReady() }
+    fun group(of: List<Light>, on: Boolean) = scope.launch { if (!home.switchAll(of, on)) toast("Algumas luzes não responderam") }
+
+    androidx.compose.foundation.lazy.LazyColumn(
+        contentPadding = PaddingValues(top = 26.dp, bottom = 48.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        item(key = "header") {
+            Row(Modifier.fillMaxWidth().padding(horizontal = Tv.Edge), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Casa", style = Tv.Display, color = Tv.Primary)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(if (litAll == 0) "Tudo apagado" else "${lit(litAll)} em $litRooms ${if (litRooms == 1) "cômodo" else "cômodos"}", style = Tv.Headline, color = Tv.Secondary)
+                        Spacer(Modifier.width(16.dp))
+                        LinkStatus(link.dot(), link.problem() ?: "Hub conectado")
+                    }
+                }
+                SegmentGroup {
+                    listOf(Show.LIGHTS, Show.LIT, Show.ALL).forEach { s ->
+                        Segment(s.label, Panel.filter(lights, now, s).size, state.show == s, { state.filter(s) })
+                    }
+                }
+            }
+        }
+        item(key = "scenes") {
+            Column(Modifier.padding(top = 18.dp)) {
+                Text("Cenas", style = Casa.Section, color = Tv.Primary, modifier = Modifier.padding(start = Tv.Edge, bottom = 10.dp))
+                LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    item(key = "off") { SceneCard(Icons.Rounded.PowerSettingsNew, "Apagar tudo", lit(litAll), { group(lights, false) }) }
+                    item(key = "model") {
+                        val floors = home.plan.floors.size
+                        SceneCard(Icons.Rounded.ViewInAr, "Maquete", "a casa em 3D · $floors ${if (floors == 1) "andar" else "andares"}", onModel, tint = Color(0xFF64D2FF))
+                    }
+                    item(key = "cinema") { SceneCard(Icons.Rounded.Movie, "Cinema", "apaga o andar da TV", { group(Scenes.cinema(lights, home.plan), false) }, tint = Casa.Scene) }
+                    item(key = "night") {
+                        SceneCard(Icons.Rounded.Bedtime, "Boa noite", "apaga a casa até aqui", {
+                            scope.launch { if (!home.cascade(Scenes.goodNight(lights, home.plan), false)) toast("Algumas luzes não responderam") }
+                        }, tint = Color(0xFF5E5CE6))
+                    }
+                    item(key = "shortcut") {
+                        SceneCard(Icons.Rounded.Keyboard, "Atalho no filme", shortcut.first, shortcut.second, tint = Tv.Secondary, modifier = Modifier.focusRequester(shortcutFocus))
+                    }
+                }
+            }
+        }
+        if (shown.isEmpty()) {
+            item(key = "empty") {
+                Row(Modifier.padding(start = Tv.Edge, top = 30.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.NightsStay, contentDescription = null, tint = Tv.Tertiary, modifier = Modifier.size(26.dp))
+                    Spacer(Modifier.width(10.dp))
+                    Text("Nenhuma luz acesa", style = Tv.Headline, color = Tv.Tertiary)
+                }
+            }
+        }
+        val rooms = shown.map { it.room }.distinct()
+        rooms.forEachIndexed { r, room ->
+            val inRoom = shown.filter { it.room == room }
+            item(key = "room-$room") {
+                val all = lights.filter { it.room == room }
+                val roomLit = all.count { Panel.isOn(it, now) }
+                Column(Modifier.padding(top = 18.dp)) {
+                    Row(Modifier.padding(start = Tv.Edge, bottom = 10.dp), verticalAlignment = Alignment.Bottom) {
+                        Text(room, style = Casa.Section, color = Tv.Primary)
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            listOfNotNull(floorOf[room], if (roomLit == 0) "apagado" else "$roomLit de ${all.size} acesas").joinToString("  ·  "),
+                            style = Casa.Status, color = if (roomLit > 0) Casa.Amber else Tv.Tertiary, modifier = Modifier.padding(bottom = 2.dp),
+                        )
+                    }
+                    LazyRow(contentPadding = RowPadding, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                        // The room itself first: one press darkens it, or lights it when it is dark
+                        item(key = "room") {
+                            CasaTile(
+                                if (roomLit > 0) Icons.Rounded.NightsStay else Icons.Rounded.WbSunny,
+                                if (roomLit > 0) "Apagar" else "Acender", "o cômodo todo", on = false,
+                                onClick = { group(all, roomLit == 0) },
+                                disc = Casa.Scene,
+                                modifier = Modifier.width(136.dp).height(100.dp),
+                            )
+                        }
+                        items(inRoom, key = { it.key }) { light ->
+                            LightTile(
+                                light = light,
+                                states = statesState,
+                                showRoom = false,
+                                dimmed = light.key !in onRow,
+                                modifier = Modifier.width(156.dp).height(100.dp).let { if (r == 0 && light == inRoom.first()) it.focusRequester(first) else it },
+                                onClick = { scope.launch { if (!home.toggle(light)) toast(NO_HUB) } },
+                                onLongClick = {
+                                    val add = light.key !in onRow
+                                    home.setHidden(light, !add)
+                                    toast(if (add) "${light.name} está na fileira Casa" else "${light.name} saiu da fileira Casa")
+                                },
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }

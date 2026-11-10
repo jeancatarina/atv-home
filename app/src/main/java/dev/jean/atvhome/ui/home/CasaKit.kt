@@ -224,3 +224,43 @@ internal fun LinkStatus(color: Color, text: String, modifier: Modifier = Modifie
         Text(text, style = Tv.Meta, color = Tv.Secondary, maxLines = 1)
     }
 }
+
+/**
+ * A scene card on the Scenes row: bigger than a light, with a tinted wash behind the icon so each
+ * scene reads at a glance from the sofa. White when focused, like every Casa control.
+ */
+@Composable
+internal fun SceneCard(
+    icon: ImageVector,
+    title: String,
+    detail: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    tint: Color = Casa.Amber,
+) {
+    var focused by remember { mutableStateOf(false) }
+    FocusCard(
+        onClick = onClick,
+        focusedScale = 1.07f,
+        shape = RoundedCornerShape(20.dp),
+        container = Casa.Off,
+        focusedContainer = Color.White,
+        onFocus = { focused = it },
+        modifier = modifier.width(206.dp).height(112.dp),
+    ) {
+        // The scene's colour washes in from the corner: one radial fill on a small card, no blur
+        Box(Modifier.fillMaxSize().drawBehind {
+            val corner = androidx.compose.ui.geometry.Offset(size.width, 0f)
+            val r = size.width * 0.9f
+            drawCircle(Brush.radialGradient(listOf(tint.copy(alpha = if (focused) 0.30f else 0.24f), Color.Transparent), corner, r), radius = r, center = corner)
+        })
+        Column(Modifier.fillMaxSize().padding(14.dp)) {
+            Box(Modifier.size(36.dp).background(if (focused) tint else tint.copy(alpha = 0.2f), CircleShape), contentAlignment = Alignment.Center) {
+                Icon(icon, contentDescription = null, tint = if (focused) Color.White else tint, modifier = Modifier.size(20.dp))
+            }
+            Spacer(Modifier.weight(1f))
+            Text(title, style = Casa.Name.copy(fontSize = 15.sp), color = if (focused) Casa.Ink else Tv.Primary, maxLines = 1)
+            Text(detail, style = Casa.Status, color = if (focused) Casa.InkSoft else Tv.Tertiary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}

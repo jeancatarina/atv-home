@@ -220,7 +220,12 @@ ambiente segue a hora: azul de noite, dourado no pôr do sol.
 1 s que se vê na maquete e nos cômodos. Quando alguém aperta um interruptor na parede, o bloco da luz
 pulsa na tela.
 
-**Ver a casa** e o **botão amarelo** abrem o mesmo painel:
+**Ver a casa** é em fileiras, como o resto do Início: no topo o que está aceso, o hub e o filtro
+(Luzes, Acesas, Todas); depois a fileira **Cenas** (Apagar tudo, Maquete, Cinema, Boa noite e o atalho
+no filme) e uma fileira por cômodo, cujo primeiro bloco apaga ou acende o cômodo todo. ▲ ▼ vão de
+cômodo em cômodo, ◀ ▶ pelas luzes. O foco começa na primeira luz da sala da TV, nunca numa cena.
+
+O **botão amarelo** abre uma folha por cima do filme:
 
 - Atalhos no topo: **Apagar tudo**, **Apagar** e **Acender** o cômodo escolhido (sem cômodo escolhido,
   o primeiro do app, onde está a TV). Acender nunca liga uma cena; apagar desliga toda tecla acesa.
