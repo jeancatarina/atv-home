@@ -35,7 +35,22 @@ data class Plan(val width: Float, val depth: Float, val floors: List<Floor>) {
  * [outdoor]: a terrace: a deck with a glass railing instead of walls.
  */
 @Serializable
-data class Floor(val name: String, val rooms: List<RoomBox>, val open: Boolean = false, val outdoor: Boolean = false)
+data class Floor(
+    val name: String,
+    val rooms: List<RoomBox>,
+    val open: Boolean = false,
+    val outdoor: Boolean = false,
+    /** What the model draws besides the rooms: a deck, a lawn, a jacuzzi, the water tank… */
+    val features: List<Feature> = emptyList(),
+)
+
+/**
+ * Something the model draws that is not a room and has no lights: [kind] is one of deck, grass,
+ * ceramic (finishes on the floor), jacuzzi, tank (the water tank's housing), stairs (where the stairs
+ * come up), skylight, planter. A kind the model does not know is skipped.
+ */
+@Serializable
+data class Feature(val kind: String, val x: Float, val y: Float, val w: Float, val d: Float)
 
 /** A room's rectangle on the footprint: [x] along the width, [y] along the depth, from the back corner. */
 @Serializable
