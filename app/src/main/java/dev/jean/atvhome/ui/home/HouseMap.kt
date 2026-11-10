@@ -130,6 +130,9 @@ fun HouseMap(
     val roomLit = inRoom.count { Panel.isOn(it, states) }
     val tvRoom = home.lights.firstOrNull()?.room
     val text = rememberTextMeasurer()
+    // What does not move on this floor, built once; the tags' text, measured once per label
+    val scene = remember(plan, floor, home.lights, tvRoom) { Scene(plan, plan.floors[floor], home.lights, tvRoom) }
+    val measured = remember { HashMap<String, androidx.compose.ui.text.TextLayoutResult>() }
     fun group(of: List<Light>, on: Boolean) = scope.launch { if (!home.switchAll(of, on)) toast("Algumas luzes não responderam") }
     LaunchedEffect(Unit) { mapFocus.requestWhenReady() }
 
@@ -222,7 +225,7 @@ fun HouseMap(
                 .focusable(),
         ) {
             Canvas(Modifier.fillMaxSize()) {
-                drawFloor(plan, plan.floors[floor], home.lights, glow, ripple, room, focused, text, if (builtFor == floor) build.value else 0f, sky, tvRoom)
+                drawFloor(scene, glow, ripple, room, focused, text, measured, if (builtFor == floor) build.value else 0f, sky)
             }
             Column(Modifier.align(Alignment.TopStart)) {
                 FloorStack(plan.floors, floor, home.lights, states)
@@ -626,36 +629,128 @@ private fun furniture(room: RoomBox, outdoor: Boolean, tv: Boolean, features: Li
     return out
 }
 
+/**
+ * Everything about a floor that does not move: the lights by room and where they hang, the walls and
+ * furniture already in painter's order, each soft piece's silhouette (which of its outline's points
+ * make the hull: it does not depend on the height, so it is worked out once), the rugs, the windows.
+ * Built once per floor; a frame then only projects and fills.
+ */
+private class Scene(val plan: Plan, val floor: Floor, lights: List<Light>, val tvRoom: String?) {
+    val w = plan.width
+    val d = plan.depth
+    val inRoom: Map<String, List<Light>> = floor.rooms.associate { r -> r.room to lights.filter { it.room == r.room } }
+    val spots: Map<String, List<Pair<Float, Float>>> = floor.rooms.associate { r -> r.room to spots(r, inRoom.getValue(r.room).size) }
+    val order: Map<String, Int> = floor.rooms.flatMap { inRoom.getValue(it.room) }.withIndex().associate { (i, l) -> l.key to i }
+    val tvBox: RoomBox? = floor.rooms.firstOrNull { it.room == tvRoom }.takeIf { !floor.outdoor }
+    fun roomAt(x: Float, y: Float) = floor.rooms.firstOrNull { x >= it.x && x <= it.x + it.w && y >= it.y && y <= it.y + it.d }
+
+    class Piece(val b: Block, val depth: Float, val faceRoomY: RoomBox?, val faceRoomX: RoomBox?, val heatRoom: RoomBox?,
+                val outline: List<Pair<Float, Float>>, val lower: IntArray, val upper: IntArray, val shadow: List<Pair<Float, Float>>?)
+
+    val pieces: List<Piece>
+    val windows: List<Pair<Float, Float>>
+    val rugs: List<Pair<List<Pair<Float, Float>>, List<Pair<Float, Float>>>>
+    val art: List<RoomBox>
+
+    init {
+        val furnish = floor.rooms.flatMap { furniture(it, floor.outdoor, it.room == tvRoom, floor.features) } + floor.features.mapNotNull { f ->
+            val host = roomAt(f.x + f.w / 2, f.y + f.d / 2)
+            when (f.kind) {
+                // The jacuzzi: white shell, water on top
+                "jacuzzi" -> Block(f.x, f.y, f.x + f.w, f.y + f.d, 0f, 0.55f, Porcelain, wall = false, room = host, top = Color(0xFF7CC6DF), radius = 0.35f)
+                // The water tank's housing over the stairs, concrete
+                "tank" -> Block(f.x, f.y, f.x + f.w, f.y + f.d, 0f, 1.35f, Color(0xFFB9B4AC), wall = false, room = host, top = Color(0xFFCFCAC2), radius = 0.04f)
+                "planter" -> { val rr = minOf(f.w, f.d) / 2; Block(f.x, f.y, f.x + 2 * rr, f.y + 2 * rr, 0f, 0.45f, Planter, wall = false, room = host, radius = rr, bush = true) }
+                // A built-in concrete bench (burnished cement, like the stairs on the plans)
+                "bench" -> Block(f.x, f.y, f.x + f.w, f.y + f.d, 0f, 0.45f, Color(0xFFAFA9A0), wall = false, room = host, top = Color(0xFFC4BEB5), radius = 0.04f)
+                else -> null
+            }
+        } + floor.features.filter { it.kind == "flight" }.flatMap { f ->
+            // A flight of stairs along its long side, rising towards the back of the house (y = 0)
+            val host = roomAt(f.x + f.w / 2, f.y + f.d / 2)
+            val steps = 12
+            (0 until steps).map { i ->
+                if (f.d >= f.w) {
+                    val run = f.d / steps; val sy = f.y + f.d - (i + 1) * run
+                    Block(f.x, sy, f.x + f.w, sy + run, 0f, (i + 1) * 0.11f, Color(0xFFAFA9A0), wall = false, room = host, top = Color(0xFFC4BEB5), radius = 0f)
+                } else {
+                    val run = f.w / steps; val sx = f.x + f.w - (i + 1) * run
+                    Block(sx, f.y, sx + run, f.y + f.d, 0f, (i + 1) * 0.11f, Color(0xFFAFA9A0), wall = false, room = host, top = Color(0xFFC4BEB5), radius = 0f)
+                }
+            }
+        }
+        pieces = (walls(plan, floor) + furnish).sortedBy { it.depth }.map { b ->
+            val outline = if (b.radius > 0.001f) rounded(b.x0, b.y0, b.x1, b.y1, b.radius) else emptyList()
+            // The silhouette: from the leftmost to the rightmost point on screen, the outline's lower
+            // chain at the foot and its upper chain at the top
+            var lower = IntArray(0); var upper = IntArray(0)
+            if (outline.isNotEmpty()) {
+                val sx = outline.map { (x, y) -> x - y }; val sy = outline.map { (x, y) -> x + y }
+                val l = sx.indices.minBy { sx[it] }; val r = sx.indices.maxBy { sx[it] }
+                val n = outline.size
+                fun arc(from: Int, to: Int): IntArray { val out = ArrayList<Int>(); var i = from; while (true) { out += i; if (i == to) break; i = (i + 1) % n }; return out.toIntArray() }
+                val a = arc(l, r); val c = arc(r, l)
+                val aLow = a.sumOf { sy[it].toDouble() } / a.size > c.sumOf { sy[it].toDouble() } / c.size
+                // The foot runs left to right along the lower arc, the top comes back right to left
+                lower = if (aLow) a else c.reversedArray()
+                upper = if (aLow) c else a.reversedArray()
+            }
+            val shadow = if (!b.wall && !b.screen && b.z0 <= 0.05f) rounded(b.x0 - 0.08f, b.y0 - 0.04f, b.x1 + 0.14f, b.y1 + 0.16f, b.radius + 0.1f) else null
+            Piece(
+                b, (b.x0 + b.x1 + b.y0 + b.y1) / 2f / (w + d),
+                if (b.wall) roomAt((b.x0 + b.x1) / 2, b.y1 + 0.3f) else b.room,
+                if (b.wall) roomAt(b.x1 + 0.3f, (b.y0 + b.y1) / 2) else b.room,
+                b.room ?: roomAt((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2),
+                outline, lower, upper, shadow,
+            )
+        }
+        windows = if (floor.outdoor) emptyList() else floor.rooms.filter { it.y < 0.01f }.flatMap { r ->
+            val n = if (r.w >= 4.5f) 2 else 1
+            (0 until n).map { i -> r.x + r.w * (i + 0.5f) / n to minOf(1.5f, r.w * 0.42f / n * 1.6f) }
+        }
+        rugs = if (floor.outdoor) emptyList() else floor.rooms.filter { it.room == tvRoom || it.room.contains("estar", true) }.map { r ->
+            val cy = r.y + r.d / 2; val rl = minOf(3f, r.d * 0.62f)
+            rounded(r.x + 0.8f, cy - rl / 2, r.x + r.w * 0.78f, cy + rl / 2, 0.35f) to
+                rounded(r.x + 0.95f, cy - rl / 2 + 0.15f, r.x + r.w * 0.78f - 0.15f, cy + rl / 2 - 0.15f, 0.25f)
+        }
+        art = floor.rooms.filter { it.x < 0.01f && it.room != tvRoom && !WET.containsMatchIn(it.room) && it.d >= 2f }
+    }
+}
+
+private val TagStyle = TextStyle(fontFamily = Inter, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+
 private fun DrawScope.drawFloor(
-    plan: Plan,
-    floor: Floor,
-    lights: List<Light>,
+    scene: Scene,
     glow: Map<String, Float>,
     ripple: Map<String, Float>,
     chosen: RoomBox?,
     focused: Boolean,
     text: TextMeasurer,
+    measured: HashMap<String, androidx.compose.ui.text.TextLayoutResult>,
     build: Float,
     sky: Sky,
-    tvRoom: String?,
 ) {
+    val floor = scene.floor
     // The build: the slab settles from above, the walls rise back to front, the furniture arrives,
     // then the lights come on one after another and the names appear
     val settle = stage(build, 0f, 0.35f)
-    val iso = fit(plan, dz = (1f - settle) * 0.9f)
-    val w = plan.width; val d = plan.depth
+    val iso = fit(scene.plan, dz = (1f - settle) * 0.9f)
+    val w = scene.w; val d = scene.d
     val centre = iso.p(w / 2, d / 2)
-    val order = floor.rooms.flatMap { r -> lights.filter { it.room == r.room } }.withIndex().associate { (i, l) -> l.key to i }
-    fun g(l: Light): Float = (glow[l.key] ?: 0f) * stage(build, 0.62f + (order[l.key] ?: 0) * 0.03f, 0.82f + (order[l.key] ?: 0) * 0.03f)
-    fun warmth(r: RoomBox?): Float {
-        r ?: return 0f
-        val inRoom = lights.filter { it.room == r.room }
-        if (inRoom.isEmpty()) return 0f
-        val sum = inRoom.sumOf { g(it).coerceIn(0f, 1f).toDouble() }.toFloat()
-        return if (sum <= 0.001f) 0f else (0.35f * sum.coerceAtMost(1f) + 0.65f * sum / inRoom.size)
+    fun g(l: Light): Float {
+        val i = scene.order[l.key] ?: 0
+        return (glow[l.key] ?: 0f) * stage(build, 0.62f + i * 0.03f, 0.82f + i * 0.03f)
     }
-    fun roomAt(x: Float, y: Float) = floor.rooms.firstOrNull { x >= it.x && x <= it.x + it.w && y >= it.y && y <= it.y + it.d }
+    // Each room's warmth, once a frame (every wall and piece reads it)
+    val heat = HashMap<RoomBox, Float>(floor.rooms.size * 2)
+    floor.rooms.forEach { r ->
+        val inRoom = scene.inRoom.getValue(r.room)
+        val sum = inRoom.sumOf { g(it).coerceIn(0f, 1f).toDouble() }.toFloat()
+        heat[r] = if (inRoom.isEmpty() || sum <= 0.001f) 0f else (0.35f * sum.coerceAtMost(1f) + 0.65f * sum / inRoom.size)
+    }
+    fun warmth(r: RoomBox?) = if (r == null) 0f else heat[r] ?: 0f
     fun washed(c: Color, amount: Float = sky.amount) = lerp(c, sky.wash, amount)
+    fun pts(outline: List<Pair<Float, Float>>, z: Float = 0f) = outline.map { (x, y) -> iso.p(x, y, z) }
 
     // The hour's light behind the model, not the whole screen: it lifts the model off the page
     drawCircle(
@@ -676,7 +771,7 @@ private fun DrawScope.drawFloor(
     // Floors and their finish: wood in the bedrooms, tiles where it gets wet, a deck outside
     floor.rooms.forEach { r ->
         val wet = WET.containsMatchIn(r.room)
-        val bedroom = Regex("(?i)quarto|suíte|suite|ninho|principal|escritório").containsMatchIn(r.room)
+        val bedroom = BEDROOM.containsMatchIn(r.room)
         val base = washed(when { floor.outdoor -> FloorDeck; wet -> FloorWet; bedroom -> FloorWood; else -> FloorDry })
         val shape = iso.rect(r.x, r.y, r.x + r.w, r.y + r.d)
         // A lit room's floor warms towards the lamplight; a dark one keeps the hour's colour
@@ -692,13 +787,11 @@ private fun DrawScope.drawFloor(
             while (y < r.y + r.d) { drawLine(line, iso.p(r.x, y), iso.p(r.x + r.w, y), 1f); y += 0.6f }
         }
         if (floor.open) drawPath(shape, Color.Black.copy(alpha = 0.06f * settle), style = Stroke(1f))
-        // A soft rug under the living room's table
-        if (!floor.outdoor && (r.room == tvRoom || r.room.contains("estar", true))) {
-            val cy = r.y + r.d / 2; val rl = minOf(3f, r.d * 0.62f)
-            val rug = path(rounded(r.x + 0.8f, cy - rl / 2, r.x + r.w * 0.78f, cy + rl / 2, 0.35f).map { (x, y) -> iso.p(x, y) })
-            drawPath(rug, washed(Rug).copy(alpha = settle))
-            drawPath(path(rounded(r.x + 0.95f, cy - rl / 2 + 0.15f, r.x + r.w * 0.78f - 0.15f, cy + rl / 2 - 0.15f, 0.25f).map { (x, y) -> iso.p(x, y) }), washed(Terracotta).copy(alpha = 0.45f * settle), style = Stroke(1.5f))
-        }
+    }
+    // A soft rug under the living room's table
+    scene.rugs.forEach { (rug, border) ->
+        drawPath(path(pts(rug)), washed(Rug).copy(alpha = settle))
+        drawPath(path(pts(border)), washed(Terracotta).copy(alpha = 0.45f * settle), style = Stroke(1.5f))
     }
 
     // The plan's finishes on the floor: a deck, a lawn, tiles; where the stairs come up; a skylight
@@ -724,8 +817,7 @@ private fun DrawScope.drawFloor(
             }
             "stairs" -> {
                 drawPath(shape, washed(Color(0xFF6E665C)), alpha = settle)
-                val n = 6
-                (1 until n).forEach { i -> val yy = f.y + f.d * i / n; drawLine(Color.White.copy(alpha = 0.18f * settle), iso.p(f.x, yy), iso.p(f.x + f.w, yy), 1.2f) }
+                (1 until 6).forEach { i -> val yy = f.y + f.d * i / 6; drawLine(Color.White.copy(alpha = 0.18f * settle), iso.p(f.x, yy), iso.p(f.x + f.w, yy), 1.2f) }
             }
             "skylight" -> {
                 drawPath(shape, Brush.linearGradient(listOf(lerp(sky.glass, Color.White, 0.35f), sky.glass), iso.p(f.x, f.y), iso.p(f.x + f.w, f.y + f.d)), alpha = settle)
@@ -736,13 +828,8 @@ private fun DrawScope.drawFloor(
     }
 
     val wallsUp = stage(build, 0.15f, 0.55f)
-    // Windows on the street side (y = 0): the sun or the moon through them, on the floor, before
-    // anything stands on it
-    val windows = if (floor.outdoor) emptyList() else floor.rooms.filter { it.y < 0.01f }.flatMap { r ->
-        val n = if (r.w >= 4.5f) 2 else 1
-        (0 until n).map { i -> r.x + r.w * (i + 0.5f) / n to minOf(1.5f, r.w * 0.42f / n * 1.6f) }
-    }
-    windows.forEach { (mid, len) ->
+    // The sun or the moon through the back windows, on the floor, before anything stands on it
+    scene.windows.forEach { (mid, len) ->
         val a = mid - len / 2; val b = mid + len / 2
         drawPath(iso.poly(Triple(a, T / 2, 0f), Triple(b, T / 2, 0f), Triple(b + 0.8f, 1.9f, 0f), Triple(a + 0.8f, 1.9f, 0f)), sky.sun.copy(alpha = sky.sun.alpha * wallsUp))
     }
@@ -753,10 +840,10 @@ private fun DrawScope.drawFloor(
 
     // Pools of light: a radial fill squashed into the floor's ellipse (no blur), blooming as they come on
     floor.rooms.forEach { r ->
-        val inRoom = lights.filter { it.room == r.room }
-        spots(r, inRoom.size).zip(inRoom).forEach { (spot, l) ->
-            val k = g(l)
-            if (k <= 0.01f) return@forEach
+        val inRoom = scene.inRoom.getValue(r.room)
+        scene.spots.getValue(r.room).forEachIndexed { i, spot ->
+            val k = g(inRoom[i])
+            if (k <= 0.01f) return@forEachIndexed
             val c = iso.p(spot.first, spot.second)
             val radius = minOf(r.w, r.d, 3.2f) * 0.66f * 1.414f * COS * iso.s * (0.45f + 0.55f * k)
             val a = (k.coerceIn(0f, 1f) * sky.pools).coerceAtMost(1.2f)
@@ -766,9 +853,8 @@ private fun DrawScope.drawFloor(
         }
     }
     // The TV's own light on the floor in front of it, bluish
-    val tvBox = floor.rooms.firstOrNull { it.room == tvRoom }
-    if (tvBox != null && !floor.outdoor) {
-        val c = iso.p(tvBox.x + 1.1f, tvBox.y + tvBox.d / 2)
+    scene.tvBox?.let { tv ->
+        val c = iso.p(tv.x + 1.1f, tv.y + tv.d / 2)
         val radius = 1.7f * COS * iso.s
         scale(1f, SIN / COS, pivot = c) {
             drawCircle(Brush.radialGradient(listOf(Color(0xFF8FB8FF).copy(alpha = 0.24f * wallsUp), Color.Transparent), c, radius), radius, c)
@@ -777,10 +863,10 @@ private fun DrawScope.drawFloor(
     // The chosen room's floor brightens a little; its tag (below) turns white
     chosen?.let { r -> drawPath(iso.rect(r.x, r.y, r.x + r.w, r.y + r.d), Color.White.copy(alpha = if (focused) 0.07f else 0.035f)) }
     // Ripples: a ring across the floor from a light that just changed
-    floor.rooms.forEach { r ->
-        val inRoom = lights.filter { it.room == r.room }
-        spots(r, inRoom.size).zip(inRoom).forEach { (spot, l) ->
-            val p = ripple[l.key] ?: return@forEach
+    if (ripple.isNotEmpty()) floor.rooms.forEach { r ->
+        val inRoom = scene.inRoom.getValue(r.room)
+        scene.spots.getValue(r.room).forEachIndexed { i, spot ->
+            val p = ripple[inRoom[i].key] ?: return@forEachIndexed
             val c = iso.p(spot.first, spot.second)
             val radius = (0.25f + p * 2.4f) * 1.414f * COS * iso.s
             scale(1f, SIN / COS, pivot = c) {
@@ -789,48 +875,17 @@ private fun DrawScope.drawFloor(
         }
     }
 
-    // Walls and furniture, far to near; a face catches the light of the room it faces
-    val furnish = floor.rooms.flatMap { furniture(it, floor.outdoor, it.room == tvRoom, floor.features) } + floor.features.mapNotNull { f ->
-        val host = roomAt(f.x + f.w / 2, f.y + f.d / 2)
-        when (f.kind) {
-            // The jacuzzi: white shell, water on top (warm when the terrace is lit)
-            "jacuzzi" -> Block(f.x, f.y, f.x + f.w, f.y + f.d, 0f, 0.55f, Porcelain, wall = false, room = host, top = Color(0xFF7CC6DF), radius = 0.35f)
-            // The water tank's housing over the stairs, concrete
-            "tank" -> Block(f.x, f.y, f.x + f.w, f.y + f.d, 0f, 1.35f, Color(0xFFB9B4AC), wall = false, room = host, top = Color(0xFFCFCAC2), radius = 0.04f)
-            "planter" -> { val rr = minOf(f.w, f.d) / 2; Block(f.x, f.y, f.x + 2 * rr, f.y + 2 * rr, 0f, 0.45f, Planter, wall = false, room = host, radius = rr, bush = true) }
-            // A built-in concrete bench (burnished cement, like the stairs on the plans)
-            "bench" -> Block(f.x, f.y, f.x + f.w, f.y + f.d, 0f, 0.45f, Color(0xFFAFA9A0), wall = false, room = host, top = Color(0xFFC4BEB5), radius = 0.04f)
-            else -> null
-        }
-    } + floor.features.filter { it.kind == "flight" }.flatMap { f ->
-        // A flight of stairs along its long side, rising towards the back of the house (y = 0)
-        val host = roomAt(f.x + f.w / 2, f.y + f.d / 2)
-        val steps = 12
-        val alongY = f.d >= f.w
-        (0 until steps).map { i ->
-            if (alongY) {
-                val run = f.d / steps; val sy = f.y + f.d - (i + 1) * run
-                Block(f.x, sy, f.x + f.w, sy + run, 0f, (i + 1) * 0.11f, Color(0xFFAFA9A0), wall = false, room = host, top = Color(0xFFC4BEB5), radius = 0f)
-            } else {
-                val run = f.w / steps; val sx = f.x + f.w - (i + 1) * run
-                Block(sx, f.y, sx + run, f.y + f.d, 0f, (i + 1) * 0.11f, Color(0xFFAFA9A0), wall = false, room = host, top = Color(0xFFC4BEB5), radius = 0f)
-            }
-        }
-    }
-    // Soft contact shadows under every piece, as in a photograph of a model (a radial fill, no blur)
-    furnish.forEach { b ->
-        if (b.screen || b.z0 > 0.05f) return@forEach
-        val depth = (b.x0 + b.x1 + b.y0 + b.y1) / 2f / (w + d)
-        val shown = stage(build, 0.42f + depth * 0.2f, 0.66f + depth * 0.2f)
+    // Soft contact shadows under every piece, as in a photograph of a model: two flat fills
+    scene.pieces.forEach { pc ->
+        val outline = pc.shadow ?: return@forEach
+        val shown = stage(build, 0.42f + pc.depth * 0.2f, 0.66f + pc.depth * 0.2f)
         if (shown <= 0.01f) return@forEach
-        val outline = rounded(b.x0 - 0.1f, b.y0 - 0.06f, b.x1 + 0.16f, b.y1 + 0.18f, b.radius + 0.12f).map { (x, y) -> iso.p(x, y) }
-        val c = iso.p((b.x0 + b.x1) / 2 + 0.05f, (b.y0 + b.y1) / 2 + 0.06f)
-        val r = maxOf(b.x1 - b.x0, b.y1 - b.y0) * 0.75f * iso.s + 6.dp.toPx()
-        drawPath(path(outline), Brush.radialGradient(listOf(Color.Black.copy(alpha = 0.3f * shown), Color.Black.copy(alpha = 0.12f * shown), Color.Transparent), c, r))
+        drawPath(path(pts(outline)), Color.Black.copy(alpha = 0.16f * shown))
     }
-    (walls(plan, floor) + furnish).sortedBy { it.depth }.forEach { b ->
-        val depth = (b.x0 + b.x1 + b.y0 + b.y1) / 2f / (w + d)
-        val rise = if (b.wall) stage(build, 0.15f + depth * 0.25f, 0.5f + depth * 0.25f) else stage(build, 0.42f + depth * 0.2f, 0.66f + depth * 0.2f)
+    // Walls and furniture, far to near; a face catches the light of the room it faces
+    scene.pieces.forEach { pc ->
+        val b = pc.b
+        val rise = if (b.wall) stage(build, 0.15f + pc.depth * 0.25f, 0.5f + pc.depth * 0.25f) else stage(build, 0.42f + pc.depth * 0.2f, 0.66f + pc.depth * 0.2f)
         if (rise <= 0.01f) return@forEach
         val x0 = b.x0; val y0 = b.y0; val x1 = b.x1; val y1 = b.y1
         val z0 = b.z0 * rise; val z1 = b.z1 * rise
@@ -843,12 +898,12 @@ private fun DrawScope.drawFloor(
             drawLine(Color.White.copy(alpha = 0.45f), a, c, 1.5.dp.toPx())
             return@forEach
         }
-        val heatY = if (b.wall) warmth(roomAt((x0 + x1) / 2, y1 + 0.3f)) else warmth(b.room)
-        val heatX = if (b.wall) warmth(roomAt(x1 + 0.3f, (y0 + y1) / 2)) else warmth(b.room)
+        val heatY = warmth(pc.faceRoomY)
+        val heatX = warmth(pc.faceRoomX)
         val base = washed(b.color)
         val faceY = lerp(lerp(base, Color.Black, 0.2f), Warm, heatY * (if (b.wall) 0.42f else 0.25f))
         val faceX = lerp(lerp(base, Color.Black, 0.36f), Warm, heatX * (if (b.wall) 0.36f else 0.2f))
-        val roomHeat = warmth(b.room ?: roomAt((x0 + x1) / 2, (y0 + y1) / 2))
+        val roomHeat = warmth(pc.heatRoom)
         val top = lerp(washed(b.top ?: lerp(b.color, Color.White, 0.1f)), Warm, roomHeat * 0.18f)
         if (b.screen) {
             // A glowing face: the TV (you are here) or a monitor, on the side the box is thin in
@@ -858,16 +913,19 @@ private fun DrawScope.drawFloor(
             drawPath(face, Color.White.copy(alpha = 0.55f), style = Stroke(1f))
             return@forEach
         }
-        if (b.radius > 0.001f) {
-            // A soft piece: the rounded outline extruded. Its silhouette is the hull of the top and
-            // bottom outlines, shaded left to right like light on a curved side; then its top
-            val outline = rounded(x0, y0, x1, y1, b.radius)
-            val topPts = outline.map { (x, y) -> iso.p(x, y, z1) }
-            val sides = hull(outline.map { (x, y) -> iso.p(x, y, z0) } + topPts)
-            val left = sides.minOf { it.x }; val right = sides.maxOf { it.x }
-            drawPath(path(sides), Brush.horizontalGradient(listOf(faceY, lerp(faceY, faceX, 0.5f), faceX), left, right))
-            drawPath(path(topPts), top)
-            drawPath(path(topPts), Color.White.copy(alpha = 0.1f), style = Stroke(1f))
+        if (pc.outline.isNotEmpty()) {
+            // A soft piece: the rounded outline extruded, its silhouette shaded left to right like
+            // light on a curved side; then its top
+            val o = pc.outline
+            val sides = Path().apply {
+                pc.lower.forEachIndexed { i, idx -> val p = iso.p(o[idx].first, o[idx].second, z0); if (i == 0) moveTo(p.x, p.y) else lineTo(p.x, p.y) }
+                pc.upper.forEach { idx -> val p = iso.p(o[idx].first, o[idx].second, z1); lineTo(p.x, p.y) }
+                close()
+            }
+            val left = iso.p(o[pc.lower.first()].first, o[pc.lower.first()].second).x
+            val right = iso.p(o[pc.lower.last()].first, o[pc.lower.last()].second).x
+            drawPath(sides, Brush.horizontalGradient(listOf(faceY, lerp(faceY, faceX, 0.5f), faceX), minOf(left, right), maxOf(left, right)))
+            drawPath(path(pts(o, z1)), top)
             if (b.bush) {
                 // Leaves: a few overlapping discs above the pot
                 val c = iso.p((x0 + x1) / 2, (y0 + y1) / 2, z1)
@@ -885,15 +943,23 @@ private fun DrawScope.drawFloor(
             }
             return@forEach
         }
-        // A wall: its faces a little darker at the foot, and a highlight along its top edge
+        // A box: a wall (faces a little darker at the foot, a cap) or a step
         val frontFace = iso.poly(Triple(x0, y1, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x0, y1, z1))
-        drawPath(frontFace, Brush.verticalGradient(listOf(faceY, lerp(faceY, Color.Black, 0.25f)), iso.p(x0, y1, z1).y, iso.p(x0, y1, z0).y))
-        drawPath(iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1)), Brush.verticalGradient(listOf(faceX, lerp(faceX, Color.Black, 0.25f)), iso.p(x1, y0, z1).y, iso.p(x1, y0, z0).y))
-        drawPath(iso.rect(x0, y0, x1, y1, z1), washed(WallCap, sky.amount * 0.8f))
-        drawLine(Color.White.copy(alpha = 0.16f), iso.p(x0, y1, z1), iso.p(x1, y1, z1), 1f)
+        val sideFace = iso.poly(Triple(x1, y0, z0), Triple(x1, y1, z0), Triple(x1, y1, z1), Triple(x1, y0, z1))
+        if (b.wall) {
+            drawPath(frontFace, Brush.verticalGradient(listOf(faceY, lerp(faceY, Color.Black, 0.25f)), iso.p(x0, y1, z1).y, iso.p(x0, y1, z0).y))
+            drawPath(sideFace, Brush.verticalGradient(listOf(faceX, lerp(faceX, Color.Black, 0.25f)), iso.p(x1, y0, z1).y, iso.p(x1, y0, z0).y))
+            drawPath(iso.rect(x0, y0, x1, y1, z1), washed(WallCap, sky.amount * 0.8f))
+            drawLine(Color.White.copy(alpha = 0.16f), iso.p(x0, y1, z1), iso.p(x1, y1, z1), 1f)
+            drawLine(Color.White.copy(alpha = 0.1f), iso.p(x1, y0, z1), iso.p(x1, y1, z1), 1f)
+        } else {
+            drawPath(frontFace, faceY)
+            drawPath(sideFace, faceX)
+            drawPath(iso.rect(x0, y0, x1, y1, z1), top)
+        }
         // Framed prints on the side wall, over the bed or the table (never over the TV)
         if (b.order == -1000f && y1 - y0 > x1 - x0 && rise > 0.9f) {
-            floor.rooms.filter { it.x < 0.01f && it.room != tvRoom && !WET.containsMatchIn(it.room) && it.d >= 2f }.forEachIndexed { i, r ->
+            scene.art.forEachIndexed { i, r ->
                 val (outer, inner) = Art[i % Art.size]
                 val fw = minOf(1.1f, r.d * 0.32f); val cy = r.y + r.d / 2
                 val frame = iso.poly(Triple(x1, cy - fw / 2, 0.98f), Triple(x1, cy + fw / 2, 0.98f), Triple(x1, cy + fw / 2, 1.34f), Triple(x1, cy - fw / 2, 1.34f))
@@ -903,10 +969,9 @@ private fun DrawScope.drawFloor(
                 drawPath(iso.poly(Triple(x1, cy - fw * 0.05f, 1.04f), Triple(x1, cy + fw / 2 - 0.08f, 1.04f), Triple(x1, cy + fw / 2 - 0.08f, 1.18f), Triple(x1, cy - fw * 0.05f, 1.18f)), washed(inner))
             }
         }
-        drawLine(Color.White.copy(alpha = 0.1f), iso.p(x1, y0, z1), iso.p(x1, y1, z1), 1f)
-        // Windows on the street wall, their glass taking the hour, with a sill and a mullion
+        // Windows on the back wall, their glass taking the hour, with a sill and a mullion
         if (b.order == -1000f && x1 - x0 > y1 - y0) {
-            windows.forEach { (mid, len) ->
+            scene.windows.forEach { (mid, len) ->
                 val a = mid - len / 2; val c = mid + len / 2
                 val zz0 = 0.48f * rise; val zz1 = 1.2f * rise
                 val pane = iso.poly(Triple(a, y1, zz0), Triple(c, y1, zz0), Triple(c, y1, zz1), Triple(a, y1, zz1))
@@ -918,30 +983,30 @@ private fun DrawScope.drawFloor(
         }
     }
 
-    // Pendants over their pools, on a thin cord
-    floor.rooms.forEach { r ->
-        val inRoom = lights.filter { it.room == r.room }
-        spots(r, inRoom.size).zip(inRoom).forEach { (spot, l) ->
-            val k = g(l).coerceIn(0f, 1.3f)
-            val shown = stage(build, 0.55f, 0.75f)
-            if (shown <= 0.01f) return@forEach
+    // Pendants over their pools, on a thin cord, under a brass dome
+    val shown = stage(build, 0.55f, 0.75f)
+    if (shown > 0.01f) floor.rooms.forEach { r ->
+        val inRoom = scene.inRoom.getValue(r.room)
+        scene.spots.getValue(r.room).forEachIndexed { i, spot ->
+            val k = g(inRoom[i]).coerceIn(0f, 1.3f)
             val c = iso.p(spot.first, spot.second, PENDANT)
             drawLine(Color.Black.copy(alpha = 0.35f * shown), c, iso.p(spot.first, spot.second, PENDANT + 0.32f), 1f)
             if (k > 0.01f) {
-                drawCircle(Brush.radialGradient(listOf(Bulb.copy(alpha = 0.5f * k.coerceAtMost(1f)), Color.Transparent), c + Offset(0f, 3.dp.toPx()), 16.dp.toPx() * (0.6f + 0.4f * k)), 16.dp.toPx() * (0.6f + 0.4f * k), c + Offset(0f, 3.dp.toPx()))
+                val gr = 16.dp.toPx() * (0.6f + 0.4f * k); val gc = c + Offset(0f, 3.dp.toPx())
+                drawCircle(Brush.radialGradient(listOf(Bulb.copy(alpha = 0.5f * k.coerceAtMost(1f)), Color.Transparent), gc, gr), gr, gc)
             }
-            // A brass dome shade over the bulb
             val sr = 5.dp.toPx()
             drawArc(washed(Brass).copy(alpha = shown), 180f, 180f, true, topLeft = c - Offset(sr, sr * 0.9f), size = Size(sr * 2, sr * 1.8f))
             drawOval(lerp(Color(0xFF6B6255), Bulb, k.coerceIn(0f, 1f)).copy(alpha = shown), topLeft = c - Offset(sr * 0.8f, sr * 0.22f), size = Size(sr * 1.6f, sr * 0.44f))
         }
     }
 
-    // Names on glass tags, with what is lit in amber: the last thing to arrive
+    // Names on glass tags, with what is lit in amber: the last thing to arrive. Each label is measured
+    // once and kept (it changes only when a light or the chosen room does)
     val tags = stage(build, 0.78f, 1f)
     if (tags <= 0.01f) return
-    fun tag(label: androidx.compose.ui.text.AnnotatedString, at: Offset, bg: Color) {
-        val m = text.measure(label, TextStyle(fontFamily = Inter, fontSize = 10.sp, fontWeight = FontWeight.SemiBold))
+    fun tag(key: String, label: () -> androidx.compose.ui.text.AnnotatedString, at: Offset, bg: Color) {
+        val m = measured.getOrPut(key) { text.measure(label(), TagStyle) }
         val padX = 7.dp.toPx(); val padY = 3.dp.toPx()
         val tl = Offset(at.x - m.size.width / 2f - padX, at.y - m.size.height - padY * 2)
         val size = Size(m.size.width + padX * 2, m.size.height + padY * 2)
@@ -949,17 +1014,20 @@ private fun DrawScope.drawFloor(
         drawText(m, topLeft = Offset(tl.x + padX, tl.y + padY), alpha = tags)
     }
     floor.rooms.forEach { r ->
-        val inRoom = lights.filter { it.room == r.room }
+        val inRoom = scene.inRoom.getValue(r.room)
         val lit = inRoom.count { (glow[it.key] ?: 0f) > 0.5f }
         val picked = r == chosen
-        val ink = if (picked) Casa.Ink else Color.White
-        val label = buildAnnotatedString {
-            withStyle(SpanStyle(color = ink)) { append(r.room) }
-            if (inRoom.isNotEmpty()) withStyle(SpanStyle(color = if (lit > 0) (if (picked) Color(0xFFB86E00) else Casa.Amber) else ink.copy(alpha = 0.45f))) { append("  $lit/${inRoom.size}") }
-        }
-        tag(label, iso.p(r.x + r.w / 2, r.y + r.d / 2, 1.45f), if (picked) Color.White.copy(alpha = if (focused) 1f else 0.7f) else Color(0xE0141518))
+        tag("${r.room}|$lit|$picked", {
+            val ink = if (picked) Casa.Ink else Color.White
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = ink)) { append(r.room) }
+                if (inRoom.isNotEmpty()) withStyle(SpanStyle(color = if (lit > 0) (if (picked) Color(0xFFB86E00) else Casa.Amber) else ink.copy(alpha = 0.45f))) { append("  $lit/${inRoom.size}") }
+            }
+        }, iso.p(r.x + r.w / 2, r.y + r.d / 2, 1.45f), if (picked) Color.White.copy(alpha = if (focused) 1f else 0.7f) else Color(0xE0141518))
     }
-    if (tvBox != null && !floor.outdoor) {
-        tag(buildAnnotatedString { withStyle(SpanStyle(color = Color(0xFFBFD3FF))) { append("● Você está aqui") } }, iso.p(tvBox.x + 0.2f, tvBox.y + tvBox.d / 2, 1.7f), Color(0xE0141A2B))
+    scene.tvBox?.let { tv ->
+        tag("tv", { buildAnnotatedString { withStyle(SpanStyle(color = Color(0xFFBFD3FF))) { append("● Você está aqui") } } }, iso.p(tv.x + 0.2f, tv.y + tv.d / 2, 1.7f), Color(0xE0141A2B))
     }
 }
+
+private val BEDROOM = Regex("(?i)quarto|suíte|suite|ninho|principal|escritório")
