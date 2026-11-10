@@ -83,7 +83,9 @@ class MapShotsTest {
         rule.mainClock.advanceTimeBy(1_900)
         rule.waitForIdle()
         rule.onNodeWithText("2º andar").assertExists()
-        // Up from the living room at the back is the suite right above it
+        // Upstairs lands in the front bedroom, over the living room; ▲ walks back through the house to the suite
+        rule.onRoot().performKeyInput { repeat(3) { pressKey(Key.DirectionUp) } }
+        rule.waitForIdle()
         rule.onNodeWithText("Quarto principal").assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-model-suite.png")
         // ▲ climbs to the room above on screen first; Channel + goes straight up a floor

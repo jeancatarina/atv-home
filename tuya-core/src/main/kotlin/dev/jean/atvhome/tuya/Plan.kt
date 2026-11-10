@@ -47,7 +47,8 @@ data class Floor(
 /**
  * Something the model draws that is not a room and has no lights: [kind] is one of deck, grass,
  * ceramic (finishes on the floor), jacuzzi, tank (the water tank's housing), stairs (where the stairs
- * come up), skylight, planter. A kind the model does not know is skipped.
+ * come up), flight (a flight of stairs), bench (a built-in bench), skylight, planter. A kind the
+ * model does not know is skipped.
  */
 @Serializable
 data class Feature(val kind: String, val x: Float, val y: Float, val w: Float, val d: Float)

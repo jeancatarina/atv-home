@@ -191,7 +191,8 @@ fun HouseMap(
             val vx = cx - hx; val vy = cy - hy
             val len = sqrt(vx * vx + vy * vy)
             val along = (vx * dx + vy * dy) / len
-            if (along < 0.45f) null else r to len * (2f - along)
+            // A wide cone: in the isometric view rooms lie on diagonals, so "up" means up-ish
+            if (along < 0.25f) null else r to len * (2f - along)
         }.minByOrNull { it.second }?.first
         if (best != null) { chosen = best; return true }
         return when { dy < 0 -> jump(+1); dy > 0 -> jump(-1); else -> false }
@@ -322,6 +323,8 @@ private const val RAIL = 0.6f
 /** No key for this long and the model starts touring the floors, one every [TOUR_STEP_MS]. */
 private const val TOUR_IDLE_MS = 30_000L
 private const val TOUR_STEP_MS = 8_000L
+/** A doorway's width in an inner wall. */
+private const val DOOR = 0.85f
 /** Where the pendants hang. */
 private const val PENDANT = 1.18f
 
@@ -483,9 +486,15 @@ private fun walls(plan: Plan, floor: Floor): List<Block> {
     along(0f, w, 0f, back, order = -1000f); across(0f, d, 0f, back, order = -1000f)
     along(0f, w, d, front, order = 1000f); across(0f, d, w, front, order = 1000f)
     if (!floor.open && !floor.outdoor) {
+        // Inner walls with a doorway: rooms open onto each other, as in a house (not sealed boxes)
+        fun door(a: Float, b: Float, wall: (Float, Float) -> Unit) {
+            if (b - a < 1.6f) { wall(a, b); return }
+            val gap = a + (b - a) * 0.22f
+            wall(a, gap); wall(gap + DOOR, b)
+        }
         floor.rooms.forEach { r ->
-            if (r.x + r.w < w - 0.01f) across(r.y, r.y + r.d, r.x + r.w, INNER)
-            if (r.y + r.d < d - 0.01f) along(r.x, r.x + r.w, r.y + r.d, INNER)
+            if (r.x + r.w < w - 0.01f) door(r.y, r.y + r.d) { a, b -> across(a, b, r.x + r.w, INNER) }
+            if (r.y + r.d < d - 0.01f) door(r.x, r.x + r.w) { a, b -> along(a, b, r.y + r.d, INNER) }
         }
     }
     return out
@@ -539,19 +548,19 @@ private fun furniture(room: RoomBox, outdoor: Boolean, tv: Boolean, features: Li
             round(sx + 0.5f, y0 + 0.3f, 0.2f, 0f, 1.05f, Walnut, lamp = true) // a floor lamp by the sofa
         }
         name.contains("jantar") -> {
-            // A long table with rounded chairs either side, a plant in the corner
-            val tl = minOf(2.4f, w * 0.55f); val td = minOf(1f, d * 0.4f)
-            val ty = cy - td / 2
+            // A long table down the house's length (the kitchen island goes on as the table), chairs either side
+            val tl = minOf(2.6f, d * 0.8f); val td = 0.95f
+            val tx = cx - td / 2
             (0 until 3).forEach { i ->
-                val chx = cx - tl / 2 + tl * (i + 0.5f) / 3
-                round(chx, ty - 0.35f, 0.2f, 0f, 0.46f, Linen)
+                val chy = cy - tl / 2 + tl * (i + 0.5f) / 3
+                round(tx - 0.35f, chy, 0.2f, 0f, 0.46f, Linen)
             }
-            box(cx - tl / 2, ty, cx + tl / 2, ty + td, 0f, 0.56f, Wood, top = Color(0xFFD8B78C), radius = 0.12f)
+            box(tx, cy - tl / 2, tx + td, cy + tl / 2, 0f, 0.56f, Wood, top = Color(0xFFD8B78C), radius = 0.12f)
             (0 until 3).forEach { i ->
-                val chx = cx - tl / 2 + tl * (i + 0.5f) / 3
-                round(chx, ty + td + 0.35f, 0.2f, 0f, 0.46f, Linen)
+                val chy = cy - tl / 2 + tl * (i + 0.5f) / 3
+                round(tx + td + 0.35f, chy, 0.2f, 0f, 0.46f, Linen)
             }
-            plant(x1 - 0.35f, y0 + 0.35f, 0.32f)
+            plant(x0 + 0.35f, y1 - 0.35f, 0.32f)
         }
         name.contains("cozinha") -> {
             // Counter along the side wall, an island with stools
@@ -789,7 +798,23 @@ private fun DrawScope.drawFloor(
             // The water tank's housing over the stairs, concrete
             "tank" -> Block(f.x, f.y, f.x + f.w, f.y + f.d, 0f, 1.35f, Color(0xFFB9B4AC), wall = false, room = host, top = Color(0xFFCFCAC2), radius = 0.04f)
             "planter" -> { val rr = minOf(f.w, f.d) / 2; Block(f.x, f.y, f.x + 2 * rr, f.y + 2 * rr, 0f, 0.45f, Planter, wall = false, room = host, radius = rr, bush = true) }
+            // A built-in concrete bench (burnished cement, like the stairs on the plans)
+            "bench" -> Block(f.x, f.y, f.x + f.w, f.y + f.d, 0f, 0.45f, Color(0xFFAFA9A0), wall = false, room = host, top = Color(0xFFC4BEB5), radius = 0.04f)
             else -> null
+        }
+    } + floor.features.filter { it.kind == "flight" }.flatMap { f ->
+        // A flight of stairs along its long side, rising towards the back of the house (y = 0)
+        val host = roomAt(f.x + f.w / 2, f.y + f.d / 2)
+        val steps = 12
+        val alongY = f.d >= f.w
+        (0 until steps).map { i ->
+            if (alongY) {
+                val run = f.d / steps; val sy = f.y + f.d - (i + 1) * run
+                Block(f.x, sy, f.x + f.w, sy + run, 0f, (i + 1) * 0.11f, Color(0xFFAFA9A0), wall = false, room = host, top = Color(0xFFC4BEB5), radius = 0f)
+            } else {
+                val run = f.w / steps; val sx = f.x + f.w - (i + 1) * run
+                Block(sx, f.y, sx + run, f.y + f.d, 0f, (i + 1) * 0.11f, Color(0xFFAFA9A0), wall = false, room = host, top = Color(0xFFC4BEB5), radius = 0f)
+            }
         }
     }
     // Soft contact shadows under every piece, as in a photograph of a model (a radial fill, no blur)

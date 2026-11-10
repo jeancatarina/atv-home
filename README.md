@@ -210,7 +210,7 @@ o cômodo inteiro, e ao lado ficam as luzes do cômodo. A planta é sua: copie
 `tools/casa-plan.example.json` para `casa-plan.json` (fora do git, como as chaves), ajuste os andares e
 os retângulos dos cômodos (os nomes iguais aos do app Tuya) e rode `tools/tuya-setup.sh`. Cada andar
 pode ter também `features`, coisas sem luz que a maquete desenha: `deck`, `grass`, `ceramic`,
-`jacuzzi`, `tank` (a caixa d'água), `stairs` (onde a escada chega), `skylight` e `planter`. Sem planta, a
+`jacuzzi`, `tank` (a caixa d'água), `stairs` (onde a escada chega), `flight` (um lance de escada), `bench` (um banco embutido), `skylight` e `planter`. A frente da casa (a rua) é o lado mais perto de quem olha a maquete (`y` = `depth`), como nas plantas. Sem planta, a
 maquete põe todos os cômodos num andar só.
 
 Cada cômodo tem seus móveis, reconhecidos pelo nome: o sofá voltado para a TV, que está ligada e
