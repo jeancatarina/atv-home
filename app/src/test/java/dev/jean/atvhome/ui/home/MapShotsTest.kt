@@ -109,4 +109,16 @@ class MapShotsTest {
         rule.onNodeWithText("pôr do sol", substring = true).assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-model-sunset.png")
     }
+
+    @Test fun `left alone, the model tours the floors`() {
+        show(LocalTime.of(21, 30))
+        rule.mainClock.advanceTimeBy(1_500)
+        rule.onNodeWithText("1º ANDAR").assertExists()
+        rule.mainClock.advanceTimeBy(31_000)
+        rule.waitForIdle()
+        rule.onNodeWithText("2º ANDAR").assertExists()
+        rule.mainClock.advanceTimeBy(8_000)
+        rule.waitForIdle()
+        rule.onNodeWithText("TERRAÇO").assertExists()
+    }
 }

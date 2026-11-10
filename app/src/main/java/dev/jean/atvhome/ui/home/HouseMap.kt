@@ -150,6 +150,18 @@ fun HouseMap(
             }
         }
     }
+    // Left alone, the model tours the house: a floor every few seconds, each building itself again,
+    // back to the ground floor at the top. Any key hands it back
+    var touched by remember { mutableIntStateOf(0) }
+    LaunchedEffect(touched) {
+        delay(TOUR_IDLE_MS)
+        while (plan.floors.size > 1) {
+            val next = (floor + 1) % plan.floors.size
+            floor = next
+            chosen = plan.floors[next].rooms.firstOrNull()
+            delay(TOUR_STEP_MS)
+        }
+    }
     // The hour outside, checked twice a minute
     var now by remember { mutableStateOf(clock()) }
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = clock() } }
@@ -189,6 +201,7 @@ fun HouseMap(
                 .onFocusChanged { focused = it.isFocused }
                 .onKeyEvent { e ->
                     if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
+                    touched++
                     when (e.key) {
                         Key.DirectionLeft -> move(-1f, 0f)
                         // Nothing further right: on to the room's lights beside the model
@@ -303,6 +316,9 @@ private const val BACK = 1.45f
 private const val INNER = 0.62f
 private const val FRONT = 0.3f
 private const val RAIL = 0.6f
+/** No key for this long and the model starts touring the floors, one every [TOUR_STEP_MS]. */
+private const val TOUR_IDLE_MS = 30_000L
+private const val TOUR_STEP_MS = 8_000L
 /** Where the pendants hang. */
 private const val PENDANT = 1.18f
 

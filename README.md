@@ -217,7 +217,8 @@ quartos; mesa e estante no escritório; pia e vaso nos banheiros; a escada no co
 espreguiçadeiras e vasos no terraço. As luzes são pendentes sobre a poça que fazem no piso, e as
 janelas do fundo seguem a hora (sol no piso de dia, dourado no fim da tarde, luar à noite). As setas
 vão para o cômodo naquela direção da tela; no alto ou embaixo do andar, trocam de andar, e **CH ±**
-trocam direto. Acender ou apagar solta um anel pelo piso.
+trocam direto. Acender ou apagar solta um anel pelo piso. Deixada sozinha por 30 s, a maquete passeia
+pela casa, um andar a cada 8 s, cada um se montando de novo; qualquer tecla devolve o controle.
 
 A maquete é viva: o andar se monta ao aparecer (a laje assenta, as paredes sobem do fundo para a
 frente e as luzes acendem uma a uma), uma luz que acende "floresce" como lâmpada esquentando, e o
