@@ -171,6 +171,12 @@ class HomeActivity : ComponentActivity() {
                     panelOpen = !panelOpen
                     return true
                 }
+                // "Casa no filme" takes the yellow key everywhere when it is on; without it, Home still answers it
+                KeyEvent.KEYCODE_PROG_YELLOW -> if (home != null) {
+                    panelOpen = false
+                    stack.clear(); stack.add(Screen.House)
+                    return true
+                }
                 KeyEvent.KEYCODE_SEARCH -> {
                     stack.clear(); stack.add(Screen.Search)
                     return true
@@ -216,7 +222,7 @@ class HomeActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
         // "Casa": the hub connection opens with Home in front, so a click never waits for it
-        home?.foreground(true)
+        home?.connect(true)
         // The guard steps aside while Home is in front: browsing pays nothing for it
         lifecycleScope.launch { AdShield.launcherInFront(this@HomeActivity, true) }
         // A network filter that stopped answering must not leave the TV without internet
@@ -231,7 +237,7 @@ class HomeActivity : ComponentActivity() {
     /** Another app took the screen: a Social game freezes instead of running its clocks behind the app. */
     override fun onStop() {
         super.onStop()
-        home?.foreground(false)
+        home?.connect(false)
         if (socialUsed) social.background()
         lifecycleScope.launch { AdShield.launcherInFront(this@HomeActivity, false) }
     }

@@ -67,8 +67,8 @@ fun main(args: Array<String>) = runBlocking {
             .ifEmpty { names.keys.filter { it.matches(Regex("switch_\\d+")) }.map { it to it.removePrefix("switch_").toInt() } }
         // A switch offline at setup (the doorbell's) stays off the row until the person puts it there
         val online = d.bool("isOnline") != false
-        lights += nameKeys(device, keys.map { (code, dp) -> dp to names[code] }).map { (dps, name, load) ->
-            Light(cid = cid, dps = dps, name = name, room = roomOf[id] ?: "Casa", device = device, load = load && online)
+        lights += nameKeys(device, keys.map { (code, dp) -> dp to names[code] }).map { k ->
+            Light(cid = cid, dps = k.dps, name = k.name, room = roomOf[id] ?: "Casa", device = device, load = k.kind == Kind.LIGHT && online, kind = k.kind)
         }
     }
     val tidy = tidy(lights, roomOrder)
@@ -95,15 +95,20 @@ fun main(args: Array<String>) = runBlocking {
  * only): scene keys ("Cena…", "Atalho…"), unnamed keys of a switch whose other keys have names, and
  * scene switches with no names ("Escada térreo cenas").
  */
-internal fun nameKeys(device: String, keys: List<Pair<Int, String?>>): List<Triple<List<Int>, String, Boolean>> {
+internal data class Key(val dps: List<Int>, val name: String, val kind: Kind)
+
+internal fun nameKeys(device: String, keys: List<Pair<Int, String?>>): List<Key> {
     fun custom(name: String?) = name != null && !name.matches(Regex("(?i)switch( \\d+)?|momentary.*|delay.*"))
     val sorted = keys.sortedBy { it.first }
     if (sorted.none { custom(it.second) }) {
-        return listOf(Triple(sorted.map { it.first }, device, !device.contains("cena", ignoreCase = true)))
+        return listOf(Key(sorted.map { it.first }, device, if (device.contains("cena", ignoreCase = true)) Kind.SCENE else Kind.LIGHT))
     }
     return sorted.mapIndexed { i, (dp, name) ->
-        if (custom(name)) Triple(listOf(dp), name!!, !name.matches(Regex("(?i)(cena|atalho)\\b.*")))
-        else Triple(listOf(dp), "$device ${i + 1}", false)
+        when {
+            !custom(name) -> Key(listOf(dp), "$device ${i + 1}", Kind.SPARE)
+            name!!.matches(Regex("(?i)(cena|atalho)\\b.*")) -> Key(listOf(dp), name, Kind.SCENE)
+            else -> Key(listOf(dp), name, Kind.LIGHT)
+        }
     }
 }
 

@@ -5,6 +5,9 @@
 #   tools/tuya-setup.sh            (TV=ip:port if it is not 192.168.1.3:5555)
 #   tools/tuya-setup.sh --fake     the fake hub of ./gradlew :tuya-core:fakeHub instead of the house
 #
+# It restarts the launcher and presses HOME on the TV: whatever is playing stops. Run it when nobody
+# is watching.
+#
 # Needs tuya.accessId, tuya.accessSecret and tuya.region in local.properties (README, "Casa").
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -28,6 +31,19 @@ fi
 # The app moves it to its private storage on the next start and deletes this copy
 adb -s "$TV" shell mkdir -p "/sdcard/Android/data/$PKG/files"
 adb -s "$TV" push "$FILE" "/sdcard/Android/data/$PKG/files/tuya.json" >/dev/null
+
+# "Casa no filme" (the yellow key over any app) is an accessibility service: listed here, and kept
+# listed by the launcher, which needs WRITE_SECURE_SETTINGS for that (the same grant as "Sem anúncios")
+adb -s "$TV" shell pm grant "$PKG" android.permission.WRITE_SECURE_SETTINGS
+SERVICE="$PKG/$PKG.casa.HouseKeyService"
+LIST="$(adb -s "$TV" shell settings get secure enabled_accessibility_services | tr -d '\r')"
+[ "$LIST" = "null" ] && LIST=""
+# Out and back in: the service starts again and reads the new tuya.json
+REST="$(printf '%s' "$LIST" | tr ':' '\n' | { grep -vx "$SERVICE" || true; } | paste -sd: -)"
+if [ -n "$REST" ]; then adb -s "$TV" shell settings put secure enabled_accessibility_services "$REST"
+else adb -s "$TV" shell settings delete secure enabled_accessibility_services >/dev/null; fi
 adb -s "$TV" shell am force-stop "$PKG"
+adb -s "$TV" shell settings put secure enabled_accessibility_services "${REST:+$REST:}$SERVICE"
+adb -s "$TV" shell settings put secure accessibility_enabled 1
 adb -s "$TV" shell input keyevent KEYCODE_HOME
-echo "ok: the Casa row is under the apps on the TV"
+echo "ok: the Casa row is under the apps, and the yellow key opens the house over any app"

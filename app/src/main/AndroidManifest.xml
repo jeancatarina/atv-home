@@ -90,6 +90,21 @@
                 <action android:name="android.service.notification.NotificationListenerService" />
             </intent-filter>
         </service>
+        <!-- "Casa no filme": the yellow key opens the house panel over any app. Its own process,
+             like the guard's: a film never holds the launcher's memory -->
+        <service
+            android:name=".casa.HouseKeyService"
+            android:exported="true"
+            android:label="Início · Casa no filme"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:process=":casa">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/casa_keys" />
+        </service>
         <service
             android:name=".guard.ScreenService"
             android:exported="false"

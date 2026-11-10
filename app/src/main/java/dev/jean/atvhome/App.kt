@@ -34,13 +34,16 @@ class App : Application(), SingletonImageLoader.Factory {
 
     override fun onCreate() {
         super.onCreate()
-        // The ad guard's process (docs/anuncios/SINAIS.md) uses none of the launcher's state
-        if (processName()?.endsWith(":guard") == true) return
+        // The ad guard's process (docs/anuncios/SINAIS.md) and the film overlay's use none of the launcher's state
+        val process = processName().orEmpty()
+        if (process.endsWith(":guard") || process.endsWith(":casa")) return
         catalog = Catalog(TmdbClient(BuildConfig.TMDB_TOKEN, cacheDir))
         apps = Apps(this)
         myList = MyList(this)
         deepLinks = dev.jean.atvhome.data.DeepLinks(cacheDir)
-        home = dev.jean.atvhome.data.SmartHome.load(this)
+        home = dev.jean.atvhome.data.SmartHome.forLauncher(this)
+        // "Casa no filme" stays listed while there is a house (granted by tools/tuya-setup.sh)
+        if (home != null) dev.jean.atvhome.data.AdShield.keepListed(this, dev.jean.atvhome.casa.HouseKeyService::class.java)
         // "Sem anúncios": the guard is listed only while another app plays sound
         dev.jean.atvhome.data.AdShield.watch(this)
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(

@@ -46,7 +46,7 @@ Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e 
 | **Explorar** | Filtros de filme/série, streaming, gênero, nota mínima no IMDb, época e duração, ordenados pela nota do IMDb. |
 | **Página do título** | IMDb com número de votos, onde assistir no Brasil, trailer, elenco e parecidos. Clicar num ator mostra a filmografia com o selo do app onde você já pode ver cada filme. |
 | **Minha Lista com avisos** | Uma checagem diária marca "Agora no Prime" quando o título chega a um streaming que você tem, e "Novo ep. sexta" em séries. |
-| **Casa** | Uma fileira logo abaixo dos apps com as luzes da casa (interruptores Tuya/Zigbee), as mais usadas primeiro: **OK** acende ou apaga na hora, e o que alguém liga na parede ou no celular aparece sozinho. A TV fala direto com o hub na sua rede, sem nuvem. **Apagar tudo** no fim da fileira e na Central; **Ver a casa** mostra todos os cômodos. |
+| **Casa** | Uma fileira logo abaixo dos apps com as luzes da casa (interruptores Tuya/Zigbee), as mais usadas primeiro: **OK** acende ou apaga na hora, e o que alguém liga na parede ou no celular aparece sozinho. A TV fala direto com o hub na sua rede, sem nuvem. **Ver a casa** tem atalhos (apagar tudo, apagar ou acender um cômodo) e filtros (acesas, luzes, cenas, por cômodo). **Botão amarelo**: a mesma Casa por cima do filme, em qualquer app. |
 | **Central (tecla MENU)** | Entradas HDMI com os nomes que você deu na TV, protetor de tela, Wi-Fi e configurações. |
 | **Protetor de tela** | Já vem no Início: os vídeos aéreos da Apple, sem nenhum texto por cima, e um painel verde-escuro com a hora, a data e o **clima da semana** (Open-Meteo, cidade descoberta pela internet, sem conta). |
 
@@ -200,6 +200,20 @@ Como as teclas viram luzes:
 - A ordem segue o uso: cada vez que uma luz acende (pela TV, pela parede ou pelo celular) ela ganha
   um ponto, e os pontos valem metade a cada 30 dias. A fileira só se reordena quando a Home volta à
   frente, nunca embaixo do foco.
+
+**Ver a casa** e o **botão amarelo** abrem o mesmo painel:
+
+- Atalhos no topo: **Apagar tudo**, **Apagar** e **Acender** o cômodo escolhido (sem cômodo escolhido,
+  o primeiro do app, onde está a TV). Acender nunca liga uma cena; apagar desliga toda tecla acesa.
+- Filtros com a contagem: **Acesas**, **Luzes**, **Cenas**, **Todas**, e um cômodo por vez.
+- As luzes por cômodo, cada cômodo com o próprio **Apagar**.
+
+**Botão amarelo, durante o filme**: em qualquer app (Netflix, Prime Video, canal ao vivo) ele abre a
+Casa numa folha à direita, com o filme rodando ao lado. Amarelo de novo ou **Voltar** fecha; sem
+nenhuma tecla por 20 s, fecha sozinha. É um serviço de acessibilidade que só olha o botão amarelo (toda
+outra tecla vai direto para o app), em processo próprio, com a própria conexão ao hub enquanto a tela
+está ligada: a folha abre já com tudo em dia, e ele é quem conta os usos da fileira. O
+`tools/tuya-setup.sh` o liga; ele aparece em Configurações → Acessibilidade como "Início · Casa no filme".
 
 Sem a casa por perto: `./gradlew :tuya-core:fakeHub` (um hub falso neste computador) e
 `tools/tuya-setup.sh --fake`. Para testar o código da TV contra o hub de verdade, do computador:

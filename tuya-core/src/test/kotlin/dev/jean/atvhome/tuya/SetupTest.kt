@@ -7,26 +7,26 @@ import org.junit.Test
 class SetupTest {
     @Test fun `named keys keep the name the app gave them`() {
         assertEquals(
-            listOf(Triple(listOf(1), "Luz cozinha", true), Triple(listOf(2), "Luz sala", true), Triple(listOf(3), "Luz mesa", true)),
+            listOf(Key(listOf(1), "Luz cozinha", Kind.LIGHT), Key(listOf(2), "Luz sala", Kind.LIGHT), Key(listOf(3), "Luz mesa", Kind.LIGHT)),
             nameKeys("Estar", listOf(1 to "Luz cozinha", 2 to "Luz sala", 3 to "Luz mesa")),
         )
     }
 
     @Test fun `a switch with no names is one light with all its keys`() {
-        assertEquals(listOf(Triple(listOf(1, 2, 3), "Lavabo", true)), nameKeys("Lavabo", listOf(1 to "Switch", 2 to "Switch 2", 3 to "Switch 3")))
-        assertEquals(listOf(Triple(listOf(1, 2), "Quartinho", true)), nameKeys("Quartinho", listOf(1 to "switch", 2 to "Switch 2")))
+        assertEquals(listOf(Key(listOf(1, 2, 3), "Lavabo", Kind.LIGHT)), nameKeys("Lavabo", listOf(1 to "Switch", 2 to "Switch 2", 3 to "Switch 3")))
+        assertEquals(listOf(Key(listOf(1, 2), "Quartinho", Kind.LIGHT)), nameKeys("Quartinho", listOf(1 to "switch", 2 to "Switch 2")))
     }
 
     @Test fun `scene keys and spare keys stay off the row`() {
         assertEquals(
-            listOf(Triple(listOf(1), "Luz da escada", true), Triple(listOf(2), "Cena da escada", false)),
+            listOf(Key(listOf(1), "Luz da escada", Kind.LIGHT), Key(listOf(2), "Cena da escada", Kind.SCENE)),
             nameKeys("Escada", listOf(1 to "Luz da escada", 2 to "Cena da escada")),
         )
         assertEquals(
-            listOf(Triple(listOf(1), "Luz do banheiro", true), Triple(listOf(2), "Luz do banheiro 2", true), Triple(listOf(3), "Toalete 3", false)),
+            listOf(Key(listOf(1), "Luz do banheiro", Kind.LIGHT), Key(listOf(2), "Luz do banheiro 2", Kind.LIGHT), Key(listOf(3), "Toalete 3", Kind.SPARE)),
             nameKeys("Toalete", listOf(1 to "Luz do banheiro", 2 to "Luz do banheiro 2", 3 to "Switch 3")),
         )
-        assertEquals(listOf(Triple(listOf(1, 2, 3), "Escada térreo cenas", false)), nameKeys("Escada térreo cenas", listOf(1 to "Switch", 2 to "Switch 2", 3 to "Switch 3")))
+        assertEquals(listOf(Key(listOf(1, 2, 3), "Escada térreo cenas", Kind.SCENE)), nameKeys("Escada térreo cenas", listOf(1 to "Switch", 2 to "Switch 2", 3 to "Switch 3")))
     }
 
     @Test fun `rooms in order, scene switches last, no twin names on the row`() {

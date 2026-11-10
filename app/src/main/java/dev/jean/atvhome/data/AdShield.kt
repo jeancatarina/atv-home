@@ -167,11 +167,24 @@ object AdShield {
         runCatching { guardService(context, on) }.onFailure { Log.w(TAG, "guard $on", it) }
     }
 
-    /** Adds or removes our accessibility service in the system's colon-separated list. */
-    private fun guardService(context: Context, on: Boolean) {
+    private fun guardService(context: Context, on: Boolean) = listService(context, AdGuardService::class.java, on)
+
+    /**
+     * Keeps another of our accessibility services listed ("Casa no filme"), on the same writer as the
+     * guard's so neither overwrites the other's change to the list. Without WRITE_SECURE_SETTINGS it
+     * does nothing.
+     */
+    fun keepListed(context: Context, service: Class<*>) {
+        if (!allowed(context)) return
+        val app = context.applicationContext
+        scope.launch { runCatching { listService(app, service, true) }.onFailure { Log.w(TAG, "list ${service.simpleName}", it) } }
+    }
+
+    /** Adds or removes one of our accessibility services in the system's colon-separated list. */
+    private fun listService(context: Context, service: Class<*>, on: Boolean) {
         val cr = context.contentResolver
         val p = prefs(context)
-        val me = ComponentName(context, AdGuardService::class.java).flattenToString()
+        val me = ComponentName(context, service).flattenToString()
         val current = Settings.Secure.getString(cr, A11Y_SERVICES).orEmpty().split(':').filter { it.isNotBlank() }
         val next = if (on) (current + me).distinct() else current - me
         if (next == current) return

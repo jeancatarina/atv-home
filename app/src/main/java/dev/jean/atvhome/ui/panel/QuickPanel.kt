@@ -72,7 +72,7 @@ fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit, onAdShieldOn: () ->
                     item { Text("Casa", style = Tv.Meta, color = Tv.Secondary, modifier = Modifier.padding(top = 6.dp)) }
                     // The first lights of the Casa row, with their state in the label: the Central opens over any screen
                     items(row.take(3), key = { "casa:" + it.key }) { light ->
-                        val on = dev.jean.atvhome.data.SmartHome.isOn(light, lit)
+                        val on = dev.jean.atvhome.tuya.Panel.isOn(light, lit)
                         PillButton("${light.name}: ${if (on) "acesa" else "apagada"}", {
                             scope.launch { if (!home.toggle(light)) toast("Não consegui falar com o hub") }
                         }, modifier = Modifier.fillMaxWidth(), selected = on)

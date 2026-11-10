@@ -1,16 +1,19 @@
 package dev.jean.atvhome.data
 
+import android.content.ComponentName
 import android.content.Context
 import android.net.wifi.WifiManager
+import android.provider.Settings
 import android.util.Log
+import dev.jean.atvhome.casa.HouseKeyService
 import dev.jean.atvhome.tuya.Discovery
 import dev.jean.atvhome.tuya.Gateway
 import dev.jean.atvhome.tuya.HomeConfig
 import dev.jean.atvhome.tuya.Light
 import dev.jean.atvhome.tuya.Link
 import dev.jean.atvhome.tuya.Located
+import dev.jean.atvhome.tuya.Panel
 import dev.jean.atvhome.tuya.Usage
-import dev.jean.atvhome.tuya.keyOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -24,45 +27,59 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 
+/** What the Casa screens need from the house: [SmartHome], or a stand-in in screenshot tests. */
+interface HouseModel {
+    val lights: List<Light>
+    val rooms: List<String> get() = Panel.rooms(lights)
+    /** cid:dp → on. */
+    val states: StateFlow<Map<String, Boolean>>
+    val link: StateFlow<Link>
+    /** The Casa row: most used first, without the hidden lights. */
+    val row: StateFlow<List<Light>>
+    suspend fun toggle(light: Light): Boolean
+    suspend fun switchAll(group: List<Light>, on: Boolean): Boolean
+    fun setHidden(light: Light, hide: Boolean)
+}
+
 /**
  * "Casa": the house's lights, straight from the Tuya Zigbee hub on the home network
  * (tuya-core's [Gateway]; no cloud, no server). Exists only when tools/tuya-setup.sh pushed a
  * tuya.json: without it nothing runs and the row is not shown.
  *
- * The connection is open while the launcher is in front, and closes [IDLE_MS] after it leaves, so
- * coming back from an app finds it still open and a click goes out at once.
+ * One per process: the launcher's (the Casa row and "Ver a casa", connected while Home is in front)
+ * and the film overlay's ([HouseKeyService], connected while the screen is on). The hub serves both
+ * and tells both about every change.
  *
- * The row puts the most used lights first ([Usage]), rearranged only when Home comes to the front so
- * a tile never moves under the focus.
+ * "Mais usadas": every off → on the hub reports is a use, whoever pressed it. Only one process
+ * counts ([counts]), into a file the other reads: the overlay's when it runs (it is connected all
+ * day), the launcher's otherwise.
  */
-class SmartHome private constructor(private val context: Context, private val file: File, private var config: HomeConfig) {
-
+class SmartHome private constructor(
+    private val context: Context,
+    private val file: File,
+    private var config: HomeConfig,
+    private val counts: () -> Boolean,
+) : HouseModel {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val prefs = context.getSharedPreferences("casa", Context.MODE_PRIVATE)
     private val gateway = Gateway(config, scope, log = { Log.i(TAG, it) }, locate = ::locate)
+    private val usageFile = File(context.filesDir, USAGE)
     private var idle: Job? = null
 
-    val lights: List<Light> get() = config.lights
-    /** cid:dp → on. */
-    val states: StateFlow<Map<String, Boolean>> = gateway.states
-    val link: StateFlow<Link> = gateway.link
+    override val lights: List<Light> get() = config.lights
+    override val states: StateFlow<Map<String, Boolean>> = gateway.states
+    override val link: StateFlow<Link> = gateway.link
 
-    private val usage = Usage.decode(prefs.getString("usage", null))
     private val _row = MutableStateFlow(arrange())
-    /** The Casa row: most used first, without the hidden lights. */
-    val row: StateFlow<List<Light>> = _row
+    override val row: StateFlow<List<Light>> = _row
 
     init {
-        // Every off → on the hub reports is a use, whoever pressed it
         scope.launch {
             var before = states.value
             states.collect { now ->
                 val on = Usage.turnedOn(lights, before, now)
                 before = now
-                if (on.isNotEmpty()) synchronized(usage) {
-                    on.forEach { usage.used(it.key, System.currentTimeMillis()) }
-                    prefs.edit().putString("usage", usage.encode()).apply()
-                }
+                if (on.isNotEmpty() && counts()) countUses(on)
             }
         }
         // A hub found at a new address is saved, so the next start does not wait for its broadcast
@@ -71,53 +88,65 @@ class SmartHome private constructor(private val context: Context, private val fi
                 val at = gateway.located
                 if (l is Link.Online && at != null && (at.ip != config.hub.ip || at.version.wire != config.hub.version)) {
                     config = config.copy(hub = config.hub.copy(ip = at.ip, version = at.version.wire))
-                    runCatching { save(file, config) }.onFailure { Log.w(TAG, "save", it) }
+                    runCatching { write(file, config.encode()) }.onFailure { Log.w(TAG, "save", it) }
                 }
             }
         }
     }
 
-    fun foreground(front: Boolean) {
+    /** Connects now; with [on] false, disconnects after [graceMs] (coming back soon finds it open). */
+    fun connect(on: Boolean, graceMs: Long = IDLE_MS) {
         idle?.cancel()
-        if (front) {
+        if (on) {
             _row.value = arrange()
             gateway.start()
         } else {
-            idle = scope.launch { delay(IDLE_MS); gateway.stop() }
+            idle = scope.launch { delay(graceMs); gateway.stop() }
         }
     }
 
-    fun isOn(light: Light) = isOn(light, states.value)
+    fun isOn(light: Light) = Panel.isOn(light, states.value)
 
     /** A whole switch ("Lavabo") turns all its keys off when any is on, and all on when none is. */
-    suspend fun toggle(light: Light): Boolean {
+    override suspend fun toggle(light: Light): Boolean {
         val on = !isOn(light)
         return gateway.set(light.cid, light.dps.associateWith { on })
     }
 
-    /** Every key that is on, one frame per switch, all switches at once. */
-    suspend fun allOff(): Boolean = coroutineScope {
-        val now = states.value
-        lights.flatMap { l -> l.dps.filter { now[keyOf(l.cid, it)] == true }.map { l.cid to it } }.distinct()
-            .groupBy({ it.first }, { it.second })
-            .map { (cid, dps) -> async { gateway.set(cid, dps.associateWith { false }) } }
+    /**
+     * Switches a group ("Apagar tudo", a room): one frame per switch, all switches at once. Off turns
+     * off every key that is on; on turns on only lights, never scenes.
+     */
+    override suspend fun switchAll(group: List<Light>, on: Boolean): Boolean = coroutineScope {
+        Panel.switching(group, states.value, on)
+            .map { (cid, dps) -> async { gateway.set(cid, dps) } }
             .awaitAll().all { it }
     }
 
+    suspend fun allOff(): Boolean = switchAll(lights, false)
+
     // --- The row ---------------------------------------------------------------------------------
 
-    /** Hidden by the person; before any choice, the keys the setup marked as not wired (scenes, spares). */
+    /** Hidden by the person; before any choice, what the setup left off the row (scenes, spares, offline). */
     fun hidden(): Set<String> = prefs.getStringSet("hidden", null) ?: lights.filterNot { it.load }.map { it.key }.toSet()
 
     private fun arrange(): List<Light> {
         val hidden = hidden()
-        return synchronized(usage) { usage.rank(lights.filter { it.key !in hidden }, System.currentTimeMillis()) }
+        return readUsage().rank(lights.filter { it.key !in hidden }, System.currentTimeMillis())
     }
 
-    fun setHidden(light: Light, hide: Boolean) {
+    override fun setHidden(light: Light, hide: Boolean) {
         val set = hidden().toMutableSet().apply { if (hide) add(light.key) else remove(light.key) }
         prefs.edit().putStringSet("hidden", set).apply()
         _row.value = arrange()
+    }
+
+    private fun readUsage(): Usage = synchronized(usageFile) { Usage.decode(runCatching { usageFile.readText() }.getOrNull()) }
+
+    private fun countUses(on: List<Light>) = synchronized(usageFile) {
+        val usage = readUsage()
+        on.forEach { usage.used(it.key, System.currentTimeMillis()) }
+        runCatching { write(usageFile, usage.encode()) }.onFailure { Log.w(TAG, "usage", it) }
     }
 
     /** UDP broadcasts reach an app only while it holds a multicast lock on some Wi-Fi drivers. */
@@ -133,30 +162,42 @@ class SmartHome private constructor(private val context: Context, private val fi
 
     companion object {
         private const val TAG = "SmartHome"
-
         private const val IDLE_MS = 30_000L
-
-        fun isOn(light: Light, states: Map<String, Boolean>) = light.keys.any { states[it] == true }
+        private const val CONFIG = "tuya.json"
+        private const val USAGE = "casa-usage.txt"
 
         /**
-         * Reads tuya.json. tools/tuya-setup.sh pushes it to the app's external folder (the only one adb
-         * can write); it is moved to internal storage, where no other app can read the hub's key.
+         * The launcher's. tools/tuya-setup.sh pushes tuya.json to the app's external folder (the only
+         * one adb can write); it is moved to internal storage, where no other app can read the hub's key.
          */
-        fun load(context: Context): SmartHome? {
-            val file = File(context.filesDir, "tuya.json")
-            val pushed = context.getExternalFilesDir(null)?.let { File(it, "tuya.json") }
+        fun forLauncher(context: Context): SmartHome? {
+            val file = File(context.filesDir, CONFIG)
+            val pushed = context.getExternalFilesDir(null)?.let { File(it, CONFIG) }
             if (pushed != null && pushed.isFile) {
                 runCatching { pushed.copyTo(file, overwrite = true); pushed.delete() }.onFailure { Log.w(TAG, "import", it) }
                 context.getSharedPreferences("casa", Context.MODE_PRIVATE).edit().clear().apply()
+                File(context.filesDir, USAGE).delete()
             }
-            if (!file.isFile) return null
-            return runCatching { SmartHome(context, file, HomeConfig.decode(file.readText())) }
-                .onFailure { Log.w(TAG, "tuya.json", it) }.getOrNull()
+            return open(context, file) { !overlayListed(context) }
         }
 
-        private fun save(file: File, config: HomeConfig) {
+        /** The film overlay's: reads what the launcher imported. */
+        fun forOverlay(context: Context): SmartHome? = open(context, File(context.filesDir, CONFIG)) { true }
+
+        private fun open(context: Context, file: File, counts: () -> Boolean): SmartHome? {
+            if (!file.isFile) return null
+            return runCatching { SmartHome(context, file, HomeConfig.decode(file.readText()), counts) }
+                .onFailure { Log.w(TAG, CONFIG, it) }.getOrNull()
+        }
+
+        /** Whether the film overlay's service is switched on (then it is the one counting uses). */
+        fun overlayListed(context: Context): Boolean =
+            Settings.Secure.getString(context.contentResolver, "enabled_accessibility_services").orEmpty()
+                .contains(ComponentName(context, HouseKeyService::class.java).flattenToString())
+
+        private fun write(file: File, text: String) {
             val tmp = File(file.parentFile, "${file.name}.tmp")
-            tmp.writeText(config.encode())
+            tmp.writeText(text)
             tmp.renameTo(file)
         }
     }

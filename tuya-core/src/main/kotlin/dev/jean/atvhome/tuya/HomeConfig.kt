@@ -35,8 +35,8 @@ data class Hub(
 /**
  * One light: a key of a wall switch ("Luz cozinha" is key 1 of "Estar"), or a whole switch whose
  * keys have no names ("Lavabo"), which is on when any key is and switches all of them, like the
- * switch's power button in the Tuya app. [load]: false for keys with nothing wired to them (scene
- * keys), shown only on the house screen.
+ * switch's power button in the Tuya app. [load]: on the Casa row by default (a [Kind.LIGHT] that
+ * was online at setup).
  */
 @Serializable
 data class Light(
@@ -46,9 +46,21 @@ data class Light(
     val room: String,
     val device: String,
     val load: Boolean = true,
+    val kind: Kind = Kind.LIGHT,
 ) {
     val key: String get() = "$cid:" + dps.joinToString("+")
     val keys: List<String> get() = dps.map { keyOf(cid, it) }
+}
+
+/** What a key is for, from the names given in the app: the house panel filters by it. */
+@Serializable
+enum class Kind {
+    /** A named key, or a whole switch with no names. */
+    LIGHT,
+    /** "Cena…", "Atalho…", or a scene switch ("Cenas estar") with no names. */
+    SCENE,
+    /** An unnamed key on a switch whose other keys have names: most likely nothing wired. */
+    SPARE,
 }
 
 fun keyOf(cid: String, dp: Int) = "$cid:$dp"
