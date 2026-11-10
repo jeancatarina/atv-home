@@ -3,6 +3,7 @@ package dev.jean.atvhome.ui.home
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
@@ -46,6 +47,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -53,6 +55,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
@@ -171,7 +174,15 @@ fun HouseMap(
     // The hour outside, checked twice a minute
     var now by remember { mutableStateOf(clock()) }
     LaunchedEffect(Unit) { while (true) { delay(30_000); now = clock() } }
-    val sky = ambience(now)
+    val sky = remember(now) { ambience(now) }
+    // The chosen room's mark slides to the next room; on a new floor it starts where it is
+    val mark = remember { Animatable(Rect.Zero, Rect.VectorConverter) }
+    var markFloor by remember { mutableIntStateOf(-1) }
+    LaunchedEffect(room, floor) {
+        val r = room ?: return@LaunchedEffect
+        val to = Rect(r.x, r.y, r.x + r.w, r.y + r.d)
+        if (markFloor != floor) { markFloor = floor; mark.snapTo(to) } else mark.animateTo(to, spring(dampingRatio = 0.82f, stiffness = 420f))
+    }
 
     /** Straight up or down a floor, to the room right over or under the chosen one. */
     fun jump(by: Int): Boolean {
@@ -224,8 +235,12 @@ fun HouseMap(
                 }
                 .focusable(),
         ) {
+            // The house in a layer of its own: moving between rooms redraws only the marks over it
+            Canvas(Modifier.fillMaxSize().graphicsLayer()) {
+                drawFloor(scene, glow, ripple, if (builtFor == floor) build.value else 0f, sky)
+            }
             Canvas(Modifier.fillMaxSize()) {
-                drawFloor(scene, glow, ripple, room, focused, text, measured, if (builtFor == floor) build.value else 0f, sky)
+                drawMarks(scene, glow, room, mark.value, focused, text, measured, if (builtFor == floor) build.value else 0f)
             }
             Column(Modifier.align(Alignment.TopStart)) {
                 FloorStack(plan.floors, floor, home.lights, states)
@@ -732,10 +747,6 @@ private fun DrawScope.drawFloor(
     scene: Scene,
     glow: Map<String, Float>,
     ripple: Map<String, Float>,
-    chosen: RoomBox?,
-    focused: Boolean,
-    text: TextMeasurer,
-    measured: HashMap<String, androidx.compose.ui.text.TextLayoutResult>,
     build: Float,
     sky: Sky,
 ) {
@@ -876,8 +887,6 @@ private fun DrawScope.drawFloor(
             drawCircle(Brush.radialGradient(listOf(Color(0xFF8FB8FF).copy(alpha = 0.24f * wallsUp), Color.Transparent), c, radius), radius, c)
         }
     }
-    // The chosen room's floor brightens a little; its tag (below) turns white
-    chosen?.let { r -> drawPath(iso.rect(r.x, r.y, r.x + r.w, r.y + r.d), Color.White.copy(alpha = if (focused) 0.07f else 0.035f)) }
     // Ripples: a ring across the floor from a light that just changed
     if (ripple.isNotEmpty()) floor.rooms.forEach { r ->
         val inRoom = scene.inRoom.getValue(r.room)
@@ -1022,8 +1031,30 @@ private fun DrawScope.drawFloor(
         }
     }
 
-    // Names on glass tags, with what is lit in amber: the last thing to arrive. Each label is measured
-    // once and kept (it changes only when a light or the chosen room does)
+}
+
+/**
+ * Over the house: the chosen room's mark (a veil and a rim on its floor, [mark] in plan units, sliding
+ * between rooms) and the names on glass tags. Moving between rooms redraws only this.
+ */
+private fun DrawScope.drawMarks(
+    scene: Scene,
+    glow: Map<String, Float>,
+    chosen: RoomBox?,
+    mark: Rect,
+    focused: Boolean,
+    text: TextMeasurer,
+    measured: HashMap<String, androidx.compose.ui.text.TextLayoutResult>,
+    build: Float,
+) {
+    val floor = scene.floor
+    val iso = fit(scene.plan, dz = (1f - stage(build, 0f, 0.35f)) * 0.9f)
+    if (chosen != null && mark.width > 0f) {
+        val i = 0.1f
+        val shape = path(rounded(mark.left + i, mark.top + i, mark.right - i, mark.bottom - i, 0.35f).map { (x, y) -> iso.p(x, y) })
+        drawPath(shape, Color.White.copy(alpha = if (focused) 0.06f else 0.03f))
+        drawPath(shape, Color.White.copy(alpha = if (focused) 0.42f else 0.18f), style = Stroke(1.5.dp.toPx()))
+    }
     val tags = stage(build, 0.78f, 1f)
     if (tags <= 0.01f) return
     fun tag(key: String, label: () -> androidx.compose.ui.text.AnnotatedString, at: Offset, bg: Color) {
