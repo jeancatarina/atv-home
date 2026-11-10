@@ -51,6 +51,7 @@ import dev.jean.atvhome.ui.discover.MatchScreen
 import dev.jean.atvhome.social.SocialViewModel
 import dev.jean.atvhome.social.ui.SocialScreen
 import dev.jean.atvhome.ui.home.HomeScreen
+import dev.jean.atvhome.ui.panel.AdShieldScreen
 import dev.jean.atvhome.ui.panel.QuickPanel
 import dev.jean.atvhome.ui.theme.InicioTheme
 
@@ -63,6 +64,7 @@ sealed interface Screen {
     data object Roulette : Screen
     data object Match : Screen
     data object Social : Screen
+    data object AdSettings : Screen
 }
 
 class HomeActivity : ComponentActivity() {
@@ -134,12 +136,16 @@ class HomeActivity : ComponentActivity() {
                                 Screen.Roulette -> RouletteScreen(vm, onOpen)
                                 Screen.Match -> MatchScreen(vm, onOpen, toast)
                                 Screen.Social -> SocialScreen(social, vm, toast)
+                                Screen.AdSettings -> AdShieldScreen(toast, ::askCapture)
                             }
                         }
                     }
                     AnimatedVisibility(panelOpen, enter = fadeIn(), exit = fadeOut()) {
                         Box(Modifier.fillMaxSize().focusProperties { exit = { FocusRequester.Cancel } }.focusGroup()) {
-                            QuickPanel(onClose = { panelOpen = false }, toast = toast, onAdShieldOn = ::askCapture)
+                            QuickPanel(
+                                onClose = { panelOpen = false }, toast = toast, onAdShieldOn = ::askCapture,
+                                onAdSettings = { open(Screen.AdSettings) },
+                            )
                         }
                     }
                 }
@@ -193,10 +199,10 @@ class HomeActivity : ComponentActivity() {
     private var captureAsked = false
     private var healing: Job? = null
 
-    /** From the Central's switch: the person asked, so a past "no" does not count. */
+    /** From the Central or the "Sem anúncios" screen: the person asked, so a past "no" does not count. */
     private fun askCapture() {
         captureAsked = true
-        if (ScreenService.running(this)) return
+        if (!AdShield.settings(this).readScreen || ScreenService.running(this)) return
         runCatching { capture.launch(getSystemService(MediaProjectionManager::class.java).createScreenCaptureIntent()) }
             .onFailure { Log.w("AdShield", "screen capture not available", it) }
     }

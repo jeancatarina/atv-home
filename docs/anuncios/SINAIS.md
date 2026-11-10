@@ -49,7 +49,8 @@ e nem o filme, nem a Home, nem os menus dos apps podem engasgar por causa da gua
   serviço desses ligado, o Compose de qualquer app (a Home inclusive) mantém a árvore de semântica a
   cada mudança; assim, Home e menus não pagam nada. Uma pausa só o tira depois de 10 s, para um
   intervalo não cair entre o anúncio e o filme. `accessibility_enabled` volta ao valor de antes.
-- A guarda não esconde a imagem nem filtra teclas: no anúncio que não dá para pular, só tira o som.
+- A guarda não esconde a imagem nem filtra teclas. No anúncio que não dá para pular ela não faz nada,
+  ou tira o som se a pessoa escolheu "sem som" nos ajustes (`GuardSettings`, padrão: com som).
 - O espelho da tela fica sem superfície entre as olhadas; cada olhada pega um quadro só. Sem olhar
   por 30 s, o modelo do OCR, os bitmaps e a fila de imagens são liberados.
 - Calmo, uma olhada a cada 2 s; em alerta, uma por segundo. OCR numa thread de segundo plano.
@@ -69,7 +70,7 @@ palavra só num app que já teve anúncio confirmado; nunca mais de 4 min; a tec
 
 Se estourar, nesta ordem, uma coisa por vez: `SLOW_EVERY` 2 → 3 (`AdGuardService`); captura em
 960×540 (`W`, `H`, `TOP`, `BOTTOM` de `ScreenService`); `KEEP_MIRROR = true` (`ScreenService`, só se
-ligar e desligar o espelho for o que engasga); `"screen_reader": false` em `rules.json`.
+ligar e desligar o espelho for o que engasga); "Ler a tela: não" nos ajustes.
 
 ## Onde nenhum leitor enxerga
 

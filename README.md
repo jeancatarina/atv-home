@@ -170,43 +170,45 @@ Com os apps oficiais, sem conhecer nenhum streaming: um app instalado amanhã en
 A regra é que a TV nunca fique pior do que sem isto: na dúvida, a guarda não faz nada.
 
 1. Instale e rode uma vez, do computador: `tools/ad-guard-setup.sh`.
-2. **MENU** → **Sem anúncios** liga a guarda de intervalos. O mesmo botão desliga.
-3. Opcional: **MENU** → **Filtro na rede** aponta o DNS da TV para `dns.adguard-dns.com`, que some com
-   o anúncio vindo de servidor de anúncio separado. Fica desligado por padrão porque um filtro de DNS
-   pode atrapalhar um app que espera o próprio servidor de anúncio, ou um nome que só o roteador da
-   casa conhece (um servidor de mídia local, por exemplo). Se algo assim acontecer, desligue-o.
+2. **MENU** → **Sem anúncios** liga e desliga a guarda de intervalos.
+3. **MENU** → **Ajustes do Sem anúncios** abre a tela com todas as escolhas (valem a partir do próximo vídeo):
 
-O que a guarda faz:
+| Ajuste | Padrão | O que faz |
+|---|---|---|
+| Sem anúncios | desligado | Desligado, nada age: os apps ficam exatamente como sem o Início |
+| Pular anúncio | sim | Aperta o botão "Pular" quando o app mostra um |
+| Pular também pelo que a tela mostra | não | Toca onde aparece "Pular" quando o app não expõe o botão. Em teste: pode tocar no lugar errado; pular por automação também pode contrariar os termos de uso do YouTube |
+| Anúncio que não dá para pular | com som | "Sem som" tira o som do anúncio costurado no vídeo (Netflix, Prime Video, Disney+, Max) e devolve no filme. A imagem nunca é escondida |
+| Ler a tela | sim | OCR das bordas da tela, para apps que só mostram o anúncio na imagem |
+| Contagem regressiva em qualquer idioma | sim | Número caindo no canto conta como anúncio, só em apps que já tiveram um anúncio confirmado |
+| Filtro na rede | desligado | DNS da TV em `dns.adguard-dns.com`: some o anúncio vindo de servidor separado. Pode atrapalhar um app que espera o próprio servidor de anúncio, ou um nome que só o roteador conhece |
+| Recomeçar o aprendizado | | A guarda esquece qual leitor funciona em cada app |
+| Voltar ao padrão | | Os padrões acima |
 
-- **Pula**: quando o app mostra um botão "Pular" que dá para apertar.
-- **Fica mudo** quando não dá para pular: anúncio costurado no próprio vídeo (Netflix, Prime Video,
-  Disney+, Max nos planos com anúncios). A imagem nunca é escondida: ver o anúncio é melhor que ficar
-  olhando uma tela preta. O som sai até uns 4 s depois do começo e volta até uns 3 s depois do fim.
-- **Volume** no controle durante o anúncio devolve o som a você até o fim daquele intervalo, e a
-  guarda não mexe mais nele.
+Com "Sem som", a tecla de volume durante o anúncio devolve o som a você até o fim daquele intervalo.
+Não tem jeito: canal ao vivo, e app que não mostra o intervalo a nenhum dos três leitores (sessão
+de mídia, árvore de acessibilidade, OCR das bordas da tela).
 - **Não tem jeito**: canal ao vivo, e app que não mostra o intervalo a nenhum dos três leitores
   (sessão de mídia, árvore de acessibilidade, OCR das bordas da tela).
 
 Para nunca piorar a TV:
 
-- A guarda só existe para o sistema enquanto **outro app toca som**: na Home, no menu dos apps e
-  com a TV em silêncio, tudo roda como se ela não estivesse instalada. Parada, ela devolve a memória
-  do OCR aos outros apps.
+- A guarda só existe para o sistema enquanto **outro app toca som** e há algo a fazer (pular ou
+  tirar o som): na Home, no menu dos apps e com a TV em silêncio, tudo roda como se ela não estivesse
+  instalada. Parada, ela devolve a memória do OCR aos outros apps.
 - Uma palavra solta ("Anúncio") só conta fora do meio da tela (onde ficam as legendas) e com pouco
   texto à vista (não num menu com cartões patrocinados). A contagem regressiva sem palavra, que vale
   em qualquer idioma, só age num app em que a guarda já viu um anúncio de verdade: placar de jogo
   também conta para trás.
-- Tocar na tela onde o OCR leu "Pular" fica desligado (`"tap_to_skip": false` em
-  `app/src/main/assets/guard/rules.json`) até o [docs/anuncios/SINAIS.md](docs/anuncios/SINAIS.md)
-  mostrar que o toque acerta. Pular por automação também pode contrariar os termos de uso do YouTube.
 - **O filtro na rede nunca deixa a TV sem internet**: ao ligar, o Início confere se a rede ainda
   funciona por ele e, se não, nem liga. Ao voltar para a Home confere de novo e se desliga sozinho,
   com aviso. Último recurso: `adb shell settings put global private_dns_mode opportunistic`.
 - Na primeira vez a TV pode perguntar se o Início pode capturar a tela (o leitor 3). Com o
   `tools/ad-guard-setup.sh` ela não pergunta; recusando, o Início não pergunta mais sozinho, só ao ligar na Central.
-- **TV ficou muda** depois de um travamento: a tecla de volume do controle.
-- **Outro idioma**: uma chave nova em `ad_words` e `skip_words` do mesmo `rules.json`, um caso novo
-  em `AdSignalsTest`, reinstalar.
+- **TV ficou muda** depois de um travamento (só com "Sem som"): a tecla de volume do controle.
+- **Outro idioma**: uma chave nova em `ad_words` e `skip_words` de `app/src/main/assets/guard/rules.json`,
+  um caso novo em `AdSignalsTest`, reinstalar. O que acontecer com cada app medido fica em
+  [docs/anuncios/SINAIS.md](docs/anuncios/SINAIS.md).
 - Nada do que a guarda lê sai da TV. O custo em quadros e memória se mede com `tools/ad-guard-perf.sh`.
 
 ## Voltar ao launcher anterior

@@ -4,18 +4,16 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
-/** assets/guard/rules.json: the words and limits the ad detector works with. Data, not code. */
+/**
+ * assets/guard/rules.json: the words and limits the ad detector works with. Data, not code. What
+ * the guard does with them is the person's choice ([GuardSettings]).
+ */
 @Serializable
 data class Rules(
     val version: Int = 1,
     @SerialName("max_label_chars") val maxLabelChars: Int = 40,
     /** A bare "Anúncio" counts only on a screen with this few texts: menus show "Ad" on sponsored cards. */
     @SerialName("max_player_labels") val maxPlayerLabels: Int = 4,
-    @SerialName("countdown_rule") val countdownRule: Boolean = true,
-    /** Taps where the OCR read "Pular" when no node can be clicked. Off until docs/anuncios/SINAIS.md shows the tap lands right. */
-    @SerialName("tap_to_skip") val tapToSkip: Boolean = false,
-    /** Kill switch for the screen reader (OCR), the only costly one. */
-    @SerialName("screen_reader") val screenReader: Boolean = true,
     @SerialName("ad_words") val adWords: Map<String, List<String>> = emptyMap(),
     @SerialName("skip_words") val skipWords: Map<String, List<String>> = emptyMap(),
     @SerialName("filler_words") val fillerWords: List<String> = emptyList(),

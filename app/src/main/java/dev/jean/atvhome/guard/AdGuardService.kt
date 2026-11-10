@@ -18,9 +18,10 @@ import java.io.File
 
 /**
  * The ad-break guard. Knows no streaming app: once a second it asks three readers what the app in
- * front shows, and during an ad it presses "skip" when there is one, or else only mutes it. The
- * picture is never hidden: an ad you can see beats a black screen. Fails open: on any doubt or
- * error it undoes everything and the app plays as if we were not here.
+ * front shows, and during an ad it presses "skip" when there is one and, if the person chose so
+ * ([GuardSettings]), mutes one that cannot be skipped. The picture is never hidden: an ad you can
+ * see beats a black screen. Fails open: on any doubt or error it undoes everything and the app
+ * plays as if we were not here.
  *
  * Runs in the guard process, and is only bound while "Sem anúncios" is on and another app plays
  * sound (data/AdShield.kt): being bound is what "on" means here.
@@ -31,6 +32,7 @@ class AdGuardService : AccessibilityService() {
     private val state = AdBreak()
     private val size = Point()
     private lateinit var rules: Rules
+    private lateinit var settings: GuardSettings
     private lateinit var signals: AdSignals
     private lateinit var countdown: Countdown
     private lateinit var readers: Readers
@@ -53,6 +55,7 @@ class AdGuardService : AccessibilityService() {
     }
 
     override fun onServiceConnected() {
+        settings = GuardSettings.load(filesDir)
         rules = Rules.parse(assets.open("guard/rules.json").bufferedReader().use { it.readText() })
         signals = AdSignals(rules)
         countdown = Countdown(signals)
@@ -104,7 +107,7 @@ class AdGuardService : AccessibilityService() {
             }
         }
         var waitingForScreen = false
-        if (screen != null && rules.screenReader && readers.wants(pkg, Source.SCREEN, state.inBreak)) {
+        if (screen != null && settings.readScreen && readers.wants(pkg, Source.SCREEN, state.inBreak)) {
             // Calm: one look every SLOW_EVERY ticks. Alert (something like an ad, a corner number,
             // a break): one a second
             val alert = state.inBreak || lastVerdict != Verdict.None || countdown.watching
@@ -116,7 +119,7 @@ class AdGuardService : AccessibilityService() {
                 // A read is judged once: the same read on two ticks must not count as two
                 shot.seq != shotSeq -> {
                     shotSeq = shot.seq
-                    val counter = if (rules.countdownRule && readers.knows(pkg)) countdown.feed(shot.reading) else null
+                    val counter = if (settings.countdown && readers.knows(pkg)) countdown.feed(shot.reading) else null
                     verdicts += signals.judge(shot.reading, counter) to Source.SCREEN
                 }
                 else -> waitingForScreen = true
@@ -131,8 +134,8 @@ class AdGuardService : AccessibilityService() {
         val decision = state.on(verdict, now)
         if (decision.active && verdict != Verdict.None) readers.remember(pkg, source)
         if (state.inBreak && !wasInBreak) Log.i(TAG, "break in $pkg by $source")
-        decision.click?.let(::press)
-        if (decision.active) mute() else unmute()
+        if (settings.skip) decision.click?.let(::press)
+        if (decision.active && settings.mute) mute() else unmute()
     }
 
     private fun rank(v: Verdict) = when (v) { Verdict.None -> 0; Verdict.Ad -> 1; is Verdict.Skippable -> 2 }
@@ -148,7 +151,7 @@ class AdGuardService : AccessibilityService() {
         }
         while (node != null && !node.isClickable) node = node.parent
         if (node?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true) return
-        if (!rules.tapToSkip) return
+        if (!settings.tapSkip) return
         val path = Path().apply { moveTo(label.x * size.x, label.y * size.y) }
         dispatchGesture(
             GestureDescription.Builder().addStroke(GestureDescription.StrokeDescription(path, 0, 60)).build(), null, null,

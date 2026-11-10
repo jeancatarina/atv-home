@@ -3,6 +3,7 @@ package dev.jean.atvhome.data
 import android.Manifest
 import android.app.Application
 import android.provider.Settings
+import dev.jean.atvhome.guard.GuardSettings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -34,6 +35,7 @@ class AdShieldTest {
     @Before fun startOnHome() = runBlocking {
         AdShield.dnsCheck = { dnsAnswers }
         AdShield.offDelayMs = 0
+        AdShield.saveSettings(app, GuardSettings())
         AdShield.launcherInFront(app, true)
         AdShield.playbackChanged(app, false)
     }
@@ -62,6 +64,18 @@ class AdShieldTest {
         AdShield.playbackChanged(app, false)
         delay(200) // the short grace for a pause or the gap between an ad and the film
         assertFalse(guard in services())
+    }
+
+    @Test fun withNothingToDoTheGuardIsNeverListed() = runBlocking {
+        allow()
+        AdShield.set(app, true)
+        assertTrue(AdShield.saveSettings(app, GuardSettings(skip = false, mute = false)))
+        watching()
+        assertFalse(guard in services())
+        AdShield.launcherInFront(app, true)
+        AdShield.saveSettings(app, GuardSettings(skip = true))
+        watching()
+        assertTrue(guard in services())
     }
 
     @Test fun theGuardAloneNeverTouchesTheDns() = runBlocking {

@@ -38,17 +38,15 @@ import dev.jean.atvhome.ui.theme.Tv
 /**
  * tvOS's Control Center, on the MENU key: TV inputs and the settings people reach for.
  * [onAdShieldOn]: "Sem anúncios" was just switched on (the caller asks for the screen-capture token).
+ * [onAdSettings]: opens the "Sem anúncios" screen, with every choice.
  */
 @Composable
-fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit, onAdShieldOn: () -> Unit = {}) {
+fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit, onAdShieldOn: () -> Unit = {}, onAdSettings: () -> Unit = {}) {
     val context = LocalContext.current
     val inputs = remember { TvSystem.inputs(context) }
     val first = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     var shield by remember { mutableStateOf(AdShield.isOn(context)) }
-    var dns by remember { mutableStateOf(AdShield.dnsOn(context)) }
-    // Switching the network filter on checks that the TV still reaches the internet: a few seconds
-    var checkingDns by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))) {
         Column(
@@ -72,7 +70,7 @@ fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit, onAdShieldOn: () ->
                         onClose(); if (!TvSystem.startScreensaver(context)) toast("Esta TV não deixa iniciar o protetor de tela")
                     }, modifier = Modifier.fillMaxWidth().let { if (inputs.isEmpty()) it.focusRequester(first) else it })
                 }
-                // Both stay open on purpose: the label is the feedback
+                // Stays open on purpose: the label is the feedback
                 item {
                     PillButton(if (shield) "Sem anúncios: ligado" else "Sem anúncios: desligado", {
                         if (!AdShield.allowed(context)) { toast(NOT_ALLOWED); return@PillButton }
@@ -83,27 +81,7 @@ fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit, onAdShieldOn: () ->
                         }
                     }, modifier = Modifier.fillMaxWidth(), selected = shield)
                 }
-                item {
-                    val label = when {
-                        checkingDns -> "Filtro na rede: conferindo…"
-                        dns -> "Filtro na rede: ligado"
-                        else -> "Filtro na rede: desligado"
-                    }
-                    PillButton(label, {
-                        if (checkingDns) return@PillButton
-                        if (!AdShield.allowed(context)) { toast(NOT_ALLOWED); return@PillButton }
-                        val next = !dns
-                        checkingDns = true
-                        scope.launch {
-                            when (AdShield.setDns(context, next)) {
-                                AdShield.Outcome.DONE -> dns = next
-                                AdShield.Outcome.NO_ANSWER -> toast("O filtro não respondeu: a TV continua com a rede normal")
-                                AdShield.Outcome.REFUSED -> toast("Esta TV não deixou mudar as configurações")
-                            }
-                            checkingDns = false
-                        }
-                    }, modifier = Modifier.fillMaxWidth(), selected = dns)
-                }
+                item { PillButton("Ajustes do Sem anúncios", { onClose(); onAdSettings() }, modifier = Modifier.fillMaxWidth()) }
                 item { PillButton("Wi-Fi", { onClose(); TvSystem.openSettings(context, Settings.ACTION_WIFI_SETTINGS) }, modifier = Modifier.fillMaxWidth()) }
                 item { PillButton("Imagem e som", { onClose(); TvSystem.openSettings(context, Settings.ACTION_DISPLAY_SETTINGS) }, modifier = Modifier.fillMaxWidth()) }
                 item { PillButton("Configurações", { onClose(); TvSystem.openSettings(context) }, modifier = Modifier.fillMaxWidth()) }
@@ -112,4 +90,4 @@ fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit, onAdShieldOn: () ->
     }
 }
 
-private const val NOT_ALLOWED = "Falta liberar pelo computador: tools/ad-guard-setup.sh"
+internal const val NOT_ALLOWED = "Falta liberar pelo computador: tools/ad-guard-setup.sh"

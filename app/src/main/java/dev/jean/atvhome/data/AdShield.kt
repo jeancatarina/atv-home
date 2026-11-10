@@ -13,6 +13,7 @@ import android.os.Build
 import android.provider.Settings
 import android.util.Log
 import dev.jean.atvhome.guard.AdGuardService
+import dev.jean.atvhome.guard.GuardSettings
 import dev.jean.atvhome.guard.ScreenService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -83,7 +84,7 @@ object AdShield {
             prefs(context).edit().putBoolean("on", on).commit()
             if (on) {
                 // Switching on again is how the user says "start over": the guard forgets what it learned
-                File(context.filesDir, AdGuardService.RESET_MARK).createNewFile()
+                resetLearning(context)
             } else {
                 pendingOff?.cancel()
                 guardService(context, false)
@@ -91,6 +92,23 @@ object AdShield {
             }
         }.onFailure { Log.w(TAG, "set $on", it) }.isSuccess
     }.also { if (it) { if (on) watch(context) else unwatch(context) } }
+
+    /** What the guard does, as the person chose in the "Sem anúncios" screen. */
+    fun settings(context: Context): GuardSettings = GuardSettings.load(context.filesDir)
+
+    /** Saves the person's choices; the guard reads them the next time it is listed. False when it failed. */
+    suspend fun saveSettings(context: Context, settings: GuardSettings): Boolean = withContext(writer) {
+        runCatching {
+            GuardSettings.save(context.filesDir, settings)
+            if (!settings.readScreen) context.stopService(Intent(context, ScreenService::class.java))
+            update(context)
+        }.onFailure { Log.w(TAG, "settings", it) }.isSuccess
+    }
+
+    /** The guard forgets which reader works in each app, and learns again. */
+    fun resetLearning(context: Context) {
+        runCatching { File(context.filesDir, AdGuardService.RESET_MARK).createNewFile() }.onFailure { Log.w(TAG, "reset", it) }
+    }
 
     /**
      * Follows sound playing on the TV (a callback, no polling). Called when the launcher starts and
@@ -132,11 +150,12 @@ object AdShield {
         update(context)
     }
 
-    /** Listed only while another app plays sound: it costs nothing anywhere else. */
+    /** Listed only while another app plays sound, and only with something to do: it costs nothing anywhere else. */
     private fun update(context: Context) {
         pendingOff?.cancel()
         pendingOff = null
         if (!isOn(context) || !allowed(context)) return
+        if (!settings(context).acts) { write(context, false); return }
         when {
             !homeInFront && playing -> write(context, true)
             homeInFront -> write(context, false) // Home must never pay for it, at once

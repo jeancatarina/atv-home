@@ -61,7 +61,7 @@ import kotlinx.coroutines.launch
 
 
 @Composable
-private fun Header(title: String, subtitle: String) {
+internal fun Header(title: String, subtitle: String) {
     Column(Modifier.padding(start = Tv.Edge, top = 30.dp, end = Tv.Edge)) {
         Text(title, style = Tv.Title, color = Tv.Primary)
         Spacer(Modifier.height(3.dp))

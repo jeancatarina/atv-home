@@ -2,9 +2,6 @@
   "version": 1,
   "max_label_chars": 40,
   "max_player_labels": 4,
-  "countdown_rule": true,
-  "tap_to_skip": false,
-  "screen_reader": true,
   "ad_words": {
     "pt": ["anúncio", "anúncios", "publicidade", "propaganda", "comercial"],
     "en": ["ad", "ads", "advertisement", "commercial"],
