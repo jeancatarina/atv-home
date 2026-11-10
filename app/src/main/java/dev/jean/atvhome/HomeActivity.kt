@@ -51,6 +51,7 @@ import dev.jean.atvhome.ui.discover.MatchScreen
 import dev.jean.atvhome.social.SocialViewModel
 import dev.jean.atvhome.social.ui.SocialScreen
 import dev.jean.atvhome.ui.home.HomeScreen
+import dev.jean.atvhome.ui.home.HouseScreen
 import dev.jean.atvhome.ui.panel.AdShieldScreen
 import dev.jean.atvhome.ui.panel.QuickPanel
 import dev.jean.atvhome.ui.theme.InicioTheme
@@ -65,11 +66,13 @@ sealed interface Screen {
     data object Match : Screen
     data object Social : Screen
     data object AdSettings : Screen
+    data object House : Screen
 }
 
 class HomeActivity : ComponentActivity() {
 
     private val vm: HomeViewModel by viewModels()
+    private val home get() = (application as App).home
     /** Created the first time Social opens: the launcher pays nothing for it before that. */
     private val social: SocialViewModel by viewModels()
     private var socialUsed = false
@@ -122,6 +125,8 @@ class HomeActivity : ComponentActivity() {
                             onRoulette = { open(Screen.Roulette) },
                             onMatch = { open(Screen.Match) },
                             onSocial = { socialUsed = true; open(Screen.Social) },
+                            home = home,
+                            onHouse = { open(Screen.House) },
                             toast = toast,
                         )
                     }
@@ -137,6 +142,7 @@ class HomeActivity : ComponentActivity() {
                                 Screen.Match -> MatchScreen(vm, onOpen, toast)
                                 Screen.Social -> SocialScreen(social, vm, toast)
                                 Screen.AdSettings -> AdShieldScreen(toast, ::askCapture)
+                                Screen.House -> home?.let { HouseScreen(it, toast) }
                             }
                         }
                     }
@@ -209,6 +215,8 @@ class HomeActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        // "Casa": the hub connection opens with Home in front, so a click never waits for it
+        home?.foreground(true)
         // The guard steps aside while Home is in front: browsing pays nothing for it
         lifecycleScope.launch { AdShield.launcherInFront(this@HomeActivity, true) }
         // A network filter that stopped answering must not leave the TV without internet
@@ -223,6 +231,7 @@ class HomeActivity : ComponentActivity() {
     /** Another app took the screen: a Social game freezes instead of running its clocks behind the app. */
     override fun onStop() {
         super.onStop()
+        home?.foreground(false)
         if (socialUsed) social.background()
         lifecycleScope.launch { AdShield.launcherInFront(this@HomeActivity, false) }
     }

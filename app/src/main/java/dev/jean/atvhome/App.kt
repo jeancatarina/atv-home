@@ -29,6 +29,8 @@ class App : Application(), SingletonImageLoader.Factory {
     lateinit var apps: Apps private set
     lateinit var myList: MyList private set
     lateinit var deepLinks: dev.jean.atvhome.data.DeepLinks private set
+    /** "Casa", only when tools/tuya-setup.sh pushed the house's tuya.json. */
+    var home: dev.jean.atvhome.data.SmartHome? = null; private set
 
     override fun onCreate() {
         super.onCreate()
@@ -38,6 +40,7 @@ class App : Application(), SingletonImageLoader.Factory {
         apps = Apps(this)
         myList = MyList(this)
         deepLinks = dev.jean.atvhome.data.DeepLinks(cacheDir)
+        home = dev.jean.atvhome.data.SmartHome.load(this)
         // "Sem anúncios": the guard is listed only while another app plays sound
         dev.jean.atvhome.data.AdShield.watch(this)
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(

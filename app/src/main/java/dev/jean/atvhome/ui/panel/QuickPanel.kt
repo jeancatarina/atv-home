@@ -16,6 +16,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,9 @@ fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit, onAdShieldOn: () ->
     val first = remember { FocusRequester() }
     val scope = rememberCoroutineScope()
     var shield by remember { mutableStateOf(AdShield.isOn(context)) }
+    val home = (context.applicationContext as dev.jean.atvhome.App).home
+    val row = home?.row?.collectAsState()?.value.orEmpty()
+    val lit = home?.states?.collectAsState()?.value.orEmpty()
     LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
     Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.55f))) {
         Column(
@@ -62,6 +66,21 @@ fun QuickPanel(onClose: () -> Unit, toast: (String) -> Unit, onAdShieldOn: () ->
                             onClose()
                             if (!TvSystem.switchTo(context, input)) toast("Não consegui mudar para ${input.label}")
                         }, modifier = Modifier.fillMaxWidth().let { if (input == inputs.first()) it.focusRequester(first) else it })
+                    }
+                }
+                if (home != null) {
+                    item { Text("Casa", style = Tv.Meta, color = Tv.Secondary, modifier = Modifier.padding(top = 6.dp)) }
+                    // The first lights of the Casa row, with their state in the label: the Central opens over any screen
+                    items(row.take(3), key = { "casa:" + it.key }) { light ->
+                        val on = dev.jean.atvhome.data.SmartHome.isOn(light, lit)
+                        PillButton("${light.name}: ${if (on) "acesa" else "apagada"}", {
+                            scope.launch { if (!home.toggle(light)) toast("Não consegui falar com o hub") }
+                        }, modifier = Modifier.fillMaxWidth(), selected = on)
+                    }
+                    item {
+                        PillButton("Apagar tudo", {
+                            scope.launch { if (!home.allOff()) toast("Algumas luzes não responderam") }
+                        }, modifier = Modifier.fillMaxWidth())
                     }
                 }
                 item { Text("Sistema", style = Tv.Meta, color = Tv.Secondary, modifier = Modifier.padding(top = 6.dp)) }

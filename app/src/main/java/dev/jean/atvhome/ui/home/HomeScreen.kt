@@ -113,6 +113,8 @@ fun HomeScreen(
     onMatch: () -> Unit,
     onSocial: () -> Unit,
     toast: (String) -> Unit,
+    home: dev.jean.atvhome.data.SmartHome? = null,
+    onHouse: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -287,6 +289,9 @@ fun HomeScreen(
                     onHide = { app -> editing = null; vm.setHidden(app, true); toast("${app.label} foi para Apps ocultos, no fim da tela") },
                     onDone = { editing = null; vm.saveOrder() },
                 )
+            }
+            if (home != null) {
+                item(key = "house") { HouseRow(home, onHouse = onHouse, toast = toast) }
             }
             if (vm.watchNext.isNotEmpty()) {
                 item(key = "watchNext") {

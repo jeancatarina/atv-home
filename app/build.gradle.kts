@@ -77,6 +77,8 @@ dependencies {
     implementation(libs.androidx.work.runtime)
     implementation(libs.youtube.player)
     implementation(project(":social-core"))
+    // "Casa": the house's lights over the Tuya hub's local protocol
+    implementation(project(":tuya-core"))
     implementation(libs.zxing.core)
     testImplementation(libs.junit)
     // Screenshots of the TV screens on the JVM (see social/screens): look at the UI without a TV

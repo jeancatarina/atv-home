@@ -17,3 +17,4 @@ dependencyResolutionManagement {
 rootProject.name = "atv-home"
 include(":app")
 include(":social-core")
+include(":tuya-core")

@@ -46,6 +46,7 @@ Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e 
 | **Explorar** | Filtros de filme/série, streaming, gênero, nota mínima no IMDb, época e duração, ordenados pela nota do IMDb. |
 | **Página do título** | IMDb com número de votos, onde assistir no Brasil, trailer, elenco e parecidos. Clicar num ator mostra a filmografia com o selo do app onde você já pode ver cada filme. |
 | **Minha Lista com avisos** | Uma checagem diária marca "Agora no Prime" quando o título chega a um streaming que você tem, e "Novo ep. sexta" em séries. |
+| **Casa** | Uma fileira logo abaixo dos apps com as luzes da casa (interruptores Tuya/Zigbee), as mais usadas primeiro: **OK** acende ou apaga na hora, e o que alguém liga na parede ou no celular aparece sozinho. A TV fala direto com o hub na sua rede, sem nuvem. **Apagar tudo** no fim da fileira e na Central; **Ver a casa** mostra todos os cômodos. |
 | **Central (tecla MENU)** | Entradas HDMI com os nomes que você deu na TV, protetor de tela, Wi-Fi e configurações. |
 | **Protetor de tela** | Já vem no Início: os vídeos aéreos da Apple, sem nenhum texto por cima, e um painel verde-escuro com a hora, a data e o **clima da semana** (Open-Meteo, cidade descoberta pela internet, sem conta). |
 
@@ -164,6 +165,46 @@ adb shell settings put secure screensaver_components dev.jean.atvhome/.saver.Aer
 - **Segurar OK** num app: modo de edição (◀ ▶ mover, ▼ ocultar, OK concluir). Apps ocultos ficam no fim da tela; segure OK para mostrar de novo.
 - **MENU**: Central com as entradas HDMI. **VOLTAR** fecha qualquer tela.
 
+## Casa (luzes Tuya)
+
+A fileira **Casa** acende e apaga as luzes dos interruptores Tuya (Smart Life, Tuya Smart, ZemiSmart…)
+ligados a um hub Zigbee. A TV abre uma conexão com o hub na rede de casa (protocolo local da Tuya,
+porta 6668) enquanto o Início está na frente: o clique sai pela conexão já aberta e o hub confirma em
+uns 15 ms. A nuvem da Tuya só é usada uma vez, no computador, para tirar a chave local do hub e os nomes.
+
+1. **No computador**, crie uma conta em [platform.tuya.com](https://platform.tuya.com) e abra
+   [platform.tuya.com/cloud](https://platform.tuya.com/cloud) (no celular o site não abre o console).
+2. **Create Cloud Project**: nome `Inicio TV`, *Industry* e *Development Method* **Smart Home**,
+   *Data Center* **Western America** (o das contas do Brasil). Aceite os serviços que vêm marcados.
+3. Na aba **Overview**, copie **Access ID** e **Access Secret**.
+4. Aba **Devices → Link App Account → Add App Account**: leia o QR code no app da casa
+   (aba **Mim** → ícone de scanner no canto de cima).
+5. No `local.properties`:
+   ```properties
+   tuya.accessId=...
+   tuya.accessSecret=...
+   tuya.region=us
+   ```
+6. Com a TV no `adb`: `tools/tuya-setup.sh`. Ele lista o que encontrou e manda o `tuya.json` para a TV
+   (o Início o guarda na área privada dele e apaga a cópia pública). Rode de novo só ao trocar ou
+   parear de novo um interruptor.
+
+Como as teclas viram luzes:
+
+- Tecla com nome no app ("Luz cozinha", "Closet") é uma luz.
+- Interruptor sem nenhuma tecla com nome ("Lavabo") é uma luz só, com todas as teclas juntas, como o
+  botão de ligar do interruptor no app: acesa se qualquer tecla estiver ligada.
+- Ficam fora da fileira, só em **Ver a casa**: teclas de cena ("Cena Hall", "Atalho…"), teclas sem
+  nome num interruptor que tem outras com nome, interruptores de cena sem nomes e o que estava offline
+  no setup. Em **Ver a casa**, segurar OK põe ou tira da fileira; na fileira, segurar OK e **▼** tira.
+- A ordem segue o uso: cada vez que uma luz acende (pela TV, pela parede ou pelo celular) ela ganha
+  um ponto, e os pontos valem metade a cada 30 dias. A fileira só se reordena quando a Home volta à
+  frente, nunca embaixo do foco.
+
+Sem a casa por perto: `./gradlew :tuya-core:fakeHub` (um hub falso neste computador) e
+`tools/tuya-setup.sh --fake`. Para testar o código da TV contra o hub de verdade, do computador:
+`./gradlew :tuya-core:probe --args="--toggle Escritório"`.
+
 ## Sem anúncios
 
 Com os apps oficiais, sem conhecer nenhum streaming: um app instalado amanhã entra sem código novo.
@@ -234,7 +275,7 @@ Ou desinstale: `adb uninstall dev.jean.atvhome`.
 ## Para desenvolver
 
 ```sh
-./gradlew :social-core:test :app:testDebugUnitTest   # regras e protocolo do Social, Match, IMDb, busca em português, apps ↔ streamings
+./gradlew :social-core:test :tuya-core:test :app:testDebugUnitTest   # Casa: protocolo Tuya 3.3/3.4/3.5 contra um hub falso; regras e protocolo do Social, Match, IMDb, busca em português, apps ↔ streamings
 
 # Testar o lado do celular sem a TV: sala e servidor reais neste computador, com bots
 ./gradlew :social-core:devRoom --args="--bots 3"      # imprime o link; comandos: start, continue, pause, resume, lobby, again, newroom, quit
@@ -252,6 +293,7 @@ Kotlin, Jetpack Compose for TV, Coil, OkHttp e kotlinx.serialization. A tela tem
 - [Aerial Views](https://github.com/theothernt/AerialViews): a lista dos vídeos aéreos da Apple (`assets/aerials.txt`) vem do trabalho deles.
 - [Open-Meteo](https://open-meteo.com) (CC BY 4.0) e [ipwho.is](https://ipwho.is): clima e cidade, sem chave.
 - [android-youtube-player](https://github.com/PierfrancescoSoffritti/android-youtube-player) (Apache-2.0): trailer no fundo, pelo player oficial do YouTube.
+- [tinytuya](https://github.com/jasonacox/tinytuya) (MIT): referência do protocolo local da Tuya seguida em `tuya-core` (o código é próprio).
 - [NanoHTTPD](https://github.com/NanoHttpd/nanohttpd) (BSD-3) e [ZXing](https://github.com/zxing/zxing) (Apache-2.0): servidor e QR code do Match e do Social.
 - Dados: [TMDB](https://www.themoviedb.org) (este produto usa a API do TMDB, mas não é endossado nem certificado pelo TMDB),
   [IMDb Non-Commercial Datasets](https://developer.imdb.com/non-commercial-datasets/) (uso pessoal e não comercial)
