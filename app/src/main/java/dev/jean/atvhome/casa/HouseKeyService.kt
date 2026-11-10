@@ -17,6 +17,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -49,6 +50,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.jean.atvhome.data.SmartHome
 import dev.jean.atvhome.ui.components.TvScroll
 import dev.jean.atvhome.ui.components.requestWhenReady
+import dev.jean.atvhome.ui.home.Casa
 import dev.jean.atvhome.ui.home.HousePanel
 import dev.jean.atvhome.ui.home.PanelState
 import dev.jean.atvhome.ui.theme.InicioTheme
@@ -195,7 +197,8 @@ class HouseKeyService : AccessibilityService() {
                     CompositionLocalProvider(LocalBringIntoViewSpec provides TvScroll) {
                         Box(
                             Modifier.fillMaxSize()
-                                .background(Color(0xF2141416), RoundedCornerShape(topStart = 26.dp, bottomStart = 26.dp))
+                                .background(Casa.Sheet, SHEET_SHAPE)
+                                .border(1.dp, Casa.Hairline, SHEET_SHAPE)
                                 .onPreviewKeyEvent { e ->
                                     keys++
                                     if (e.key == Key.Back || e.key == Key.Escape) {
@@ -206,7 +209,7 @@ class HouseKeyService : AccessibilityService() {
                         ) {
                             HousePanel(
                                 home, toast = { Toast.makeText(service, it, Toast.LENGTH_SHORT).show() },
-                                state = panel, columns = GridCells.Fixed(3), edge = 22.dp, firstFocus = first,
+                                state = panel, columns = GridCells.Fixed(3), edge = 22.dp, firstFocus = first, compact = true,
                             )
                         }
                     }
@@ -253,6 +256,7 @@ class HouseKeyService : AccessibilityService() {
 
         private companion object {
             const val SHEET_DP = 452
+            val SHEET_SHAPE = RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)
             const val HIDDEN_FLAGS = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
             const val SHOWN_FLAGS = 0
         }

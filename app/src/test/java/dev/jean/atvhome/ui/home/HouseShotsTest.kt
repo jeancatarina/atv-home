@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -67,7 +68,7 @@ class HouseShotsTest {
             InicioTheme {
                 Box(Modifier.fillMaxSize().background(Color.Black)) {
                     Row(Modifier.padding(48.dp), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        house.lights.take(4).forEach { light -> LightTile(light, states, onClick = {}) }
+                        house.lights.take(4).forEach { light -> LightTile(light, states, onClick = {}, modifier = Modifier.width(156.dp).height(100.dp)) }
                     }
                 }
             }
@@ -78,7 +79,7 @@ class HouseShotsTest {
 
     @Test fun `the house on the whole screen`() {
         rule.setContent { InicioTheme { HouseScreen(house, toast = {}) } }
-        rule.onNodeWithText("4 acesas").assertExists()
+        rule.onNodeWithText("4 luzes acesas em 3 cômodos").assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-screen.png")
     }
 
@@ -89,25 +90,25 @@ class HouseShotsTest {
                 Box(Modifier.fillMaxSize().background(Color(0xFF3A5068))) {
                     Box(
                         Modifier.align(Alignment.CenterEnd).width(452.dp).fillMaxHeight()
-                            .background(Color(0xF2141416), RoundedCornerShape(topStart = 26.dp, bottomStart = 26.dp)),
-                    ) { HousePanel(house, toast = {}, state = state, columns = GridCells.Fixed(3), edge = 22.dp) }
+                            .background(Casa.Sheet, RoundedCornerShape(topStart = 28.dp, bottomStart = 28.dp)),
+                    ) { HousePanel(house, toast = {}, state = state, columns = GridCells.Fixed(3), edge = 22.dp, compact = true) }
                 }
             }
         }
-        rule.onNodeWithText("Closet").assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-sheet.png")
+        rule.onNodeWithText("Luz sala").assertExists()
     }
 
     @Test fun `in Acesas a light turned off stays in place until the filter changes`() {
         val state = PanelState().apply { show = Show.LIT }
         rule.setContent { InicioTheme { HousePanel(house, toast = {}, state = state) } }
-        rule.onNodeWithText("Closet").assertExists()
+        rule.onNodeWithText("Luz sala").assertExists()
         rule.onNodeWithText("Luz cozinha").assertDoesNotExist()
-        house.states.value = house.states.value + ("ninho:3" to false)
+        house.states.value = house.states.value + ("estar:2" to false)
         rule.waitForIdle()
-        rule.onNodeWithText("Closet").assertExists()
+        rule.onNodeWithText("Luz sala").assertExists()
         rule.runOnIdle { state.filter(Show.LIT) }
         rule.waitForIdle()
-        rule.onNodeWithText("Closet").assertDoesNotExist()
+        rule.onNodeWithText("Luz sala").assertDoesNotExist()
     }
 }

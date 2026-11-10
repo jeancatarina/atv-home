@@ -81,6 +81,8 @@ fun FocusCard(
     shape: Shape = RoundedCornerShape(Tv.Corner),
     focusedScale: Float = 1.1f,
     onFocus: (Boolean) -> Unit = {},
+    container: Color = Tv.Card,
+    focusedContainer: Color = Tv.CardFocused,
     content: @Composable BoxScope.(focused: Boolean) -> Unit,
 ) {
     var focused by remember { mutableStateOf(false) }
@@ -113,7 +115,7 @@ fun FocusCard(
             .graphicsLayer { rotationY = lean.value; cameraDistance = 14f * density },
         shape = ClickableSurfaceDefaults.shape(shape = shape),
         colors = ClickableSurfaceDefaults.colors(
-            containerColor = Tv.Card, focusedContainerColor = Tv.CardFocused, pressedContainerColor = Tv.CardFocused,
+            containerColor = container, focusedContainerColor = focusedContainer, pressedContainerColor = focusedContainer,
         ),
         scale = ClickableSurfaceDefaults.scale(focusedScale = focusedScale, pressedScale = focusedScale * 0.96f),
         // No shadow glow: on this TV's GPU the blurred elevation shadow alone cost ~15 ms a frame
