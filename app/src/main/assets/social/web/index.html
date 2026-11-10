@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#000000">
+<title>Social · Início</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="/a/app.css?v=__V__">
+</head>
+<body>
+<input id="face2" type="file" accept="image/*" capture="user" hidden>
+<div id="banner" hidden>Reconectando…</div>
+
+<main id="join" class="screen" hidden>
+  <h1>Social</h1>
+  <p class="sub" id="joinSub">Entra na sala e fica de olho na TV.</p>
+  <label id="selfie" class="selfie"><input id="face" type="file" accept="image/*" capture="user" hidden><span id="faceHint">📷 Tirar uma selfie</span><img id="facePreview" alt="" hidden></label>
+  <label id="rememberRow" class="remember" hidden><input type="checkbox" id="remember"> Lembrar meu rosto nesta TV</label>
+  <input id="name" placeholder="Seu nome" maxlength="16" autocomplete="off" autocapitalize="words">
+  <button id="go" class="primary">Entrar</button>
+  <p class="err" id="joinErr"></p>
+</main>
+
+<main id="closed" class="screen" hidden>
+  <h1 id="closedTitle">A sala fechou</h1>
+  <p class="sub">Escaneia o QR code da TV de novo.</p>
+</main>
+
+<main id="game" class="screen" hidden>
+  <header><div id="title"></div><div id="clock"></div><button id="meBtn" hidden aria-label="Meu perfil"></button></header>
+  <div id="bar" hidden><i></i></div>
+  <section id="body"></section>
+  <div id="badge" hidden></div>
+</main>
+
+<div id="sheet" hidden><div class="scrim"></div><div class="panel"><div class="grab"></div><div id="sheetBody"></div></div></div>
+<canvas id="confetti" hidden></canvas>
+<div id="paused" hidden><div>Jogo pausado</div><small>Olha pra TV</small></div>
+<div id="toast" hidden></div>
+<script src="/a/app.js?v=__V__"></script>
+</body>
+</html>

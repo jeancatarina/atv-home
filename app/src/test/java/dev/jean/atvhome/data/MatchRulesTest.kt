@@ -1,11 +1,9 @@
 package dev.jean.atvhome.data
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import kotlin.random.Random
 
 class MatchRulesTest {
 
@@ -42,27 +40,30 @@ class MatchRulesTest {
     }
 
     @Test
-    fun tenPeopleWithoutUnanimityGetTheMostLikedOnceEveryoneFinishes() {
+    fun withoutUnanimityThereIsNoConsolationPrizeAndTheDeckKeepsGrowing() {
         val rules = MatchRules(deck)
         val ids = (1..10).map { rules.join("P$it") }
-        val random = Random(42)
-        ids.forEachIndexed { i, id ->
-            deck.forEach { key ->
-                // movie:12 is liked by 7 of the 10; everything else at random but never unanimous
-                val like = when {
-                    key == "movie:12" -> i < 7
-                    i == 9 -> false
-                    else -> random.nextInt(10) < 3
-                }
-                rules.vote(id, key, like)
-            }
-            if (i < 9) assertNull("no result until everyone has finished", rules.result)
-        }
-        val result = rules.result!!
-        assertEquals("movie:12", result.key)
-        assertFalse(result.unanimous)
-        assertEquals(7, result.likes)
-        assertEquals(10, result.people)
+        // Everybody goes through the whole deck; movie:12 is liked by 7 of 10, nothing by all
+        ids.forEachIndexed { i, id -> deck.forEach { key -> rules.vote(id, key, key == "movie:12" && i < 7) } }
+        assertNull("one title 7 of 10 liked is not a match", rules.result)
+        assertEquals(0, rules.remaining())
+        // More cards arrive; the room finally agrees on one of them
+        rules.add((31..40).map { "movie:$it" })
+        assertEquals(10, rules.remaining())
+        ids.forEach { rules.vote(it, "movie:35", true) }
+        assertEquals(MatchOutcome("movie:35", true, 10, 10), rules.result)
+    }
+
+    @Test
+    fun addingCardsIgnoresRepeatsAndRemainingFollowsTheFastestPerson() {
+        val rules = MatchRules(listOf("a", "b", "c"))
+        val fast = rules.join("Fast"); val slow = rules.join("Slow")
+        listOf("a", "b", "c").forEach { rules.vote(fast, it, false) }
+        rules.vote(slow, "a", false)
+        assertEquals("the fast one has nothing left: that is who runs out first", 0, rules.remaining())
+        rules.add(listOf("c", "d", "d", "e"))
+        assertEquals(5, rules.size)
+        assertEquals(2, rules.remaining())
     }
 
     @Test

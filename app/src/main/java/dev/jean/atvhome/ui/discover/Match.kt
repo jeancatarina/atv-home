@@ -36,15 +36,13 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
-import com.google.zxing.BarcodeFormat
-import com.google.zxing.EncodeHintType
-import com.google.zxing.qrcode.QRCodeWriter
 import dev.jean.atvhome.data.Card
 import dev.jean.atvhome.data.Format
 import dev.jean.atvhome.data.Item
@@ -58,6 +56,7 @@ import dev.jean.atvhome.ui.HomeViewModel
 import dev.jean.atvhome.ui.components.Chip
 import dev.jean.atvhome.ui.components.ImdbBadge
 import dev.jean.atvhome.ui.components.PillButton
+import dev.jean.atvhome.ui.components.QrCode
 import dev.jean.atvhome.ui.home.TitleArt
 import dev.jean.atvhome.ui.theme.LocalAccent
 import dev.jean.atvhome.ui.theme.Tv
@@ -82,32 +81,40 @@ fun MatchScreen(vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> U
     val firstFocus = remember { FocusRequester() }
     val empty = remember { MutableStateFlow(MatchState()) }
     val state by (server?.updates ?: empty).collectAsState()
+    // What the house said no to lives in a file: refused titles go to the end of the line for a while
+    val memory = remember { dev.jean.atvhome.data.MatchMemory(java.io.File(context.filesDir, "match_memory.json")) }
+    var loadingMore by remember { mutableStateOf(false) }
 
     // A new deck (and a fresh server) for each type
     LaunchedEffect(type) {
         server?.stop(); server = null; deck = null; qr = null
-        val items = vm.matchDeck(type)
+        val items = vm.matchDeck(type, memory = memory)
         deck = items
-        val cards = items.map { item ->
-            Card(
-                key = item.title.key,
-                title = item.title.name,
-                year = item.title.year,
-                imdb = item.imdb?.let { Format.rating(it.rating) },
-                where = vm.myProvidersOf(item).firstOrNull()?.let { p -> vm.packageFor(p)?.let(vm::appFor)?.label ?: p.name },
-                poster = TmdbClient.image(item.title.poster, "w500"),
-                overview = item.title.overview,
-            )
-        }
         val s = withContext(Dispatchers.IO) {
-            runCatching { MatchServer(context, cards).apply { start(5_000, false) } }.getOrNull()
+            runCatching { MatchServer({ context.assets.open("match.html").bufferedReader().use { it.readText() } }, items.map { cardOf(vm, it) }, memory = memory).apply { start(5_000, false) } }.getOrNull()
         }
         if (s == null) { toast("Não consegui abrir o Match na rede"); return@LaunchedEffect }
         server = s
-        qr = withContext(Dispatchers.Default) { s.url?.let(::qrBitmap) }
+        qr = withContext(Dispatchers.Default) { s.url?.let(QrCode::bitmap) }
         runCatching { firstFocus.requestFocus() }
     }
     DisposableEffect(Unit) { onDispose { server?.stop() } }
+
+    // The line never ends: when the fastest person is close to the last card, deal another batch
+    val low = server != null && state.deckSize > 0 && state.remaining < REFILL_BELOW
+    LaunchedEffect(low, state.deckSize) {
+        val s = server ?: return@LaunchedEffect
+        if (!low || loadingMore) return@LaunchedEffect
+        loadingMore = true
+        val more = vm.matchDeck(type, avoid = s.dealt(), memory = memory)
+        if (more.isNotEmpty()) {
+            deck = (deck.orEmpty() + more).distinctBy { it.title.key }
+            s.append(more.map { cardOf(vm, it) })
+        } else {
+            kotlinx.coroutines.delay(4_000) // nothing new right now (offline?): try again shortly
+        }
+        loadingMore = false
+    }
 
     val result = state.result
     val matched = result?.let { r -> deck?.firstOrNull { it.title.key == r.key } }
@@ -120,7 +127,7 @@ fun MatchScreen(vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> U
         Column(Modifier.weight(1f)) {
             Text("Match", style = Tv.Title, color = Tv.Primary)
             Spacer(Modifier.height(3.dp))
-            Text("Todo mundo vota pelo celular. O primeiro que a sala inteira quiser aparece aqui.", style = Tv.Meta, color = Tv.Tertiary)
+            Text("Cada um escolhe no celular. Quando todo mundo curtir o mesmo, ele aparece aqui. A fila não acaba até dar match.", style = Tv.Meta, color = Tv.Tertiary)
             Spacer(Modifier.height(18.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Chip("Filme", type == MediaType.MOVIE, { type = MediaType.MOVIE }, Modifier.focusRequester(firstFocus))
@@ -128,13 +135,13 @@ fun MatchScreen(vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> U
             }
             Spacer(Modifier.height(26.dp))
             when {
-                deck == null -> Text("Montando o baralho com os seus streamings…", style = Tv.Body, color = Tv.Secondary)
+                deck == null -> Text("Separando o que tem nos seus streamings…", style = Tv.Body, color = Tv.Secondary)
                 else -> {
                     Text(
                         when (state.people.size) {
-                            0 -> "Esperando a primeira pessoa…"
-                            1 -> "${state.people.first()} entrou. Falta pelo menos mais uma pessoa."
-                            else -> "${state.people.size} pessoas votando: vale o que todos curtirem, ou o mais votado no fim"
+                            0 -> "Esperando o primeiro celular entrar…"
+                            1 -> "${state.people.first()} entrou. Falta mais gente pra começar."
+                            else -> "${state.people.size} pessoas escolhendo. Vale o que todo mundo curtir."
                         },
                         style = Tv.Headline, color = Tv.Primary,
                     )
@@ -148,7 +155,7 @@ fun MatchScreen(vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> U
                     }
                     if (state.votes > 0) {
                         Spacer(Modifier.height(12.dp))
-                        Text("${state.votes} votos até agora", style = Tv.Meta, color = Tv.Tertiary)
+                        Text(if (state.votes == 1) "1 escolha até agora" else "${state.votes} escolhas até agora", style = Tv.Meta, color = Tv.Tertiary)
                     }
                     Spacer(Modifier.height(22.dp))
                     // The deck's first posters fanned out, so the TV hints at what's in play
@@ -168,16 +175,28 @@ fun MatchScreen(vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> U
             Spacer(Modifier.height(30.dp))
             Box(Modifier.size(250.dp).background(Color.White, RoundedCornerShape(22.dp)).padding(14.dp), contentAlignment = Alignment.Center) {
                 val q = qr
-                if (q != null) Image(q.asImageBitmap(), "QR code", modifier = Modifier.fillMaxSize())
+                if (q != null) Image(q.asImageBitmap(), "QR code", filterQuality = FilterQuality.None, modifier = Modifier.fillMaxSize())
                 else Text("…", style = Tv.Title, color = Color.Black)
             }
             Spacer(Modifier.height(14.dp))
-            Text("Aponte a câmera do celular", style = Tv.Headline, color = Tv.Primary)
+            Text("Aponta a câmera do celular", style = Tv.Headline, color = Tv.Primary)
             Text(server?.url ?: "", style = Tv.Meta, color = Tv.Tertiary)
-            Text("Os celulares precisam estar no mesmo Wi-Fi da TV", style = Tv.Caption, color = Tv.Tertiary)
+            Text("O celular tem que estar no mesmo Wi-Fi da TV", style = Tv.Caption, color = Tv.Tertiary)
         }
     }
 }
+
+private const val REFILL_BELOW = 12
+
+private fun cardOf(vm: HomeViewModel, item: Item) = Card(
+    key = item.title.key,
+    title = item.title.name,
+    year = item.title.year,
+    imdb = item.imdb?.let { Format.rating(it.rating) },
+    where = vm.myProvidersOf(item).firstOrNull()?.let { p -> vm.packageFor(p)?.let(vm::appFor)?.label ?: p.name },
+    poster = TmdbClient.image(item.title.poster, "w500"),
+    overview = item.title.overview,
+)
 
 @Composable
 private fun MatchReveal(item: Item, result: dev.jean.atvhome.data.MatchOutcome, vm: HomeViewModel, onOpen: (Title) -> Unit, toast: (String) -> Unit, onAgain: () -> Unit) {
@@ -194,11 +213,11 @@ private fun MatchReveal(item: Item, result: dev.jean.atvhome.data.MatchOutcome, 
         Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.92f), 0.6f to Color.Black.copy(alpha = 0.35f), 1f to Color.Transparent)))
         Column(Modifier.padding(start = Tv.Edge, top = 70.dp)) {
             Text(
-                if (result.unanimous) "♥ Deu match!" else "★ O mais votado", style = Tv.Display, color = Color(0xFFFF375F),
+                "♥ Deu match!", style = Tv.Display, color = Color(0xFFFF375F),
                 modifier = Modifier.graphicsLayer { scaleX = pop.value; scaleY = pop.value; transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0f, 0.5f) },
             )
             Text(
-                if (result.unanimous) "Todos os ${result.people} curtiram" else "${result.likes} de ${result.people} curtiram",
+                if (result.people == 2) "Os dois curtiram" else "Todos os ${result.people} curtiram",
                 style = Tv.Headline, color = Tv.Secondary,
             )
             Spacer(Modifier.height(18.dp))
@@ -224,11 +243,4 @@ private fun MatchReveal(item: Item, result: dev.jean.atvhome.data.MatchOutcome, 
             }
         }
     }
-}
-
-private fun qrBitmap(text: String): Bitmap {
-    val size = 512
-    val matrix = QRCodeWriter().encode(text, BarcodeFormat.QR_CODE, size, size, mapOf(EncodeHintType.MARGIN to 0))
-    val pixels = IntArray(size * size) { i -> if (matrix[i % size, i / size]) 0xFF000000.toInt() else 0xFFFFFFFF.toInt() }
-    return Bitmap.createBitmap(pixels, size, size, Bitmap.Config.ARGB_8888)
 }

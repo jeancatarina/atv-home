@@ -40,6 +40,8 @@ import dev.jean.atvhome.ui.discover.SearchScreen
 import dev.jean.atvhome.ui.discover.WhatToWatchScreen
 import dev.jean.atvhome.ui.discover.RouletteScreen
 import dev.jean.atvhome.ui.discover.MatchScreen
+import dev.jean.atvhome.social.SocialViewModel
+import dev.jean.atvhome.social.ui.SocialScreen
 import dev.jean.atvhome.ui.home.HomeScreen
 import dev.jean.atvhome.ui.panel.QuickPanel
 import dev.jean.atvhome.ui.theme.InicioTheme
@@ -52,11 +54,15 @@ sealed interface Screen {
     data object WhatToWatch : Screen
     data object Roulette : Screen
     data object Match : Screen
+    data object Social : Screen
 }
 
 class HomeActivity : ComponentActivity() {
 
     private val vm: HomeViewModel by viewModels()
+    /** Created the first time Social opens: the launcher pays nothing for it before that. */
+    private val social: SocialViewModel by viewModels()
+    private var socialUsed = false
     private val stack = mutableStateListOf<Screen>()
     private var panelOpen by mutableStateOf(false)
     private var resetSignal by mutableIntStateOf(0)
@@ -105,6 +111,7 @@ class HomeActivity : ComponentActivity() {
                             onExplore = { open(Screen.Explore) },
                             onRoulette = { open(Screen.Roulette) },
                             onMatch = { open(Screen.Match) },
+                            onSocial = { socialUsed = true; open(Screen.Social) },
                             toast = toast,
                         )
                     }
@@ -118,6 +125,7 @@ class HomeActivity : ComponentActivity() {
                                 Screen.WhatToWatch -> WhatToWatchScreen(vm, onOpen)
                                 Screen.Roulette -> RouletteScreen(vm, onOpen)
                                 Screen.Match -> MatchScreen(vm, onOpen, toast)
+                                Screen.Social -> SocialScreen(social, vm, toast)
                             }
                         }
                     }
@@ -160,6 +168,12 @@ class HomeActivity : ComponentActivity() {
             panelOpen = false
             resetSignal++
         }
+    }
+
+    /** Another app took the screen: a Social game freezes instead of running its clocks behind the app. */
+    override fun onStop() {
+        super.onStop()
+        if (socialUsed) social.background()
     }
 
     override fun onResume() {

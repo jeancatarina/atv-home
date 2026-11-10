@@ -217,18 +217,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     // --- Match ----------------------------------------------------------------------------------
 
     /** A shared deck for the phone game: 30 titles on the user's services with IMDb 6.5 or more. */
-    suspend fun matchDeck(type: MediaType): List<Item> {
+    /**
+     * A batch of titles for Match, from random pages of the user's services. [avoid] are the ones already
+     * dealt in this session; [memory] puts what the house recently refused at the end of the batch (or
+     * leaves it out while there is plenty else), so the line stays fresh and never ends.
+     */
+    suspend fun matchDeck(type: MediaType, avoid: Set<String> = emptySet(), memory: dev.jean.atvhome.data.MatchMemory? = null): List<Item> {
         val ids = myProviders.map { it.id }.toSet()
         val filters = Filters(type = type, minImdb = 6.5)
         val titles = coroutineScope {
-            (0 until 4).map { i ->
-                async { catalog.discover(filters, ids, page = 1 + Random.nextInt(10), sortByRating = i % 2 == 1) }
-            }.awaitAll().flatten().distinctBy { it.key }.filter { it.poster != null }
+            (0 until 6).map { i ->
+                async { catalog.discover(filters, ids, page = 1 + Random.nextInt(20), sortByRating = i % 2 == 1) }
+            }.awaitAll().flatten().distinctBy { it.key }.filter { it.poster != null && it.key !in avoid }
         }
+        // What was refused lately goes last; with a good pool left it is not even fetched
+        val order = memory?.order(titles.map { it.key }, kotlin.random.Random.Default) ?: titles.map { it.key }.shuffled()
+        val byKey = titles.associateBy { it.key }
+        val chosen = order.mapNotNull(byKey::get).take(48)
         val minVotes = if (type == MediaType.MOVIE) 3_000 else 1_500
-        return catalog.items(titles.shuffled().take(45))
-            .filter { catalog.passes(it, filters, minVotes) && myProvidersOf(it).isNotEmpty() }
-            .shuffled().take(30)
+        val items = catalog.items(chosen).filter { catalog.passes(it, filters, minVotes) && myProvidersOf(it).isNotEmpty() }
+        // catalog.items may not keep the order: restore it
+        val rank = order.withIndex().associate { it.value to it.index }
+        return items.sortedBy { rank[it.title.key] ?: Int.MAX_VALUE }.take(30)
     }
 
     fun refreshWatchNext() = viewModelScope.launch {

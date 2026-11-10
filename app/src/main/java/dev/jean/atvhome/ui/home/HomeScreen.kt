@@ -111,6 +111,7 @@ fun HomeScreen(
     onExplore: () -> Unit,
     onRoulette: () -> Unit,
     onMatch: () -> Unit,
+    onSocial: () -> Unit,
     toast: (String) -> Unit,
 ) {
     val context = LocalContext.current
@@ -256,6 +257,7 @@ fun HomeScreen(
                     onExplore = onExplore,
                     onRoulette = onRoulette,
                     onMatch = onMatch,
+                    onSocial = onSocial,
                     soundState = if (!trailerOn) 0 else if (sound) 2 else 1,
                     onOpen = onOpen,
                     onStep = step,
@@ -426,6 +428,7 @@ private fun HeroInfo(
     onExplore: () -> Unit,
     onRoulette: () -> Unit,
     onMatch: () -> Unit,
+    onSocial: () -> Unit,
     soundState: Int,
     onOpen: (Title) -> Unit,
     onButtonsFocus: (Boolean) -> Unit,
@@ -443,6 +446,7 @@ private fun HeroInfo(
             PillButton("O que assistir agora?", onWhatToWatch, icon = "✦", onFocus = onButtonsFocus)
             PillButton("Roleta", onRoulette, icon = "🎲", onFocus = onButtonsFocus)
             PillButton("Match", onMatch, icon = "♥", onFocus = onButtonsFocus)
+            PillButton("Social", onSocial, icon = "☻", onFocus = onButtonsFocus)
             PillButton("Explorar", onExplore, onFocus = onButtonsFocus)
         }
         Spacer(Modifier.height(30.dp))

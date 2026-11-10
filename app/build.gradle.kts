@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.roborazzi.plugin)
 }
 
 val localProps = Properties().apply {
@@ -49,6 +50,7 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions { unitTests { isIncludeAndroidResources = true } }
     packaging { resources.excludes += "/META-INF/{AL2.0,LGPL2.1}" }
     // androidx.lifecycle's lint check crashes on this Kotlin version; it guards LiveData, which we don't use
     lint { disable += "NullSafeMutableLiveData" }
@@ -64,13 +66,21 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.compose.animation)
     implementation(libs.tv.material)
+    // Vector icons for the Social screens; R8 keeps only the ones used
+    implementation(libs.compose.icons.extended)
     implementation(libs.coil.compose)
     implementation(libs.coil.network.okhttp)
     implementation(libs.okhttp)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.androidx.work.runtime)
     implementation(libs.youtube.player)
-    implementation(libs.nanohttpd)
+    implementation(project(":social-core"))
     implementation(libs.zxing.core)
     testImplementation(libs.junit)
+    // Screenshots of the TV screens on the JVM (see social/screens): look at the UI without a TV
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.compose.ui.test)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

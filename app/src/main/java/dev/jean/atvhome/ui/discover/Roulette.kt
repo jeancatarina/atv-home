@@ -43,11 +43,13 @@ import dev.jean.atvhome.ui.HomeViewModel
 import dev.jean.atvhome.ui.components.Chip
 import dev.jean.atvhome.ui.components.PillButton
 import dev.jean.atvhome.ui.components.PosterCard
+import dev.jean.atvhome.ui.components.Reel
 import dev.jean.atvhome.ui.theme.Tv
 import dev.jean.atvhome.ui.theme.LocalAccent
 import dev.jean.atvhome.ui.theme.screen
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
 
 private val ReelWidth = 150.dp
 private val ReelHeight = 225.dp
@@ -131,25 +133,10 @@ fun RouletteScreen(vm: HomeViewModel, onOpen: (Title) -> Unit) {
                             modifier = if (i == 0) Modifier.focusRequester(firstPick) else Modifier,
                         )
                     } else {
-                        Reel(url = s.reel.getOrNull((frame + i * 5) % maxOf(1, s.reel.size)))
+                        Reel(url = s.reel.getOrNull((frame + i * 5) % maxOf(1, s.reel.size)), width = ReelWidth, height = ReelHeight)
                     }
                 }
             }
         }
-    }
-}
-
-/** A spinning reel: posters swap with no fade, like a slot machine. */
-@Composable
-private fun Reel(url: String?) {
-    val context = LocalContext.current
-    Box(Modifier.size(ReelWidth, ReelHeight).clip(RoundedCornerShape(Tv.Corner)).background(Tv.Card)) {
-        AsyncImage(
-            model = remember(url) { ImageRequest.Builder(context).data(url).crossfade(false).build() },
-            contentDescription = null,
-            contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxSize(),
-        )
-        Text("?", style = Tv.Display, color = Color.White.copy(alpha = 0.25f), modifier = Modifier.align(Alignment.Center), overflow = TextOverflow.Clip)
     }
 }

@@ -36,6 +36,7 @@ Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e 
 | **Trocar o título na mão** | Do app, **▲** seleciona o título do topo; aí **◀ ▶** passam para o anterior/próximo e **OK** assiste. As teclas ◀◀ ▶▶ do controle também trocam. |
 | **Trailer no fundo** | Parou num título, em poucos segundos o trailer começa a tocar sem som atrás do texto, como na Apple TV, e depois de ~30 s volta para a imagem e segue. **Play/Pause** no controle liga o som. |
 | **Match pelo celular** | A TV mostra um QR code; cada pessoa abre no celular (sem instalar nada), desliza os pôsteres como no Tinder, e o primeiro título que **a sala inteira** curtir aparece na TV com "Deu match!". Funciona com quantas pessoas quiserem: se ninguém concordar até o fim do baralho, aparece **o mais votado** ("7 de 10 curtiram"). "Outro match" segue para o próximo sem perder os votos. Tudo na sua rede Wi-Fi, sem nuvem. |
+| **Social** (em construção) | Salas de jogos para a turma: a TV é o palco e cada celular, sem instalar nada, guarda o segredo e registra o voto. Já tem **Quem é Mais Provável?**; o plano de 15 jogos está em [`docs/social/PLANO.md`](docs/social/PLANO.md) e o que já funciona em [`docs/social/STATUS.md`](docs/social/STATUS.md). Cada celular é reconhecido quando volta, e a TV guarda um ranking geral de todas as noites (rosto só se a pessoa pedir; dá para apagar tudo). Tudo na sua rede Wi-Fi, sem nuvem. |
 | **Esta semana nos seus streamings** | Séries com episódio novo nos próximos dias e filmes que acabaram de chegar aos seus apps: "Novo ep. quinta · Netflix", "Novo no Prime Video". |
 | **Verde da casa** | Telas e botões levam um verde-oliva escuro (`Accent.Wall` em `ui/theme/Accent.kt`; troque a cor ali para combinar com a sua sala). |
 | **Roleta** | Escolha **Filme** ou **Série** e gire: três rolos estilo caça-níquel param em três títulos dos seus streamings (de apps diferentes), sempre com IMDb 6,5 ou mais. |
@@ -186,7 +187,10 @@ Ou desinstale: `adb uninstall dev.jean.atvhome`.
 ## Para desenvolver
 
 ```sh
-./gradlew :app:testDebugUnitTest      # testes (leitor do IMDb, formatação, busca em português, apps ↔ streamings)
+./gradlew :social-core:test :app:testDebugUnitTest   # regras e protocolo do Social, Match, IMDb, busca em português, apps ↔ streamings
+
+# Testar o lado do celular sem a TV: sala e servidor reais neste computador, com bots
+./gradlew :social-core:devRoom --args="--bots 3"      # imprime o link; comandos: start, continue, pause, resume, lobby, again, newroom, quit
 ```
 
 Kotlin, Jetpack Compose for TV, Coil, OkHttp e kotlinx.serialization. A tela tem 960×540 dp em
@@ -201,7 +205,7 @@ Kotlin, Jetpack Compose for TV, Coil, OkHttp e kotlinx.serialization. A tela tem
 - [Aerial Views](https://github.com/theothernt/AerialViews): a lista dos vídeos aéreos da Apple (`assets/aerials.txt`) vem do trabalho deles.
 - [Open-Meteo](https://open-meteo.com) (CC BY 4.0) e [ipwho.is](https://ipwho.is): clima e cidade, sem chave.
 - [android-youtube-player](https://github.com/PierfrancescoSoffritti/android-youtube-player) (Apache-2.0): trailer no fundo, pelo player oficial do YouTube.
-- [NanoHTTPD](https://github.com/NanoHttpd/nanohttpd) (BSD-3) e [ZXing](https://github.com/zxing/zxing) (Apache-2.0): servidor e QR code do Match.
+- [NanoHTTPD](https://github.com/NanoHttpd/nanohttpd) (BSD-3) e [ZXing](https://github.com/zxing/zxing) (Apache-2.0): servidor e QR code do Match e do Social.
 - Dados: [TMDB](https://www.themoviedb.org) (este produto usa a API do TMDB, mas não é endossado nem certificado pelo TMDB),
   [IMDb Non-Commercial Datasets](https://developer.imdb.com/non-commercial-datasets/) (uso pessoal e não comercial)
   e [Wikidata](https://www.wikidata.org) (CC0).

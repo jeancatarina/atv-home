@@ -4,12 +4,15 @@ package dev.jean.atvhome.data
 data class MatchOutcome(val key: String, val unanimous: Boolean, val likes: Int, val people: Int)
 
 /**
- * Who liked what, for any number of people. A title everyone in the room liked is a match right
- * away; when everyone has gone through the whole deck without one, the most liked title wins
- * ("O mais votado: 7 de 10"). "Outro match" moves on to the next one without losing votes.
+ * Who liked what, for any number of people. A title everyone in the room liked is a match. There is
+ * no "most voted" consolation prize: a title only one person wanted is not a night's choice, so the
+ * deck keeps growing ([add]) until the room agrees on something. "Outro match" moves on to the next
+ * one without losing votes.
  */
-class MatchRules(private val deck: List<String>) {
+class MatchRules(deck: List<String>) {
 
+    private val deck = ArrayList(deck)
+    private val inDeck = HashSet(deck)
     private val names = LinkedHashMap<String, String>() // id → name
     private val likes = HashMap<String, MutableSet<String>>() // card → ids that liked it
     private val voted = HashMap<String, MutableSet<String>>() // id → cards they voted on
@@ -18,6 +21,13 @@ class MatchRules(private val deck: List<String>) {
     var result: MatchOutcome? = null; private set
 
     val people: List<String> get() = names.values.toList()
+    val size: Int get() = deck.size
+
+    /** More cards for the same room; titles already in the deck are ignored. */
+    fun add(keys: List<String>) { keys.forEach { if (inDeck.add(it)) deck += it } }
+
+    /** How many cards the fastest swiper still has ahead, who runs out first (the whole deck when nobody is in). */
+    fun remaining(): Int = if (names.isEmpty()) deck.size else names.keys.minOf { deck.size - (voted[it]?.size ?: 0) }
 
     fun join(name: String): String {
         val id = "p${names.size + 1}"
@@ -26,7 +36,7 @@ class MatchRules(private val deck: List<String>) {
     }
 
     fun vote(id: String, key: String, like: Boolean) {
-        if (id !in names || key !in deck) return
+        if (id !in names || key !in inDeck) return
         if (voted.getOrPut(id) { mutableSetOf() }.add(key)) votes++
         if (like) likes.getOrPut(key) { mutableSetOf() }.add(id) else likes[key]?.remove(id)
         if (result == null) result = decide()
@@ -41,13 +51,7 @@ class MatchRules(private val deck: List<String>) {
     private fun decide(): MatchOutcome? {
         if (names.size < 2) return null
         val everyone = names.keys
-        deck.firstOrNull { it !in shown && likes[it]?.containsAll(everyone) == true }?.let {
-            return MatchOutcome(it, unanimous = true, likes = everyone.size, people = everyone.size)
-        }
-        val allDone = everyone.all { voted[it]?.size == deck.size }
-        if (!allDone) return null
-        val best = deck.filter { it !in shown }.maxByOrNull { likes[it]?.size ?: 0 } ?: return null
-        val count = likes[best]?.size ?: 0
-        return if (count == 0) null else MatchOutcome(best, unanimous = false, likes = count, people = everyone.size)
+        return deck.firstOrNull { it !in shown && likes[it]?.containsAll(everyone) == true }
+            ?.let { MatchOutcome(it, unanimous = true, likes = everyone.size, people = everyone.size) }
     }
 }

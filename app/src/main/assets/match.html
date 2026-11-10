@@ -42,7 +42,7 @@
 <body>
 <div class="screen" id="join">
   <h1>♥ Match</h1>
-  <p class="sub">Deslize os filmes. Quando todo mundo na sala<br>gostar do mesmo, ele aparece na TV.</p>
+  <p class="sub">Arraste pra direita o que você quer ver e pra esquerda o que não.<br>Quando todo mundo curtir o mesmo, ele aparece na TV.</p>
   <input id="name" placeholder="Seu nome" maxlength="20" autocomplete="off">
   <button class="primary" id="go">Começar</button>
 </div>
@@ -61,7 +61,7 @@
   <div class="sub" id="mcount" style="color:rgba(255,255,255,.7)"></div>
   <img id="mimg" alt="">
   <div class="card-title" id="mtitle" style="font-size:24px;font-weight:700;text-align:center"></div>
-  <p class="sub" style="margin-top:10px">Olhe para a TV 🍿</p>
+  <p class="sub" style="margin-top:10px">Olha a TV 🍿</p>
 </div>
 
 <script>
@@ -79,14 +79,16 @@ $('go').onclick = async () => {
   $('join').style.display = 'none';
   $('play').style.display = 'flex';
   render();
-  setInterval(poll, 2000);
+  setInterval(poll, 1500);
 };
 
 function render() {
   const deck = $('deck');
   deck.innerHTML = '';
   if (i >= cards.length) {
-    deck.innerHTML = '<div class="empty">Você viu todos.<br>Esperando os outros…</div>';
+    // The line never ends: the TV is fetching more, and they arrive on the next poll
+    deck.innerHTML = '<div class="empty">Buscando mais opções pra vocês…<br><span class="hint">Ninguém curtiu o mesmo ainda, a gente continua.</span></div>';
+    fetchMore();
     return;
   }
   for (let k = Math.min(i + 1, cards.length - 1); k >= i; k--) {
@@ -134,10 +136,29 @@ async function decide(like) {
 $('yes').onclick = () => decide(true);
 $('no').onclick = () => decide(false);
 
-async function poll() { show(await fetch('/state').then(r => r.json())); }
+async function poll() {
+  show(await fetch('/state').then(r => r.json()));
+  // Keep a few cards ahead of the swiping thumb
+  if (cards.length - i < 8) fetchMore();
+}
+
+let fetching = false;
+async function fetchMore() {
+  if (fetching) return;
+  fetching = true;
+  try {
+    const more = (await fetch('/deck?from=' + cards.length).then(r => r.json())).cards;
+    if (more.length) {
+      const wasEmpty = i >= cards.length;
+      more.forEach(c => { cards.push(c); byKey[c.key] = c; });
+      if (wasEmpty) render();
+    }
+  } catch (e) { /* the next poll tries again */ }
+  fetching = false;
+}
 
 function show(s) {
-  $('people').textContent = s.people === 1 ? 'Só você por enquanto: chame mais gente pelo QR da TV' : s.people + ' pessoas votando';
+  $('people').textContent = s.people === 1 ? 'Só você por enquanto. Chama mais gente pelo QR da TV' : s.people + ' pessoas escolhendo';
   if (!s.match && shownKey) {
     // The TV asked for another match: back to swiping
     shownKey = null;
@@ -149,8 +170,8 @@ function show(s) {
     const c = byKey[s.match];
     $('mimg').src = c.poster || '';
     $('mtitle').textContent = c.title;
-    $('mlabel').textContent = s.unanimous ? 'Deu match!' : 'O mais votado';
-    $('mcount').textContent = s.unanimous ? 'Todo mundo curtiu' : s.likes + ' de ' + s.people + ' curtiram';
+    $('mlabel').textContent = 'Deu match!';
+    $('mcount').textContent = 'Todo mundo curtiu';
     $('play').style.display = 'none';
     $('match').style.display = 'flex';
     if (navigator.vibrate) navigator.vibrate([80, 60, 120]);

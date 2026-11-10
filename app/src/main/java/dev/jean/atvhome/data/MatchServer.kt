@@ -1,17 +1,13 @@
 package dev.jean.atvhome.data
 
-import android.content.Context
 import android.util.Log
-import fi.iki.elonen.NanoHTTPD
+import dev.jean.atvhome.social.net.LanServer
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
-import java.net.Inet4Address
-import java.net.NetworkInterface
 
 /** One title of the shared deck, as the phones see it. */
 data class Card(
@@ -29,6 +25,9 @@ data class MatchState(
     val people: List<String> = emptyList(),
     val votes: Int = 0,
     val result: MatchOutcome? = null,
+    /** Cards the fastest person still has ahead, and the deck so far: the TV adds more when this runs low. */
+    val remaining: Int = 0,
+    val deckSize: Int = 0,
 )
 
 /**
@@ -36,34 +35,35 @@ data class MatchState(
  * the same deck, and the first title everyone likes is the match. No accounts, no cloud: phones
  * talk straight to the TV. Who wins is decided by [MatchRules].
  */
-class MatchServer(private val context: Context, private val deck: List<Card>) : NanoHTTPD(PORT) {
+class MatchServer(
+    private val page: () -> String, deck: List<Card>, port: Int = PORT,
+    private val memory: MatchMemory = MatchMemory(),
+) : LanServer(port) {
 
-    private val json = Json { ignoreUnknownKeys = true }
+    private val deck = java.util.concurrent.CopyOnWriteArrayList(deck)
     private val rules = MatchRules(deck.map { it.key })
     private val state = MutableStateFlow(MatchState())
     val updates: StateFlow<MatchState> = state
 
-    val url: String? get() = localIp()?.let { "http://$it:$listeningPort/" }
-
-    override fun serve(session: IHTTPSession): Response = runCatching {
+    override fun route(session: IHTTPSession): Response =
         when (session.uri) {
-            "/" -> newFixedLengthResponse(Response.Status.OK, "text/html; charset=utf-8", page())
-            "/deck" -> jsonResponse(deckJson())
+            "/" -> html(page())
+            "/deck" -> jsonResponse(deckJson(session.parms["from"]?.toIntOrNull()?.coerceAtLeast(0) ?: 0))
             "/join" -> {
-                val body = body(session)
+                val body = jsonBody(session)
                 jsonResponse(buildJsonObject { put("id", join(body.str("name").orEmpty())) })
             }
             "/vote" -> {
-                val body = body(session)
+                val body = jsonBody(session)
                 vote(body.str("id").orEmpty(), body.str("key").orEmpty(), body.bool("like") == true)
                 jsonResponse(statusJson())
             }
             "/state" -> jsonResponse(statusJson())
-            else -> newFixedLengthResponse(Response.Status.NOT_FOUND, "text/plain", "")
+            else -> text(Response.Status.NOT_FOUND, "")
         }
-    }.getOrElse {
-        Log.w(TAG, "serve ${session.uri}", it)
-        newFixedLengthResponse(Response.Status.INTERNAL_ERROR, "text/plain", it.message ?: "")
+
+    override fun onError(uri: String, error: Throwable) {
+        Log.w(TAG, "serve $uri", error)
     }
 
     @Synchronized
@@ -71,18 +71,38 @@ class MatchServer(private val context: Context, private val deck: List<Card>) : 
 
     @Synchronized
     private fun vote(id: String, key: String, like: Boolean) {
+        val before = rules.result?.key
         rules.vote(id, key, like)
+        // A "no" sends the title to the end of the line for a while; a match is not shown again soon either
+        if (!like) memory.pass(key)
+        rules.result?.takeIf { it.key != before }?.let { memory.matched(it.key) }
         publish()
     }
 
     private fun publish() {
-        state.value = MatchState(rules.people, rules.votes, rules.result)
+        state.value = MatchState(rules.people, rules.votes, rules.result, rules.remaining(), rules.size)
     }
+
+    /** More cards for the phones to swipe; titles already in the deck are ignored. */
+    @Synchronized
+    fun append(more: List<Card>) {
+        val have = deck.map { it.key }.toSet()
+        val fresh = more.filter { it.key !in have }.distinctBy { it.key }
+        if (fresh.isEmpty()) return
+        deck += fresh
+        rules.add(fresh.map { it.key })
+        publish()
+    }
+
+    /** Keys of every card dealt so far, so the next batch never repeats one. */
+    fun dealt(): Set<String> = deck.map { it.key }.toSet()
 
     /** "Outro match": keep every vote and move to the next result, if any. */
     @Synchronized
     fun next() {
+        val before = rules.result?.key
         rules.next()
+        rules.result?.takeIf { it.key != before }?.let { memory.matched(it.key) }
         publish()
     }
 
@@ -96,9 +116,9 @@ class MatchServer(private val context: Context, private val deck: List<Card>) : 
         }
     }
 
-    private fun deckJson() = buildJsonObject {
+    private fun deckJson(from: Int) = buildJsonObject {
         put("cards", buildJsonArray {
-            deck.forEach { c ->
+            deck.drop(from).forEach { c ->
                 add(buildJsonObject {
                     put("key", c.key); put("title", c.title); put("year", c.year)
                     put("imdb", c.imdb); put("where", c.where); put("poster", c.poster); put("overview", c.overview)
@@ -107,30 +127,8 @@ class MatchServer(private val context: Context, private val deck: List<Card>) : 
         })
     }
 
-    private fun body(session: IHTTPSession): JsonObject {
-        val files = HashMap<String, String>()
-        session.parseBody(files)
-        val raw = files["postData"].orEmpty()
-        return json.parseToJsonElement(raw.ifBlank { "{}" }) as? JsonObject ?: JsonObject(emptyMap())
-    }
-
-    private fun jsonResponse(o: JsonObject) =
-        newFixedLengthResponse(Response.Status.OK, "application/json; charset=utf-8", o.toString())
-            .apply { addHeader("Cache-Control", "no-store") }
-
-    private fun page(): String = context.assets.open("match.html").bufferedReader().use { it.readText() }
-
     companion object {
         private const val TAG = "Match"
         const val PORT = 8765
-
-        /** The TV's address on the home network (Wi-Fi or cable), so phones can reach it. */
-        fun localIp(): String? = runCatching {
-            NetworkInterface.getNetworkInterfaces().toList()
-                .filter { it.isUp && !it.isLoopback && !it.isVirtual }
-                .sortedBy { if (it.name.startsWith("wlan") || it.name.startsWith("eth")) 0 else 1 }
-                .flatMap { it.inetAddresses.toList() }
-                .firstOrNull { it is Inet4Address && !it.isLoopbackAddress }?.hostAddress
-        }.getOrNull()
     }
 }
