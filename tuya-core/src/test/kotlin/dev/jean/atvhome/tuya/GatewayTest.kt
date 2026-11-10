@@ -29,7 +29,7 @@ class GatewayTest {
         for (v in Version.entries) {
             val hub = FakeHub(v).also { hubs += it }
             hub.states["estar"] = mutableMapOf(1 to true, 2 to false)
-            val gw = Gateway(config(hub), scope, heartbeatMs = 200, confirmMs = 800)
+            val gw = Gateway(config(hub), scope, heartbeatMs = 200, confirmMs = 800, recheckMs = 300)
             gw.start()
             withTimeout(5_000) { gw.link.first { it is Link.Online } }
             withTimeout(5_000) { gw.states.first { it.size == 2 } }
@@ -58,11 +58,27 @@ class GatewayTest {
         assertEquals(mapOf(1 to false, 2 to false), hub.states["estar"]!!.toMap())
     }
 
-    @Test fun `no answer puts the old value back`() = each { hub, gw ->
+    @Test fun `no answer puts the old value back and is not reported`() = each { hub, gw ->
         hub.answering = false
         assertFalse(gw.set("estar", 2, true))
         assertEquals(false, gw.states.value["estar:2"])
+        assertEquals(false, gw.reported.value["estar:2"])
         hub.answering = true
+    }
+
+    @Test fun `an odd frame from the hub is skipped, the connection stays`() = each { hub, gw ->
+        hub.junk()
+        Thread.sleep(200)
+        assertTrue(gw.link.value is Link.Online)
+        assertTrue(gw.set("estar", 2, true))
+    }
+
+    @Test fun `a switch that never moved is asked again and the tile shows the truth`() = each { hub, gw ->
+        hub.unreachable += "estar"
+        assertTrue(gw.set("estar", 2, true)) // the hub took it
+        assertEquals(true, gw.states.value["estar:2"])
+        withTimeout(3_000) { gw.states.first { it["estar:2"] == false } }
+        hub.unreachable.clear()
     }
 
     @Test fun `each answer goes to its own command when several are out at once`() = each { hub, gw ->

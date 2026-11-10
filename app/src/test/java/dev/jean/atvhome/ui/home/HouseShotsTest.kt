@@ -97,4 +97,17 @@ class HouseShotsTest {
         rule.onNodeWithText("Closet").assertExists()
         rule.onRoot().captureRoboImage("build/shots/casa-sheet.png")
     }
+
+    @Test fun `in Acesas a light turned off stays in place until the filter changes`() {
+        val state = PanelState().apply { show = Show.LIT }
+        rule.setContent { InicioTheme { HousePanel(house, toast = {}, state = state) } }
+        rule.onNodeWithText("Closet").assertExists()
+        rule.onNodeWithText("Luz cozinha").assertDoesNotExist()
+        house.states.value = house.states.value + ("ninho:3" to false)
+        rule.waitForIdle()
+        rule.onNodeWithText("Closet").assertExists()
+        rule.runOnIdle { state.filter(Show.LIT) }
+        rule.waitForIdle()
+        rule.onNodeWithText("Closet").assertDoesNotExist()
+    }
 }

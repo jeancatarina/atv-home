@@ -75,9 +75,10 @@ class SmartHome private constructor(
     override val row: StateFlow<List<Light>> = _row
 
     init {
+        // From what the hub reported only: a press that failed is not a use
         scope.launch {
-            var before = states.value
-            states.collect { now ->
+            var before = gateway.reported.value
+            gateway.reported.collect { now ->
                 val on = Usage.turnedOn(lights, before, now)
                 before = now
                 if (on.isNotEmpty() && counts()) countUses(on)
@@ -89,7 +90,7 @@ class SmartHome private constructor(
                 val at = gateway.located
                 if (l is Link.Online && at != null && (at.ip != config.hub.ip || at.version.wire != config.hub.version)) {
                     config = config.copy(hub = config.hub.copy(ip = at.ip, version = at.version.wire))
-                    runCatching { write(file, config.encode()) }.onFailure { Log.w(TAG, "save", it) }
+                    runCatching { write(file, config.encode()); ownWrites += file.lastModified() }.onFailure { Log.w(TAG, "save", it) }
                 }
             }
         }
@@ -191,6 +192,13 @@ class SmartHome private constructor(
 
         /** When the house in use was written: the overlay reloads when it changes. */
         fun configStamp(context: Context): Long = File(context.filesDir, CONFIG).lastModified()
+
+        /**
+         * Stamps of tuya.json written only to save the hub's new address: the same house, so the
+         * overlay keeps its connection and its open sheet. (The other process may still reload once.)
+         */
+        private val ownWrites: MutableSet<Long> = java.util.concurrent.ConcurrentHashMap.newKeySet()
+        fun isOwnWrite(stamp: Long) = stamp in ownWrites
 
         /**
          * tools/tuya-setup.sh pushes tuya.json to the app's external folder (the only one adb can

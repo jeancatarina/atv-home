@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
@@ -60,12 +61,18 @@ class Gateway(
     private val connect: (String, Int) -> Socket = ::openSocket,
     private val heartbeatMs: Long = 10_000,
     private val confirmMs: Long = 1_500,
+    private val recheckMs: Long = 2_500,
 ) {
     private val hub = config.hub
     private val _link = MutableStateFlow<Link>(Link.Off)
     val link: StateFlow<Link> = _link
     private val _states = MutableStateFlow<Map<String, Boolean>>(emptyMap())
     val states: StateFlow<Map<String, Boolean>> = _states
+    private val _reported = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    /** Only what the hub reported, never a value still waiting for its answer: what counts as a use. */
+    val reported: StateFlow<Map<String, Boolean>> = _reported
+    /** When each switch last reported its state, to notice a command the hub took but the switch did not. */
+    private val reportedAt = java.util.concurrent.ConcurrentHashMap<String, Long>()
 
     private var job: Job? = null
     @Volatile private var session: Session? = null
@@ -76,11 +83,14 @@ class Gateway(
     /** Where the hub was last reached or heard: the app saves it so the next start skips the search. */
     val located: Located? get() = where
 
+    // From the UI thread and from the idle timer: one at a time
+    @Synchronized
     fun start() {
         if (job?.isActive == true) return
         job = scope.launch(Dispatchers.IO) { run() }
     }
 
+    @Synchronized
     fun stop() {
         job?.cancel()
         job = null
@@ -109,6 +119,14 @@ class Gateway(
             s.pending.remove(pending)
         }
         if (!ok) _states.update { now -> now + keys.filter { (k, v) -> now[k] == v }.mapValues { (k, v) -> before[k] ?: !v } }
+        // The hub took it but the switch never said so (out of Zigbee range): ask, so the tile shows the truth
+        if (ok) {
+            val sent = System.currentTimeMillis()
+            scope.launch(Dispatchers.IO) {
+                delay(recheckMs)
+                if ((reportedAt[cid] ?: 0L) < sent) runCatching { session?.query(cid) }
+            }
+        }
         return ok
     }
 
@@ -167,6 +185,8 @@ class Gateway(
             socket.soTimeout = 3_000
             if (at.version.negotiates) s.negotiate()
             socket.soTimeout = (heartbeatMs * 3).toInt()
+            // stop() while this was connecting: never report a connection nobody wants
+            coroutineContext.ensureActive()
             session = s
             _link.value = Link.Online(at.version)
             log("online ${at.ip} v${at.version.wire} in ${(System.nanoTime() - started) / 1_000_000} ms")
@@ -185,7 +205,20 @@ class Gateway(
                     runCatching { s.heartbeat() }.onFailure { s.close() }
                 }
             }
-            while (coroutineContext.isActive) handle(s, s.read())
+            // Once the hub has proved the key (a handshake, or a status that decrypted), a frame that does
+            // not decode is skipped: its length kept the stream in step, and one odd frame must not
+            // cost the connection (or, worse, read as a wrong key)
+            var proved = at.version.negotiates
+            while (coroutineContext.isActive) {
+                val frame = try {
+                    s.read()
+                } catch (e: TuyaException) {
+                    if (!proved || e is TuyaException.Rejected) throw e
+                    log("skipped a frame: ${e.message}")
+                    continue
+                }
+                if (handle(s, frame)) proved = true
+            }
         } finally {
             queries?.cancel()
             heartbeat?.cancel()
@@ -195,11 +228,15 @@ class Gateway(
         }
     }
 
-    private fun handle(s: Session, frame: Frame) {
+    /** True when the frame was a status (it decoded, so the key is right). */
+    private fun handle(s: Session, frame: Frame): Boolean {
         val update = parseStatus(frame.payload)
         if (update != null) {
             val (cid, dps) = update
-            _states.update { it + dps.mapKeys { (dp, _) -> keyOf(cid, dp) } }
+            val keys = dps.mapKeys { (dp, _) -> keyOf(cid, dp) }
+            reportedAt[cid] = System.currentTimeMillis()
+            _reported.update { it + keys }
+            _states.update { it + keys }
             s.pending.filter { it.cid == cid && it.dps.all { (dp, on) -> dps[dp] == on } }.forEach { it.done.complete(true) }
         }
         // The hub acknowledges a command with an empty frame of the same type, and the command's seq,
@@ -208,6 +245,7 @@ class Gateway(
             val ok = frame.retcode == null || frame.retcode == 0
             (s.pending.firstOrNull { it.seq == frame.seq } ?: s.pending.firstOrNull { !it.done.isCompleted })?.done?.complete(ok)
         }
+        return update != null
     }
 
     private class Pending(val cid: String, val dps: Map<Int, Boolean>, val seq: Int) {

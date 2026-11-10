@@ -16,6 +16,14 @@ TV="${TV:-192.168.1.3:5555}"
 PKG="dev.jean.atvhome"
 FILE="build/tuya.json"
 
+# Gradle needs a JDK 17: the one in JAVA_HOME, the system's, or the one in ~/.local/jdk17
+if [ -z "${JAVA_HOME:-}" ] && ! java -version >/dev/null 2>&1; then
+  for home in "$(/usr/libexec/java_home -v 17 2>/dev/null || true)" "$HOME"/.local/jdk17/*/Contents/Home; do
+    if [ -x "$home/bin/java" ]; then export JAVA_HOME="$home"; break; fi
+  done
+  [ -n "${JAVA_HOME:-}" ] || { echo "No JDK 17 found: install Temurin 17 (README, step 2) or set JAVA_HOME" >&2; exit 1; }
+fi
+
 if [ "${1:-}" = "--fake" ]; then
   FILE="build/tuya-fake.json"
   [ -f "$FILE" ] || { echo "start ./gradlew :tuya-core:fakeHub first" >&2; exit 1; }

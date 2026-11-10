@@ -35,7 +35,9 @@ class FakeHub(
     private val clients = CopyOnWriteArrayList<Client>()
     /** Off: the hub stops answering commands (a frozen hub), to test the rollback. */
     @Volatile var answering = true
-    /** Switches whose commands the hub never answers (one out of Zigbee range). */
+    /** Switches the hub acknowledges but that never switch nor report (out of Zigbee range). */
+    val unreachable: MutableSet<String> = ConcurrentHashMap.newKeySet()
+    /** Switches whose commands the hub never answers. */
     val silent: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
     init {
@@ -53,6 +55,9 @@ class FakeHub(
         states.getOrPut(cid) { ConcurrentHashMap() }[dp] = on
         clients.forEach { it.push(cid, mapOf(dp to on)) }
     }
+
+    /** A frame that frames correctly but does not decode, like an odd message from a real hub. */
+    fun junk() = clients.forEach { it.junk() }
 
     /** Drops every connection, like the hub rebooting. */
     fun dropClients() = clients.forEach { it.close() }
@@ -79,6 +84,18 @@ class FakeHub(
         }
 
         // Like the real hub: one push per key, numbered 0
+        fun junk() = runCatching {
+            // A 3.3 body of 17 bytes (no block multiple) or, for 3.4/3.5, a frame sealed with another key
+            val other = Codec(version, "fedcba9876543210".toByteArray()).apply { if (version.negotiates) key = ByteArray(16) { 9 } }
+            val bytes = if (version == Version.V33) {
+                val body = ByteArray(4) + ByteArray(17) { 7 }
+                val head = java.nio.ByteBuffer.allocate(16).putInt(0x55AA).putInt(0).putInt(Cmd.STATUS).putInt(body.size + 8).array()
+                val crc = java.util.zip.CRC32().apply { update(head + body) }.value.toInt()
+                head + body + java.nio.ByteBuffer.allocate(8).putInt(crc).putInt(0xAA55).array()
+            } else other.encode(0, Cmd.STATUS, "{}", retcode = 0)
+            synchronized(out) { out.write(bytes); out.flush() }
+        }
+
         fun push(cid: String, dps: Map<Int, Boolean>) = runCatching { dps.forEach { (dp, on) -> send(0, Cmd.STATUS, status(cid, mapOf(dp to on))) } }
 
         private fun status(cid: String, dps: Map<Int, Boolean>): ByteArray {
@@ -107,6 +124,7 @@ class FakeHub(
                     val data = if (version == Version.V33) root else root["data"]!!.jsonObject
                     val cid = data["cid"].str()!!
                     if (cid in silent) return
+                    if (cid in unreachable) { send(frame.seq, frame.cmd, ByteArray(0)); return }
                     val dps = (data["dps"] as JsonObject).mapNotNull { (k, v) -> (v as JsonPrimitive).booleanOrNull?.let { k.toInt() to it } }.toMap()
                     states.getOrPut(cid) { ConcurrentHashMap() }.putAll(dps)
                     send(frame.seq, frame.cmd, ByteArray(0))

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
@@ -106,6 +107,10 @@ fun HouseRow(home: HouseModel, onHouse: () -> Unit, toast: (String) -> Unit) {
     val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf<String?>(null) }
     val title = listOfNotNull("Casa", link.problem()).joinToString("  ·  ")
+    // A light taken off the row takes the focus with it: it goes to the tile that takes its place
+    val focus = remember { HashMap<String, FocusRequester>() }
+    var refocus by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(refocus) { refocus?.let { focus[it]?.requestWhenReady(); refocus = null } }
     Column(Modifier.padding(top = 26.dp)) {
         Text(title, style = Tv.Headline, color = Tv.Secondary, modifier = Modifier.padding(start = Tv.Edge, bottom = 10.dp))
         LazyRow(contentPadding = RowPadding, horizontalArrangement = RowSpacing) {
@@ -115,10 +120,12 @@ fun HouseRow(home: HouseModel, onHouse: () -> Unit, toast: (String) -> Unit) {
                     light = light,
                     states = states,
                     editing = isEditing,
-                    modifier = Modifier.onPreviewKeyEvent { e ->
+                    modifier = Modifier.focusRequester(focus.getOrPut(light.key) { FocusRequester() }).onPreviewKeyEvent { e ->
                         if (!isEditing || e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         when (e.key) {
                             Key.DirectionDown -> {
+                                val i = row.indexOf(light)
+                                refocus = (row.getOrNull(i + 1) ?: row.getOrNull(i - 1))?.key ?: "allOff"
                                 editing = null; home.setHidden(light, true)
                                 toast("${light.name} saiu da fileira; volta pela tela Ver a casa"); true
                             }
@@ -135,11 +142,11 @@ fun HouseRow(home: HouseModel, onHouse: () -> Unit, toast: (String) -> Unit) {
                 )
             }
             item(key = "allOff") {
-                ActionTile("Apagar tudo", Icons.Rounded.PowerSettingsNew) {
+                ActionTile("Apagar tudo", Icons.Rounded.PowerSettingsNew, Modifier.focusRequester(focus.getOrPut("allOff") { FocusRequester() })) {
                     scope.launch { if (!home.switchAll(home.lights, false)) toast("Algumas luzes não responderam") }
                 }
             }
-            item(key = "house") { ActionTile("Ver a casa", Icons.Rounded.GridView, onHouse) }
+            item(key = "house") { ActionTile("Ver a casa", Icons.Rounded.GridView, onClick = onHouse) }
         }
         AnimatedVisibility(editing != null, enter = fadeIn(), exit = fadeOut()) {
             Text("Mais usadas primeiro  ·  ▼ tira da fileira  ·  OK concluir", style = Tv.Meta, color = Tv.Primary, modifier = Modifier.padding(start = Tv.Edge, top = 8.dp))
@@ -190,8 +197,8 @@ fun LightTile(
 }
 
 @Composable
-private fun ActionTile(label: String, icon: ImageVector, onClick: () -> Unit) {
-    FocusCard(onClick = onClick, focusedScale = 1.1f, modifier = Modifier.width(132.dp).height(88.dp)) {
+private fun ActionTile(label: String, icon: ImageVector, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    FocusCard(onClick = onClick, focusedScale = 1.1f, modifier = modifier.width(132.dp).height(88.dp)) {
         Column(Modifier.fillMaxSize().padding(10.dp), verticalArrangement = Arrangement.SpaceBetween) {
             Icon(icon, contentDescription = null, tint = Tv.Primary, modifier = Modifier.size(24.dp))
             Text(label, style = Tv.Meta, color = Tv.Primary, maxLines = 1)
@@ -203,6 +210,14 @@ private fun ActionTile(label: String, icon: ImageVector, onClick: () -> Unit) {
 class PanelState {
     var show by mutableStateOf(Show.LIGHTS)
     var room by mutableStateOf<String?>(null)
+    /**
+     * In "Acesas", a light turned off stays where it was until the filter changes: a tile vanishing
+     * under the remote would take the focus with it, and turning it back on would mean finding it.
+     */
+    var keep by mutableStateOf<Set<String>>(emptySet())
+
+    fun filter(s: Show) { show = s; keep = emptySet() }
+    fun room(r: String?) { room = r; keep = emptySet() }
 }
 
 /**
@@ -233,7 +248,12 @@ fun HousePanel(
     val lights = home.lights
     val rooms = home.rooms
     val lit = lights.count { Panel.isOn(it, now) }
-    val shown = Panel.filter(lights, now, state.show, state.room)
+    val litNow = Panel.filter(lights, now, Show.LIT, state.room)
+    if (state.show == Show.LIT && !litNow.all { it.key in state.keep }) {
+        SideEffect { state.keep = state.keep + litNow.map { it.key } }
+    }
+    val shown = if (state.show == Show.LIT) Panel.filter(lights, now, Show.ALL, state.room).filter { it.key in state.keep || Panel.isOn(it, now) }
+    else Panel.filter(lights, now, state.show, state.room)
     val onRow = row.map { it.key }.toSet()
     val focusRoom = state.room ?: rooms.firstOrNull()
     // The tiles are the feedback: only a failure says something
@@ -279,10 +299,10 @@ fun HousePanel(
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
                 items(Show.entries, key = { it.name }) { s ->
                     val n = Panel.filter(lights, now, s, state.room).size
-                    Chip("${s.label} $n", state.show == s, { state.show = s })
+                    Chip("${s.label} $n", state.show == s, { state.filter(s) })
                 }
-                item(key = "allRooms") { Chip("Todos os cômodos", state.room == null, { state.room = null }) }
-                items(rooms, key = { "room:$it" }) { r -> Chip(r, state.room == r, { state.room = if (state.room == r) null else r }) }
+                item(key = "allRooms") { Chip("Todos os cômodos", state.room == null, { state.room(null) }) }
+                items(rooms, key = { "room:$it" }) { r -> Chip(r, state.room == r, { state.room(if (state.room == r) null else r) }) }
             }
         }
         if (shown.isEmpty()) {
@@ -295,13 +315,12 @@ fun HousePanel(
         }
         shown.groupBy { it.room }.forEach { (room, inRoom) ->
             item(span = { GridItemSpan(maxLineSpan) }, key = "room-$room") {
-                val roomLit = inRoom.count { Panel.isOn(it, now) }
+                // Always there, even with the room dark: a button vanishing under the remote takes the focus with it
+                val roomLit = lights.count { it.room == room && Panel.isOn(it, now) }
                 Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(room, style = Tv.Headline, color = Tv.Secondary)
-                    if (roomLit > 0) {
-                        Spacer(Modifier.width(12.dp))
-                        PillButton("Apagar", { group(lights.filter { it.room == room }, false) })
-                    }
+                    Spacer(Modifier.width(12.dp))
+                    PillButton(if (roomLit > 0) "Apagar" else "Acender", { group(lights.filter { it.room == room }, roomLit == 0) })
                 }
             }
             items(inRoom, key = { it.key }) { light ->

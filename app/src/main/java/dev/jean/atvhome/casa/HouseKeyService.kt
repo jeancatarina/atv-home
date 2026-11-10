@@ -96,7 +96,7 @@ class HouseKeyService : AccessibilityService() {
     private fun ensureHome(): SmartHome? {
         SmartHome.importPushed(this)
         val stamp = SmartHome.configStamp(this)
-        if (stamp == loaded && home != null) return home
+        if (home != null && (stamp == loaded || SmartHome.isOwnWrite(stamp))) return home.also { loaded = stamp }
         if (stamp == 0L) return null
         overlay?.destroy()
         overlay = null
@@ -233,6 +233,7 @@ class HouseKeyService : AccessibilityService() {
             view.requestFocus()
             registry.currentState = Lifecycle.State.RESUMED
             shown = true
+            panel.keep = emptySet() // every opening shows what is lit now
             opened++
         }
 
