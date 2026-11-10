@@ -29,7 +29,9 @@ import androidx.compose.material.icons.rounded.GridView
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.PowerSettingsNew
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -41,7 +43,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.platform.LocalContext
+import dev.jean.atvhome.casa.Shortcut
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
@@ -212,6 +219,7 @@ fun HousePanel(
     edge: Dp = Tv.Edge,
     firstFocus: FocusRequester = remember { FocusRequester() },
     onRowToggle: ((Light, Boolean) -> Unit)? = null,
+    shortcut: Pair<String, () -> Unit>? = null,
 ) {
     val states = home.states.collectAsState()
     val now = states.value
@@ -260,6 +268,7 @@ fun HousePanel(
                     item(key = "roomOff") { PillButton("Apagar $focusRoom", { group(inRoom, false) }) }
                     item(key = "roomOn") { PillButton("Acender $focusRoom", { group(inRoom, true) }) }
                 }
+                if (shortcut != null) item(key = "shortcut") { PillButton(shortcut.first, shortcut.second) }
             }
         }
         item(span = { GridItemSpan(maxLineSpan) }, key = "filters") {
@@ -308,13 +317,101 @@ fun HousePanel(
     }
 }
 
-/** "Ver a casa": the house panel on the whole screen, from the Casa row. */
+/** "Ver a casa": the house panel on the whole screen, from the Casa row, with the film shortcut's setting. */
 @Composable
 fun HouseScreen(home: HouseModel, toast: (String) -> Unit) {
+    val context = LocalContext.current
+    var key by remember { mutableIntStateOf(Shortcut.get(context)) }
+    var picking by remember { mutableStateOf(false) }
     Box(Modifier.fillMaxSize().background(LocalAccent.current.screen())) {
-        HousePanel(home, toast, onRowToggle = { light, add ->
-            home.setHidden(light, !add)
-            toast(if (add) "${light.name} está na fileira Casa" else "${light.name} saiu da fileira")
-        })
+        HousePanel(
+            home, toast,
+            onRowToggle = { light, add ->
+                home.setHidden(light, !add)
+                toast(if (add) "${light.name} está na fileira Casa" else "${light.name} saiu da fileira")
+            },
+            shortcut = "Atalho no filme: ${Shortcut.name(key)}" to { picking = true },
+        )
+        if (picking) {
+            ShortcutPicker(
+                current = key,
+                onPick = { code ->
+                    Shortcut.set(context, code)
+                    key = code
+                    picking = false
+                    toast(if (code == Shortcut.NONE) "Atalho no filme desligado" else "${Shortcut.name(code)} abre a Casa em qualquer app")
+                },
+                onCancel = { picking = false },
+            )
+        }
     }
 }
+
+/**
+ * Choosing the film shortcut: press the key on the remote, or pick a colour (or none) with ◀ ▶ and OK.
+ * Keys the TV needs everywhere (moving, OK, Back, Home, sound, power, playback) are refused. Back cancels.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@Composable
+fun ShortcutPicker(current: Int, onPick: (Int) -> Unit, onCancel: () -> Unit) {
+    val first = remember { FocusRequester() }
+    var refused by remember { mutableStateOf<String?>(null) }
+    var holding by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) {
+        Shortcut.capturing = true
+        onDispose { Shortcut.capturing = false }
+    }
+    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    Box(
+        Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.7f))
+            .focusProperties { exit = { FocusRequester.Cancel } }.focusGroup()
+            .onPreviewKeyEvent { e ->
+                val native = e.nativeKeyEvent
+                val code = native.keyCode
+                val held = native.repeatCount > 0 && native.eventTime - native.downTime >= Shortcut.HOLD_MS
+                // Back and Play/Pause held: the shortcut for remotes with no spare key
+                (Shortcut.HOLD + code).takeIf { it in Shortcut.HOLDS }?.let { hold ->
+                    if (e.type == KeyEventType.KeyDown && held && !holding) { holding = true; onPick(hold) }
+                    if (e.type == KeyEventType.KeyUp) {
+                        if (!holding) { if (e.key == Key.Back) onCancel() else refused = "Segure ${Shortcut.name(code)} para usá-la como atalho" }
+                        holding = false
+                    }
+                    return@onPreviewKeyEvent true
+                }
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when {
+                    e.key == Key.Escape -> { onCancel(); true }
+                    e.key in NAVIGATION -> false
+                    Shortcut.allowed(code) -> { onPick(code); true }
+                    else -> { refused = "${Shortcut.name(code)} não pode: a TV precisa dela em todo app"; true }
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            Modifier.width(560.dp).background(Color(0xF21C1C1E), RoundedCornerShape(22.dp)).padding(28.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("Atalho no filme", style = Tv.Title, color = Tv.Primary)
+            Text(
+                "Aperte no controle a tecla que vai abrir a Casa por cima de qualquer app, ou escolha abaixo. " +
+                    "Controle sem tecla sobrando: segure Voltar ou Play/Pause (o toque curto continua igual). " +
+                    "Agora: ${Shortcut.name(current)}.",
+                style = Tv.Body, color = Tv.Secondary,
+            )
+            // Colours, then the held keys and none; focus starts on the key in use (the first colour
+            // when it is a key pressed on the remote)
+            val start = (Shortcut.COLORS + Shortcut.HOLDS + Shortcut.NONE).let { all -> all.indexOf(current).takeIf { it >= 0 }?.let(all::get) } ?: Shortcut.COLORS.first()
+            for (line in listOf(Shortcut.COLORS, Shortcut.HOLDS + Shortcut.NONE)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    line.forEach { code ->
+                        Chip(Shortcut.name(code), code == current, { onPick(code) }, modifier = if (code == start) Modifier.focusRequester(first) else Modifier)
+                    }
+                }
+            }
+            Text(refused ?: "Um toque em Voltar cancela", style = Tv.Meta, color = if (refused != null) Lit else Tv.Tertiary)
+        }
+    }
+}
+
+private val NAVIGATION = setOf(Key.DirectionUp, Key.DirectionDown, Key.DirectionLeft, Key.DirectionRight, Key.DirectionCenter, Key.Enter, Key.NumPadEnter)

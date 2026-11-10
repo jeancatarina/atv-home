@@ -54,9 +54,10 @@ import dev.jean.atvhome.ui.theme.InicioTheme
 import kotlinx.coroutines.delay
 
 /**
- * "Casa no filme": the yellow key opens the house panel over any app (Netflix, Prime Video, a live
- * channel), as a side sheet with the film still playing beside it. Yellow or Back closes it, and it
- * closes on its own after [IDLE_MS] without a key.
+ * "Casa no filme": the shortcut key ([Shortcut], yellow unless changed in "Ver a casa") opens the
+ * house panel over any app (Netflix, Prime Video, a live channel), as a side sheet with the film
+ * still playing beside it. The same key or Back closes it, and it closes on its own after [IDLE_MS]
+ * without a key.
  *
  * An accessibility service only to see that one key: every other key goes straight to the app
  * (onKeyEvent returns false at once), and it asks for no events. It runs in its own process
@@ -87,10 +88,39 @@ class HouseKeyService : AccessibilityService() {
         main.postDelayed({ ensureOverlay() }, WARM_UP_MS)
     }
 
+    private val hold = Hold()
+    /** The press just given back to the app comes through here again: it goes on to the app. */
+    private var replayingUntil = 0L
+
     override fun onKeyEvent(event: KeyEvent): Boolean {
-        if (event.keyCode != TRIGGER || home == null) return false
-        if (event.action == KeyEvent.ACTION_UP) ensureOverlay()?.toggle()
+        if (home == null) return false
+        val choice = Shortcut.get(this)
+        if (choice == Shortcut.NONE || event.keyCode != Shortcut.keyOf(choice)) return false
+        if (!Shortcut.isHold(choice)) {
+            if (event.action == KeyEvent.ACTION_UP) ensureOverlay()?.toggle()
+            return true
+        }
+        if (event.eventTime < replayingUntil) return false
+        when (hold.step(event.action == KeyEvent.ACTION_DOWN, event.repeatCount, event.downTime, event.eventTime)) {
+            Hold.Step.KEEP -> Unit
+            Hold.Step.OPEN -> ensureOverlay()?.toggle()
+            Hold.Step.REPLAY -> replay(event.keyCode)
+        }
         return true
+    }
+
+    /** A short press of a held shortcut goes back to the app, as if nothing had stopped it. */
+    private fun replay(code: Int) {
+        replayingUntil = android.os.SystemClock.uptimeMillis() + 400
+        when (code) {
+            // Back goes to whatever window is in front, the overlay included (it closes)
+            KeyEvent.KEYCODE_BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
+            else -> getSystemService(android.media.AudioManager::class.java)?.let { audio ->
+                val now = android.os.SystemClock.uptimeMillis()
+                audio.dispatchMediaKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, code, 0))
+                audio.dispatchMediaKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, code, 0))
+            }
+        }
     }
 
     private fun ensureOverlay(): Overlay? {
@@ -207,8 +237,6 @@ class HouseKeyService : AccessibilityService() {
 
     companion object {
         private const val TAG = "CasaOverlay"
-        /** The yellow key of the remote. */
-        const val TRIGGER = KeyEvent.KEYCODE_PROG_YELLOW
         private const val IDLE_MS = 20_000L
         private const val WARM_UP_MS = 8_000L
     }

@@ -12,6 +12,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import dev.jean.atvhome.data.AdShield
+import dev.jean.atvhome.casa.Hold
+import dev.jean.atvhome.casa.Shortcut
 import dev.jean.atvhome.guard.ScreenService
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -73,6 +75,8 @@ class HomeActivity : ComponentActivity() {
 
     private val vm: HomeViewModel by viewModels()
     private val home get() = (application as App).home
+    private val hold = Hold()
+    private var heldDown: KeyEvent? = null
     /** Created the first time Social opens: the launcher pays nothing for it before that. */
     private val social: SocialViewModel by viewModels()
     private var socialUsed = false
@@ -161,6 +165,22 @@ class HomeActivity : ComponentActivity() {
     }
 
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
+        // "Casa no filme" takes its key everywhere when it is on; without it, Home still answers it
+        val choice = if (home != null && !Shortcut.capturing) Shortcut.get(this) else Shortcut.NONE
+        if (choice != Shortcut.NONE && event.keyCode == Shortcut.keyOf(choice)) {
+            val openHouse = { panelOpen = false; stack.clear(); stack.add(Screen.House) }
+            if (!Shortcut.isHold(choice)) {
+                if (event.action == KeyEvent.ACTION_UP) openHouse()
+                return true
+            }
+            when (hold.step(event.action == KeyEvent.ACTION_DOWN, event.repeatCount, event.downTime, event.eventTime)) {
+                Hold.Step.KEEP -> if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) heldDown = KeyEvent(event)
+                Hold.Step.OPEN -> openHouse()
+                // A short press: Home gets it whole, as if nothing had stopped it
+                Hold.Step.REPLAY -> { heldDown?.let { super.dispatchKeyEvent(it) }; heldDown = null; return super.dispatchKeyEvent(event) }
+            }
+            return true
+        }
         if (event.action == KeyEvent.ACTION_DOWN) {
             inputTick++
             when (event.keyCode) {
@@ -169,12 +189,6 @@ class HomeActivity : ComponentActivity() {
                 KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN -> LastKey.dx = 0
                 KeyEvent.KEYCODE_MENU -> {
                     panelOpen = !panelOpen
-                    return true
-                }
-                // "Casa no filme" takes the yellow key everywhere when it is on; without it, Home still answers it
-                KeyEvent.KEYCODE_PROG_YELLOW -> if (home != null) {
-                    panelOpen = false
-                    stack.clear(); stack.add(Screen.House)
                     return true
                 }
                 KeyEvent.KEYCODE_SEARCH -> {
