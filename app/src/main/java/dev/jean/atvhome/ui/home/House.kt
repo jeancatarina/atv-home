@@ -70,9 +70,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
-import dev.jean.atvhome.casa.HouseKeyService
 import dev.jean.atvhome.casa.Shortcut
-import dev.jean.atvhome.data.AdShield
 import dev.jean.atvhome.data.HouseModel
 import dev.jean.atvhome.tuya.Kind
 import dev.jean.atvhome.tuya.Light
@@ -428,8 +426,6 @@ fun HouseScreen(home: HouseModel, toast: (String) -> Unit) {
                 current = key,
                 onPick = { code ->
                     Shortcut.set(context, code)
-                    // No shortcut, no service: nothing watches the remote and nothing stays connected
-                    AdShield.keepListed(context, HouseKeyService::class.java, on = code != Shortcut.NONE)
                     key = code
                     picking = false
                     toast(if (code == Shortcut.NONE) "Atalho no filme desligado" else "${Shortcut.name(code)} abre a Casa em qualquer app")

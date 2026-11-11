@@ -48,6 +48,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.jean.atvhome.data.SmartHome
+import dev.jean.atvhome.saver.WeatherStrip
 import dev.jean.atvhome.ui.components.TvScroll
 import dev.jean.atvhome.ui.components.requestWhenReady
 import dev.jean.atvhome.ui.home.Casa
@@ -66,6 +67,9 @@ import kotlinx.coroutines.delay
  * (onKeyEvent returns false at once), and it asks for no events. It runs in its own process
  * (":casa"), so a film never holds the launcher's memory, and keeps its own connection to the hub
  * while the screen is on: the panel opens with every light already current.
+ *
+ * It also writes the week's weather over the TV's screensaver ([WeatherStrip]) while the system
+ * dreams, so it stays listed even with no shortcut and no house.
  */
 class HouseKeyService : AccessibilityService() {
 
@@ -74,18 +78,24 @@ class HouseKeyService : AccessibilityService() {
     private var loaded = Long.MIN_VALUE
     private var overlay: Overlay? = null
     private val main = Handler(Looper.getMainLooper())
+    private val weather by lazy { WeatherStrip(this) }
 
     private val screen = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
                 Intent.ACTION_SCREEN_ON -> ensureHome()?.connect(true)
-                Intent.ACTION_SCREEN_OFF -> { overlay?.hide(); home?.connect(false, graceMs = 0) }
+                Intent.ACTION_SCREEN_OFF -> { overlay?.hide(); weather.hide(); home?.connect(false, graceMs = 0) }
+                Intent.ACTION_DREAMING_STARTED -> { overlay?.hide(); weather.show() }
+                Intent.ACTION_DREAMING_STOPPED -> weather.hide()
             }
         }
     }
 
     override fun onServiceConnected() {
-        registerReceiver(screen, IntentFilter().apply { addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF) })
+        registerReceiver(screen, IntentFilter().apply {
+            addAction(Intent.ACTION_SCREEN_ON); addAction(Intent.ACTION_SCREEN_OFF)
+            addAction(Intent.ACTION_DREAMING_STARTED); addAction(Intent.ACTION_DREAMING_STOPPED)
+        })
         if (ensureHome() == null) Log.i(TAG, "no tuya.json yet: the shortcut key stays with the apps")
         // Built once, a while after start, and kept hidden: the first press opens it at once
         main.postDelayed({ ensureOverlay() }, WARM_UP_MS)
@@ -156,6 +166,7 @@ class HouseKeyService : AccessibilityService() {
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
         runCatching { unregisterReceiver(screen) }
+        weather.hide()
         overlay?.destroy()
         overlay = null
         home?.close()

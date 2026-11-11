@@ -22,8 +22,8 @@ Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e 
 | **Trailer no fundo**, sem som (🔇) | **Busca**: "comédia curta na Netflix com nota alta" |
 | ![Explorar com filtros](docs/img/explorar.jpg) | ![Central com as entradas HDMI](docs/img/central.jpg) |
 | **Explorar**: filtros por app, gênero, nota e época | **Central** (tecla MENU): entradas HDMI e ajustes |
-| ![Protetor de tela com os aéreos da Apple](docs/img/protetor.jpg) | |
-| **Protetor de tela** com os aéreos da Apple | |
+| ![Protetor de tela: as folhas da Sony com o clima da semana](docs/img/protetor.jpg) | |
+| **Protetor de tela**: o da Sony, com o clima da semana | |
 
 ---
 
@@ -48,7 +48,7 @@ Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e 
 | **Minha Lista com avisos** | Uma checagem diária marca "Agora no Prime" quando o título chega a um streaming que você tem, e "Novo ep. sexta" em séries. |
 | **Casa** | Uma fileira logo abaixo dos apps com as luzes da casa (interruptores Tuya/Zigbee), as mais usadas primeiro: **OK** acende ou apaga na hora, e o que alguém liga na parede ou no celular aparece sozinho. A TV fala direto com o hub na sua rede, sem nuvem. **Ver a casa** tem atalhos (apagar tudo, apagar ou acender um cômodo) e filtros (acesas, luzes, cenas, por cômodo). **Botão amarelo** (ou a tecla que você escolher): a mesma Casa por cima do filme, em qualquer app. |
 | **Central (tecla MENU)** | Entradas HDMI com os nomes que você deu na TV, protetor de tela, Wi-Fi e configurações. |
-| **Protetor de tela** | Já vem no Início: os vídeos aéreos da Apple, sem nenhum texto por cima, e um painel verde-escuro com a hora, a data e o **clima da semana** (Open-Meteo, cidade descoberta pela internet, sem conta). |
+| **Protetor de tela** | O da própria TV ("Decoração do Ambiente" da Sony, tema **Relógio da floresta tropical**: costelas-de-adão na água, com a hora). O Início escreve por cima, sem moldura, o **clima da semana** que a Sony não tem no Brasil (Open-Meteo, cidade descoberta pela internet, sem conta). Começa depois de 3 minutos sem usar a TV. |
 
 ---
 
@@ -147,12 +147,23 @@ adb shell pm disable-user --user 0 com.spocky.projengmenu
 
 ### 7. Protetor de tela
 
-O protetor com os aéreos da Apple e o clima da semana já vem no Início. Ative em
-**Configurações → Preferências do dispositivo → Protetor de tela → Início · Aéreos**, ou:
+O protetor é o da Sony ("Decoração do Ambiente"); o Início só põe o clima da semana por cima. Se
+um "debloat" removeu os apps da Sony, devolva-os (não apaga nada) e escolha o protetor e os 3 minutos:
 
 ```sh
-adb shell settings put secure screensaver_components dev.jean.atvhome/.saver.AerialSaver
+adb shell pm install-existing com.sony.dtv.livingfit     # Decoração do Ambiente (o protetor)
+adb shell pm install-existing com.sony.dtv.sonyselect    # de onde ele baixa os temas
+adb shell pm enable com.sony.dtv.timers
+adb shell settings put secure screensaver_components com.sony.dtv.livingfit/.MainDreamService
+adb shell settings put system screen_off_timeout 180000
 ```
+
+Abra **Decoração do Ambiente** nos apps, aperte **OK** e escolha **Rainforest Clock**. O clima
+aparece pelo serviço de acessibilidade do Início (o mesmo da Casa no filme), que
+`tools/ad-guard-setup.sh` ou `tools/tuya-setup.sh` deixam ligado.
+
+A Alexa liga e desliga a TV pelo app **Controle da TV com alto-falantes inteligentes** da Sony. Ele
+também não pode estar desativado: `adb shell pm enable com.sony.dtv.seeds.iot`.
 
 ---
 
@@ -344,7 +355,6 @@ Kotlin, Jetpack Compose for TV, Coil, OkHttp e kotlinx.serialization. A tela tem
 - Código deste projeto: [Apache License 2.0](LICENSE).
 - [Sofadrop](https://github.com/rfmarcos/projectivy-plugin-sofadrop) (Apache-2.0): base do leitor das notas do IMDb (`ImdbRatings.kt`).
 - [Inter](https://github.com/rsms/inter) (SIL OFL 1.1, `licenses/Inter-OFL.txt`): a fonte, no lugar da SF Pro.
-- [Aerial Views](https://github.com/theothernt/AerialViews): a lista dos vídeos aéreos da Apple (`assets/aerials.txt`) vem do trabalho deles.
 - [Open-Meteo](https://open-meteo.com) (CC BY 4.0) e [ipwho.is](https://ipwho.is): clima e cidade, sem chave.
 - [android-youtube-player](https://github.com/PierfrancescoSoffritti/android-youtube-player) (Apache-2.0): trailer no fundo, pelo player oficial do YouTube.
 - [tinytuya](https://github.com/jasonacox/tinytuya) (MIT): referência do protocolo local da Tuya seguida em `tuya-core` (o código é próprio).

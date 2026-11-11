@@ -6,7 +6,7 @@ import androidx.compose.ui.graphics.lerp
 
 /**
  * The house colour: a dark olive green picked to sit with the living-room wall. Every screen tints
- * its background and resting buttons with it (the screensaver's panel uses the same green).
+ * its background and resting buttons with it.
  */
 val LocalAccent = compositionLocalOf { Accent.Wall }
 

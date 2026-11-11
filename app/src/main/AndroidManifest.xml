@@ -52,18 +52,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Screensaver: Apple's aerial films with the time and the week's weather -->
-        <service
-            android:name=".saver.AerialSaver"
-            android:exported="true"
-            android:label="Início · Aéreos"
-            android:permission="android.permission.BIND_DREAM_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.dreams.DreamService" />
-                <category android:name="android.intent.category.DEFAULT" />
-            </intent-filter>
-        </service>
-
         <!-- "Sem anúncios": the ad-break guard, in its own process so it never holds the
              launcher's memory while a film plays (docs/anuncios/SINAIS.md) -->
         <service

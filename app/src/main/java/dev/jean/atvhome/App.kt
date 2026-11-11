@@ -42,10 +42,9 @@ class App : Application(), SingletonImageLoader.Factory {
         myList = MyList(this)
         deepLinks = dev.jean.atvhome.data.DeepLinks(cacheDir)
         home = dev.jean.atvhome.data.SmartHome.forLauncher(this)
-        // "Casa no filme" stays listed while there is a house and a shortcut (granted by tools/tuya-setup.sh)
-        if (home != null && dev.jean.atvhome.casa.Shortcut.get(this) != dev.jean.atvhome.casa.Shortcut.NONE) {
-            dev.jean.atvhome.data.AdShield.keepListed(this, dev.jean.atvhome.casa.HouseKeyService::class.java)
-        }
+        // Always listed: "Casa no filme" when there is a house and a shortcut, and the week's weather over
+        // the screensaver (granted by tools/ad-guard-setup.sh or tools/tuya-setup.sh)
+        dev.jean.atvhome.data.AdShield.keepListed(this, dev.jean.atvhome.casa.HouseKeyService::class.java)
         // "Sem anúncios": the guard is listed only while another app plays sound
         dev.jean.atvhome.data.AdShield.watch(this)
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
