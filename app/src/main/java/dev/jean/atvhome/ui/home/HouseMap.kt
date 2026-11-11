@@ -40,6 +40,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -87,6 +88,7 @@ import dev.jean.atvhome.ui.components.requestWhenReady
 import dev.jean.atvhome.ui.theme.Inter
 import dev.jean.atvhome.ui.theme.Tv
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -160,15 +162,18 @@ fun HouseMap(
         }
     }
     // Left alone, the model tours the house: a floor every few seconds, each building itself again,
-    // back to the ground floor at the top. Any key hands it back
+    // back to the ground floor at the top. Any key hands it back. [touched] is read only by this effect,
+    // never by the composition: a key restarts the wait without recomposing the model
     var touched by remember { mutableIntStateOf(0) }
-    LaunchedEffect(touched) {
-        delay(TOUR_IDLE_MS)
-        while (plan.floors.size > 1) {
-            val next = (floor + 1) % plan.floors.size
-            floor = next
-            chosen = plan.floors[next].rooms.firstOrNull()
-            delay(TOUR_STEP_MS)
+    LaunchedEffect(Unit) {
+        snapshotFlow { touched }.collectLatest {
+            delay(TOUR_IDLE_MS)
+            while (plan.floors.size > 1) {
+                val next = (floor + 1) % plan.floors.size
+                floor = next
+                chosen = plan.floors[next].rooms.firstOrNull()
+                delay(TOUR_STEP_MS)
+            }
         }
     }
     // The hour outside, checked twice a minute
@@ -267,22 +272,23 @@ fun HouseMap(
                 style = Tv.Meta, color = Tv.Secondary,
             )
             Spacer(Modifier.height(14.dp))
-            if (inRoom.isNotEmpty()) {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
-                ) {
-                    items(inRoom, key = { it.key }) { light ->
-                        LightTile(
-                            light = light,
-                            states = statesState,
-                            showRoom = false,
-                            modifier = Modifier.fillMaxWidth().height(92.dp),
-                            onClick = { scope.launch { if (!home.toggle(light)) toast("Não consegui falar com o hub") } },
-                        )
-                    }
+            // One grid for every room, its tiles kept by place: a new room refills the tiles already
+            // there instead of building new ones (on this TV, building them cost most of a room change)
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth().weight(1f, fill = false),
+            ) {
+                items(inRoom.size, key = { it }) { i ->
+                    val light = inRoom[i]
+                    LightTile(
+                        light = light,
+                        states = statesState,
+                        showRoom = false,
+                        modifier = Modifier.fillMaxWidth().height(92.dp),
+                        onClick = { scope.launch { if (!home.toggle(light)) toast("Não consegui falar com o hub") } },
+                    )
                 }
             }
             Spacer(Modifier.height(14.dp))
