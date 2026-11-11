@@ -24,7 +24,8 @@ import kotlinx.coroutines.launch
 /**
  * The week's weather over the TV's own screensaver (Sony's "Decoração do Ambiente", the monstera
  * leaves in the water): it writes the time over its film but has no weather for Brazil. Written straight
- * on the film, no panel, in the bottom-right corner under its clock; a soft shadow keeps it readable.
+ * on the film, no panel, a little see-through ([OPACITY]), in the bottom-right corner under its clock; a
+ * soft shadow keeps it readable.
  *
  * Shown by [dev.jean.atvhome.casa.HouseKeyService] while the system dreams, in an accessibility
  * overlay window (above the dream, never focusable or touchable: any key still wakes the TV).
@@ -95,7 +96,7 @@ class WeatherStrip(private val context: Context) {
         }
         row.visibility = View.VISIBLE
         row.alpha = 0f
-        row.animate().alpha(1f).setDuration(900).start()
+        row.animate().alpha(OPACITY).setDuration(900).start()
     }
 
     private fun text(sp: Float, face: Typeface, color: Int) = TextView(context).apply {
@@ -112,6 +113,8 @@ class WeatherStrip(private val context: Context) {
     private companion object {
         const val TAG = "WeatherStrip"
         const val SOFT = 0xD9FFFFFF.toInt()
-        const val SHADOW = 0xB3000000.toInt()
+        const val SHADOW = 0x80000000.toInt()
+        /** A little see-through: the leaves show through it, so it does not crowd the film. */
+        const val OPACITY = 0.7f
     }
 }
