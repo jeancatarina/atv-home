@@ -21,7 +21,7 @@ Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e 
 | ![Trailer tocando no fundo](docs/img/trailer.jpg) | ![Busca em português](docs/img/busca.jpg) |
 | **Trailer no fundo**, sem som (🔇) | **Busca**: "comédia curta na Netflix com nota alta" |
 | ![Explorar com filtros](docs/img/explorar.jpg) | ![Central com as entradas HDMI](docs/img/central.jpg) |
-| **Explorar**: filtros por app, gênero, nota e época | **Central** (tecla MENU): entradas HDMI e ajustes |
+| **Explorar**: filtros por app, gênero, nota e época | **Central** (botão no topo ou tecla MENU): entradas HDMI, Sem anúncios e ajustes |
 | ![Protetor de tela: as folhas da Sony com o clima da semana](docs/img/protetor.jpg) | |
 | **Protetor de tela**: o da Sony, com o clima da semana | |
 
@@ -47,7 +47,7 @@ Feito e testado numa Sony BRAVIA (Android 10, 1080p, 2,3 GB de RAM). Gratuito e 
 | **Página do título** | IMDb com número de votos, onde assistir no Brasil, trailer, elenco e parecidos. Clicar num ator mostra a filmografia com o selo do app onde você já pode ver cada filme. |
 | **Minha Lista com avisos** | Uma checagem diária marca "Agora no Prime" quando o título chega a um streaming que você tem, e "Novo ep. sexta" em séries. |
 | **Casa** | Uma fileira logo abaixo dos apps com as luzes da casa (interruptores Tuya/Zigbee), as mais usadas primeiro: **OK** acende ou apaga na hora, e o que alguém liga na parede ou no celular aparece sozinho. A TV fala direto com o hub na sua rede, sem nuvem. **Ver a casa** tem atalhos (apagar tudo, apagar ou acender um cômodo) e filtros (acesas, luzes, cenas, por cômodo). **Botão amarelo** (ou a tecla que você escolher): a mesma Casa por cima do filme, em qualquer app. |
-| **Central (tecla MENU)** | Entradas HDMI com os nomes que você deu na TV, protetor de tela, Wi-Fi e configurações. |
+| **Central** (botão **Central** no topo da tela inicial, ou tecla MENU) | Entradas HDMI com os nomes que você deu na TV, protetor de tela, Wi-Fi e configurações. |
 | **Protetor de tela** | O da própria TV ("Decoração do Ambiente" da Sony, tema **Relógio da floresta tropical**: costelas-de-adão na água, com a hora). O Início escreve por cima, sem moldura, o **clima da semana** que a Sony não tem no Brasil (Open-Meteo, cidade descoberta pela internet, sem conta). Começa depois de 3 minutos sem usar a TV. |
 
 ---
@@ -174,7 +174,7 @@ também não pode estar desativado: `adb shell pm enable com.sony.dtv.seeds.iot`
 - **▼** do título chega aos botões (Assistir, Detalhes, Trailer, Minha Lista). Lá em cima ficam
   **Buscar**, **O que assistir agora?**, **Roleta** e **Explorar**.
 - **Segurar OK** num app: modo de edição (◀ ▶ mover, ▼ ocultar, OK concluir). Apps ocultos ficam no fim da tela; segure OK para mostrar de novo.
-- **MENU**: Central com as entradas HDMI. **VOLTAR** fecha qualquer tela.
+- **Central** (o botão no topo da tela inicial, ou **MENU** em controles que têm a tecla): as entradas HDMI e o Sem anúncios. **VOLTAR** fecha qualquer tela.
 
 ## Casa (luzes Tuya)
 
@@ -279,8 +279,8 @@ Com os apps oficiais, sem conhecer nenhum streaming: um app instalado amanhã en
 A regra é que a TV nunca fique pior do que sem isto: na dúvida, a guarda não faz nada.
 
 1. Instale e rode uma vez, do computador: `tools/ad-guard-setup.sh`.
-2. **MENU** → **Sem anúncios** liga e desliga a guarda de intervalos.
-3. **MENU** → **Ajustes do Sem anúncios** abre a tela com todas as escolhas (valem a partir do próximo vídeo):
+2. **Central** (botão no topo da tela inicial, ou **MENU**) → **Sem anúncios** liga e desliga a guarda de intervalos.
+3. **Central** → **Ajustes do Sem anúncios** abre a tela com todas as escolhas (valem a partir do próximo vídeo):
 
 | Ajuste | Padrão | O que faz |
 |---|---|---|

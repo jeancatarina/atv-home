@@ -114,6 +114,7 @@ fun HomeScreen(
     onSocial: () -> Unit,
     toast: (String) -> Unit,
     home: dev.jean.atvhome.data.SmartHome? = null,
+    onCentral: () -> Unit = {},
     onHouse: () -> Unit = {},
 ) {
     val context = LocalContext.current
@@ -260,6 +261,7 @@ fun HomeScreen(
                     onRoulette = onRoulette,
                     onMatch = onMatch,
                     onSocial = onSocial,
+                    onCentral = onCentral,
                     soundState = if (!trailerOn) 0 else if (sound) 2 else 1,
                     onOpen = onOpen,
                     onStep = step,
@@ -434,6 +436,7 @@ private fun HeroInfo(
     onRoulette: () -> Unit,
     onMatch: () -> Unit,
     onSocial: () -> Unit,
+    onCentral: () -> Unit,
     soundState: Int,
     onOpen: (Title) -> Unit,
     onButtonsFocus: (Boolean) -> Unit,
@@ -453,6 +456,9 @@ private fun HeroInfo(
             PillButton("Match", onMatch, icon = "♥", onFocus = onButtonsFocus)
             PillButton("Social", onSocial, icon = "☻", onFocus = onButtonsFocus)
             PillButton("Explorar", onExplore, onFocus = onButtonsFocus)
+            // The Central (Sem anúncios, the TV inputs, Wi-Fi) is also on the MENU key, which Sony's
+            // remotes do not have
+            PillButton("Central", onCentral, icon = "⚙", onFocus = onButtonsFocus)
         }
         Spacer(Modifier.height(30.dp))
         if (item == null) {

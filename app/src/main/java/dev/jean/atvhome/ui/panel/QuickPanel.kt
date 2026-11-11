@@ -37,7 +37,7 @@ import dev.jean.atvhome.ui.components.PillButton
 import dev.jean.atvhome.ui.theme.Tv
 
 /**
- * tvOS's Control Center, on the MENU key: TV inputs and the settings people reach for.
+ * tvOS's Control Center, on the MENU key and Home's Central button: TV inputs and the settings people reach for.
  * [onAdShieldOn]: "Sem anúncios" was just switched on (the caller asks for the screen-capture token).
  * [onAdSettings]: opens the "Sem anúncios" screen, with every choice.
  */

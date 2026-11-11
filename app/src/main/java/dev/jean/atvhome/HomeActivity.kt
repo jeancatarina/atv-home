@@ -131,6 +131,7 @@ class HomeActivity : ComponentActivity() {
                             onSocial = { socialUsed = true; open(Screen.Social) },
                             home = home,
                             onHouse = { open(Screen.House) },
+                            onCentral = { panelOpen = true },
                             toast = toast,
                         )
                     }

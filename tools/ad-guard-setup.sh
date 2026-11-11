@@ -21,4 +21,4 @@ fi
 sh pm grant "$PKG" android.permission.WRITE_SECURE_SETTINGS
 sh cmd notification allow_listener "$PKG/$PKG.guard.SessionListener"
 sh appops set "$PKG" PROJECT_MEDIA allow
-echo "ok: turn on \"Sem anúncios\" in the Central (MENU key)"
+echo "ok: turn on \"Sem anúncios\" in the Central (the Central button at the top of Home, or MENU)"
