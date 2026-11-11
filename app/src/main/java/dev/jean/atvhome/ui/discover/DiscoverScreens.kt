@@ -194,9 +194,15 @@ fun ExploreScreen(vm: HomeViewModel, onOpen: (Title) -> Unit) {
             }
         }
         ChipRow {
-            items(Genre.entries.filter { it.id(filters.type) != null }) { g ->
+            // Reality shows exist only as series: shown with films too, and choosing one there turns to series
+            items(Genre.entries.filter { it.id(filters.type) != null || it.seriesOnly }) { g ->
                 Chip(g.label, g in filters.genres, {
-                    filters = filters.copy(genres = if (g in filters.genres) filters.genres - g else filters.genres + g)
+                    filters = when {
+                        g in filters.genres -> filters.copy(genres = filters.genres - g)
+                        g.seriesOnly && filters.type != MediaType.TV ->
+                            filters.copy(type = MediaType.TV, maxRuntime = null, genres = filters.genres.filter { it.tvId != null }.toSet() + g)
+                        else -> filters.copy(genres = filters.genres + g)
+                    }
                 })
             }
         }

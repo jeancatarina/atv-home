@@ -38,9 +38,13 @@ enum class Genre(val label: String, val movieId: Int?, val tvId: Int?) {
     WAR("Guerra", 10752, 10768),
     WESTERN("Faroeste", 37, 37),
     HISTORY("História", 36, null),
-    MUSIC("Musical", 10402, null);
+    MUSIC("Musical", 10402, null),
+    REALITY("Reality show", null, 10764);
 
     fun id(type: MediaType) = if (type == MediaType.MOVIE) movieId else tvId
+
+    /** Only series have it (TMDB has no reality movies): choosing it means series. */
+    val seriesOnly get() = movieId == null
 }
 
 /**
@@ -71,6 +75,7 @@ object QueryParser {
         "faroeste|western|velho oeste" to Genre.WESTERN,
         "historic|historia\\b|biografi" to Genre.HISTORY,
         "musical" to Genre.MUSIC,
+        "\\breality(?: shows?)?\\b|\\brealities\\b" to Genre.REALITY,
     ).map { (pattern, genre) -> Regex(pattern) to genre }
 
     fun normalize(text: String): String = Normalizer.normalize(text, Normalizer.Form.NFD)
@@ -91,6 +96,7 @@ object QueryParser {
         val genres = LinkedHashSet<Genre>()
         for ((regex, genre) in genreWords) if (consume(regex) != null) genres += genre
         filters = filters.copy(genres = genres)
+        if (genres.any { it.seriesOnly }) filters = filters.copy(type = MediaType.TV)
 
         val providerIds = HashSet<Int>()
         for (provider in providers) {

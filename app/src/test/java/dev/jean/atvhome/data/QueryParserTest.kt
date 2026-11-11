@@ -75,4 +75,13 @@ class QueryParserTest {
         assertEquals(setOf(Genre.SCIFI), r.filters.genres)
         assertEquals(setOf(337), r.filters.providerIds)
     }
+
+    @Test
+    fun realityShowsAreSeries() {
+        val r = parse("reality show na netflix")
+        assertEquals(setOf(Genre.REALITY), r.filters.genres)
+        assertEquals(MediaType.TV, r.filters.type)
+        assertEquals(setOf(8), r.filters.providerIds)
+        assertEquals("", r.leftover)
+    }
 }
