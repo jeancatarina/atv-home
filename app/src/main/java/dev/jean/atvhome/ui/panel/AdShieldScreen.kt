@@ -23,6 +23,7 @@ import androidx.tv.material3.Text
 import dev.jean.atvhome.data.AdShield
 import dev.jean.atvhome.guard.GuardSettings
 import dev.jean.atvhome.ui.components.PillButton
+import dev.jean.atvhome.ui.components.requestWhenReady
 import dev.jean.atvhome.ui.discover.Header
 import dev.jean.atvhome.ui.theme.LocalAccent
 import dev.jean.atvhome.ui.theme.Tv
@@ -45,7 +46,9 @@ fun AdShieldScreen(toast: (String) -> Unit, askCapture: () -> Unit) {
     // Switching the network filter on checks that the TV still reaches the internet: a few seconds
     var checkingDns by remember { mutableStateOf(false) }
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    // The list's first row exists only after the first layout: asked at once, the focus went nowhere
+    // and the arrows moved nothing
+    LaunchedEffect(Unit) { first.requestWhenReady() }
 
     fun change(next: GuardSettings) {
         val before = settings

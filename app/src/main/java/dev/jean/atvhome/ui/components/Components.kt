@@ -318,3 +318,21 @@ suspend fun FocusRequester.requestWhenReady(frames: Int = 60) {
         androidx.compose.runtime.withFrameNanos { }
     }
 }
+
+/**
+ * A layer over Home (a screen, the Central) that never ends up with nothing focused. Home underneath
+ * refuses the focus while covered, so once the focus was lost (a system screen opened and closed over
+ * the launcher, as the screen-capture request does) no arrow could bring it back: [regain] puts it on
+ * the layer's first item. Attach with [Modifier.focusLayer].
+ */
+class FocusLayer {
+    val requester = FocusRequester()
+    var hasFocus = false
+        internal set
+
+    /** Brings the focus into the layer if it has none; false when it already had it or there is nothing to focus. */
+    fun regain(): Boolean = !hasFocus && runCatching { requester.requestFocus() }.isSuccess && hasFocus
+}
+
+fun Modifier.focusLayer(layer: FocusLayer): Modifier =
+    focusRequester(layer.requester).onFocusChanged { layer.hasFocus = it.hasFocus }

@@ -27,7 +27,9 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
+import dev.jean.atvhome.ui.components.FocusLayer
 import dev.jean.atvhome.ui.components.TvScroll
+import dev.jean.atvhome.ui.components.focusLayer
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
@@ -82,6 +84,9 @@ class HomeActivity : ComponentActivity() {
     private var socialUsed = false
     private val stack = mutableStateListOf<Screen>()
     private var panelOpen by mutableStateOf(false)
+    /** The screen over Home and the Central: each takes the focus back if it lost it. */
+    private val screenLayer = FocusLayer()
+    private val panelLayer = FocusLayer()
     private var resetSignal by mutableIntStateOf(0)
     /** Bumps on every key: trailers wait for the remote to rest, and stop when nobody is around. */
     private var inputTick by mutableIntStateOf(0)
@@ -136,7 +141,7 @@ class HomeActivity : ComponentActivity() {
                         )
                     }
                     if (top != null) {
-                        Box(Modifier.fillMaxSize().focusProperties { exit = { FocusRequester.Cancel } }.focusGroup()) {
+                        Box(Modifier.fillMaxSize().focusLayer(screenLayer).focusProperties { exit = { FocusRequester.Cancel } }.focusGroup()) {
                             when (top) {
                                 is Screen.Detail -> DetailScreen(top.title, vm, onOpen, onPerson = { open(Screen.Person(it)) }, toast = toast)
                                 is Screen.Person -> PersonScreen(top.id, vm, onOpen)
@@ -152,7 +157,7 @@ class HomeActivity : ComponentActivity() {
                         }
                     }
                     AnimatedVisibility(panelOpen, enter = fadeIn(), exit = fadeOut()) {
-                        Box(Modifier.fillMaxSize().focusProperties { exit = { FocusRequester.Cancel } }.focusGroup()) {
+                        Box(Modifier.fillMaxSize().focusLayer(panelLayer).focusProperties { exit = { FocusRequester.Cancel } }.focusGroup()) {
                             QuickPanel(
                                 onClose = { panelOpen = false }, toast = toast, onAdShieldOn = ::askCapture,
                                 onAdSettings = { open(Screen.AdSettings) },
@@ -184,6 +189,8 @@ class HomeActivity : ComponentActivity() {
         }
         if (event.action == KeyEvent.ACTION_DOWN) {
             inputTick++
+            // A screen or the Central with nothing focused: the first arrow or OK brings the focus back
+            if (event.keyCode in NAV_KEYS && regainFocus()) return true
             when (event.keyCode) {
                 KeyEvent.KEYCODE_DPAD_LEFT -> LastKey.dx = -1
                 KeyEvent.KEYCODE_DPAD_RIGHT -> LastKey.dx = 1
@@ -199,6 +206,19 @@ class HomeActivity : ComponentActivity() {
             }
         }
         return super.dispatchKeyEvent(event)
+    }
+
+    /** The layer in front (the Central, else a screen) takes the focus back if it has none. */
+    private fun regainFocus(): Boolean = when {
+        panelOpen -> panelLayer.regain()
+        stack.isNotEmpty() -> screenLayer.regain()
+        else -> false
+    }
+
+    /** Back from a system screen (the screen-capture request): the focus is where the person left it, or found again. */
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) window.decorView.post { regainFocus() }
     }
 
     /** HOME pressed while the launcher is already in front: back to the top of Home. */
@@ -263,3 +283,9 @@ class HomeActivity : ComponentActivity() {
         vm.refreshWatchNext()
     }
 }
+
+/** The remote's keys that move or choose: on a screen with nothing focused, the first one finds the focus again. */
+private val NAV_KEYS = setOf(
+    KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+    KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+)
