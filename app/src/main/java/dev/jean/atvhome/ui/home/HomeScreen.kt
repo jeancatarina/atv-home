@@ -449,16 +449,16 @@ private fun HeroInfo(
     var titleFocused by remember { mutableStateOf(false) }
     val myList by vm.myList.entries.collectAsState()
     Column(Modifier.fillMaxWidth().height(330.dp).padding(start = Tv.Edge, top = 20.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PillButton("Buscar", onSearch, icon = "⌕", onFocus = onButtonsFocus)
-            PillButton("O que assistir agora?", onWhatToWatch, icon = "✦", onFocus = onButtonsFocus)
+            PillButton("O que assistir?", onWhatToWatch, icon = "✦", onFocus = onButtonsFocus)
             PillButton("Roleta", onRoulette, icon = "🎲", onFocus = onButtonsFocus)
             PillButton("Match", onMatch, icon = "♥", onFocus = onButtonsFocus)
             PillButton("Social", onSocial, icon = "☻", onFocus = onButtonsFocus)
             PillButton("Explorar", onExplore, onFocus = onButtonsFocus)
             // The Central (Sem anúncios, the TV inputs, Wi-Fi) is also on the MENU key, which Sony's
-            // remotes do not have
-            PillButton("Central", onCentral, icon = "⚙", onFocus = onButtonsFocus)
+            // remotes do not have. Only the gear until focused: the clock sits at the end of this row
+            PillButton("Central", onCentral, icon = "⚙", onFocus = onButtonsFocus, textWhenFocused = true)
         }
         Spacer(Modifier.height(30.dp))
         if (item == null) {

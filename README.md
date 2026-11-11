@@ -172,7 +172,7 @@ também não pode estar desativado: `adb shell pm enable com.sony.dtv.seeds.iot`
 - **◀ ▶** na fileira de apps troca o Top Shelf para o app focado.
 - **▲** a partir de um app seleciona o título do topo: **◀ ▶** trocam o filme, **OK** assiste no app.
 - **▼** do título chega aos botões (Assistir, Detalhes, Trailer, Minha Lista). Lá em cima ficam
-  **Buscar**, **O que assistir agora?**, **Roleta** e **Explorar**.
+  **Buscar**, **O que assistir?**, **Roleta**, **Explorar** e a engrenagem ⚙ da **Central**.
 - **Segurar OK** num app: modo de edição (◀ ▶ mover, ▼ ocultar, OK concluir). Apps ocultos ficam no fim da tela; segure OK para mostrar de novo.
 - **Central** (o botão no topo da tela inicial, ou **MENU** em controles que têm a tecla): as entradas HDMI e o Sem anúncios. **VOLTAR** fecha qualquer tela.
 

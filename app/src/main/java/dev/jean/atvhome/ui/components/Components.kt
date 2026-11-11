@@ -151,10 +151,13 @@ fun PillButton(
     icon: String? = null,
     selected: Boolean = false,
     onFocus: (Boolean) -> Unit = {},
+    /** Only the [icon] until focused, then the [text] too: for a row with no room to spare. */
+    textWhenFocused: Boolean = false,
 ) {
     var focused by remember { mutableStateOf(false) }
     val memory = LocalFocusMemory.current
     val requester = remember { FocusRequester() }
+    val showText = !textWhenFocused || focused || icon == null
     Surface(
         onClick = onClick,
         modifier = modifier.focusRequester(requester).onFocusChanged {
@@ -176,9 +179,9 @@ fun PillButton(
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (icon != null) {
                 Text(icon, style = Tv.Headline, color = if (focused) Color.Black else Color.White)
-                Spacer(Modifier.width(7.dp))
+                if (showText) Spacer(Modifier.width(7.dp))
             }
-            Text(text, style = Tv.Headline, color = if (focused) Color.Black else Color.White, maxLines = 1)
+            if (showText) Text(text, style = Tv.Headline, color = if (focused) Color.Black else Color.White, maxLines = 1)
         }
     }
 }
