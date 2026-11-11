@@ -22,6 +22,8 @@ import dev.jean.atvhome.ui.theme.LocalAccent
 import dev.jean.atvhome.ui.theme.screen
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.Json
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -63,8 +65,10 @@ class MapShotsTest {
         override val states = MutableStateFlow(mapOf("estar:1" to true, "estar:2" to true, "estar:3" to false, "ninho:2" to true, "ninho:3" to true, "lav:2" to true, "ter:3" to true))
         override val link = MutableStateFlow<Link>(Link.Online(Version.V33))
         override val row = MutableStateFlow(lights)
-        override suspend fun toggle(light: Light) = true
-        override suspend fun switchAll(group: List<Light>, on: Boolean) = true
+        val toggled = mutableListOf<String>()
+        val switched = mutableListOf<List<String>>()
+        override suspend fun toggle(light: Light) = toggled.add(light.key)
+        override suspend fun switchAll(group: List<Light>, on: Boolean) = switched.add(group.map { it.key })
         override fun setHidden(light: Light, hide: Boolean) = Unit
     }
 
@@ -128,5 +132,40 @@ class MapShotsTest {
         rule.mainClock.advanceTimeBy(8_000)
         rule.waitForIdle()
         rule.onNodeWithText("TERRAÇO").assertExists()
+    }
+
+    @Test fun `OK goes into the room and switches one light, Back comes out`() {
+        show(LocalTime.of(21, 30))
+        rule.mainClock.advanceTimeBy(1_500)
+        rule.waitForIdle()
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
+        rule.waitForIdle()
+        rule.onNodeWithText("VOLTAR  cômodos", substring = true).assertExists()
+        assertEquals(emptyList<String>(), house.toggled)
+        // Another pendant of the living room, then OK: that one light, not the room
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionRight) }
+        rule.mainClock.advanceTimeBy(600)
+        rule.waitForIdle()
+        rule.onRoot().captureRoboImage("build/shots/casa-model-lamp.png")
+        rule.onRoot().performKeyInput { pressKey(Key.DirectionCenter) }
+        rule.waitForIdle()
+        assertEquals(1, house.toggled.size)
+        assertTrue(house.toggled.single() in setOf("estar:2", "estar:3", "cenas:1"))
+        assertEquals(emptyList<List<String>>(), house.switched)
+        // Back leaves the room's lights, not the model
+        rule.onRoot().performKeyInput { pressKey(Key.Back) }
+        rule.waitForIdle()
+        rule.onNodeWithText("OK  as luzes do cômodo", substring = true).assertExists()
+    }
+
+    @Test fun `holding OK switches the whole room`() {
+        show(LocalTime.of(21, 30))
+        rule.mainClock.advanceTimeBy(1_500)
+        rule.waitForIdle()
+        rule.onRoot().performKeyInput { keyDown(Key.DirectionCenter); advanceEventTime(800); keyUp(Key.DirectionCenter) }
+        rule.waitForIdle()
+        assertEquals(listOf(listOf("estar:1", "estar:2", "estar:3", "cenas:1")), house.switched)
+        assertEquals(emptyList<String>(), house.toggled)
+        rule.onNodeWithText("OK  as luzes do cômodo", substring = true).assertExists()
     }
 }

@@ -230,7 +230,10 @@ quartos; mesa e estante no escritório; pia e vaso nos banheiros; a escada no co
 espreguiçadeiras e vasos no terraço. As luzes são pendentes sobre a poça que fazem no piso, e as
 janelas do fundo seguem a hora (sol no piso de dia, dourado no fim da tarde, luar à noite). As setas
 vão para o cômodo naquela direção da tela; no alto ou embaixo do andar, trocam de andar, e **CH ±**
-trocam direto. Acender ou apagar solta um anel pelo piso. Deixada sozinha por 30 s, a maquete passeia
+trocam direto. **OK** entra no cômodo: as setas andam entre os pendentes (um anel marca a luz,
+com o nome e se está acesa), **OK** acende ou apaga só aquela luz e **VOLTAR** sai para os cômodos;
+num cômodo de uma luz só, **OK** já acende ou apaga. **Segurar OK** acende ou apaga o cômodo todo.
+Acender ou apagar solta um anel pelo piso. Deixada sozinha por 30 s, a maquete passeia
 pela casa, um andar a cada 8 s, cada um se montando de novo; qualquer tecla devolve o controle.
 
 A maquete é viva: o andar se monta ao aparecer (a laje assenta, as paredes sobem do fundo para a

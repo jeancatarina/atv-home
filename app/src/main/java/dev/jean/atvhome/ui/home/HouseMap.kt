@@ -7,6 +7,7 @@ import androidx.compose.animation.core.VectorConverter
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +24,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Bedtime
 import androidx.compose.material.icons.rounded.DarkMode
@@ -60,6 +63,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
@@ -76,6 +80,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
+import dev.jean.atvhome.casa.Shortcut
 import dev.jean.atvhome.data.HouseModel
 import dev.jean.atvhome.tuya.Feature
 import dev.jean.atvhome.tuya.Floor
@@ -107,8 +112,10 @@ import kotlin.math.sqrt
  * sends a ripple across the floor, one that goes off fades.
  *
  * The arrows move to the room that way on screen; past the top of a floor is the floor above (the
- * room right over this one), past the bottom the floor below. OK switches the whole room; the room's
- * lights and the scenes sit beside the model.
+ * room right over this one), past the bottom the floor below. OK goes into the room: the arrows move
+ * between its pendants, OK switches that one light, Back goes out to the rooms again (a room with a
+ * single light switches at once). Holding OK switches the whole room. The room's lights and the
+ * scenes sit beside the model.
  *
  * One Canvas of paths and flat, linear or radial fills, no blur: it redraws only while something moves.
  */
@@ -139,6 +146,10 @@ fun HouseMap(
     val scene = remember(plan, floor, home.lights, tvRoom) { Scene(plan, plan.floors[floor], home.lights, tvRoom) }
     val measured = remember { HashMap<String, androidx.compose.ui.text.TextLayoutResult>() }
     fun group(of: List<Light>, on: Boolean) = scope.launch { if (!home.switchAll(of, on)) toast("Algumas luzes não responderam") }
+    fun flip(light: Light) = scope.launch { if (!home.toggle(light)) toast("Não consegui falar com o hub") }
+    // Inside the chosen room: the light picked among its pendants (null while choosing rooms)
+    var lamp by remember { mutableStateOf<String?>(null) }
+    val lampIndex = inRoom.indexOfFirst { it.key == lamp }.takeIf { it >= 0 }
     LaunchedEffect(Unit) { mapFocus.requestWhenReady() }
 
     // The floor builds itself each time it comes into view. A new floor starts unbuilt on its very
@@ -188,12 +199,23 @@ fun HouseMap(
         val to = Rect(r.x, r.y, r.x + r.w, r.y + r.d)
         if (markFloor != floor) { markFloor = floor; mark.snapTo(to) } else mark.animateTo(to, spring(dampingRatio = 0.82f, stiffness = 420f))
     }
+    // The picked light's ring slides from pendant to pendant; going into a room it starts on the first
+    val lampAt = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
+    val lampWas = remember { arrayOf<String?>(null) }
+    LaunchedEffect(lamp, room, floor) {
+        val i = lampIndex ?: run { lampWas[0] = null; return@LaunchedEffect }
+        val spot = scene.spots[room?.room]?.getOrNull(i) ?: return@LaunchedEffect
+        val to = Offset(spot.first, spot.second)
+        if (lampWas[0] == null) lampAt.snapTo(to) else lampAt.animateTo(to, spring(dampingRatio = 0.78f, stiffness = 520f))
+        lampWas[0] = lamp
+    }
 
     /** Straight up or down a floor, to the room right over or under the chosen one. */
     fun jump(by: Int): Boolean {
         val target = plan.floors.getOrNull(floor + by) ?: return false
         val here = chosen
         val cx = here?.let { it.x + it.w / 2 } ?: 0f; val cy = here?.let { it.y + it.d / 2 } ?: 0f
+        lamp = null
         floor += by
         chosen = target.rooms.firstOrNull { cx in it.x..(it.x + it.w) && cy in it.y..(it.y + it.d) } ?: target.rooms.firstOrNull()
         return true
@@ -217,14 +239,77 @@ fun HouseMap(
         return when { dy < 0 -> jump(+1); dy > 0 -> jump(-1); else -> false }
     }
 
+    /** The chosen room and its lights, read from the state (several keys can come before a recomposition). */
+    fun here(): RoomBox? = plan.floors.getOrNull(floor)?.rooms.orEmpty().let { rooms -> chosen?.takeIf { it in rooms } ?: rooms.firstOrNull() }
+    fun lightsHere(): List<Light> = here()?.let { r -> home.lights.filter { it.room == r.room } }.orEmpty()
+
+    /** The pendant that way on screen, within the room; none that way and the ring stays. */
+    fun moveLamp(dx: Float, dy: Float): Boolean {
+        val r = here() ?: return true
+        val lights = lightsHere()
+        val spots = scene.spots[r.room] ?: return true
+        val i = lights.indexOfFirst { it.key == lamp }.takeIf { it >= 0 } ?: return true
+        val (hx, hy) = screen(spots[i].first, spots[i].second)
+        val best = spots.indices.filter { it != i }.mapNotNull { j ->
+            val (cx, cy) = screen(spots[j].first, spots[j].second)
+            val vx = cx - hx; val vy = cy - hy
+            val len = sqrt(vx * vx + vy * vy).coerceAtLeast(0.001f)
+            val along = (vx * dx + vy * dy) / len
+            if (along < 0.25f) null else j to len * (2f - along)
+        }.minByOrNull { it.second }?.first
+        if (best != null) lamp = lights[best].key
+        return true
+    }
+
+    // OK: a short press goes into the room or switches the picked light; held, it switches the whole
+    // room (on the remote's repeats, or on release for a remote that sends none)
+    val hold = remember { longArrayOf(0L, 0L) } // when OK went down; 1 once the hold has acted
+    fun ok(e: KeyEvent): Boolean {
+        val native = e.nativeKeyEvent
+        val lights = lightsHere()
+        fun wholeRoom() { hold[1] = 1L; if (lights.isNotEmpty()) group(lights, lights.none { Panel.isOn(it, home.states.value) }) }
+        when (e.type) {
+            KeyEventType.KeyDown -> {
+                if (native.repeatCount == 0) { hold[0] = native.eventTime; hold[1] = 0L; touched++ }
+                else if (hold[1] == 0L && native.eventTime - hold[0] >= Shortcut.HOLD_MS) wholeRoom()
+            }
+            KeyEventType.KeyUp -> {
+                if (hold[1] == 1L) return true
+                if (native.eventTime - hold[0] >= Shortcut.HOLD_MS) { wholeRoom(); return true }
+                val picked = lights.firstOrNull { it.key == lamp }
+                when {
+                    picked != null -> flip(picked)
+                    lights.size == 1 -> flip(lights.single())
+                    lights.size > 1 -> lamp = lights.first().key
+                }
+            }
+        }
+        return true
+    }
+
     Row(modifier.fillMaxSize().padding(start = Tv.Edge, end = Tv.Edge, top = 26.dp, bottom = 22.dp)) {
         Box(
             Modifier.weight(1f).fillMaxHeight()
                 .focusRequester(mapFocus)
                 .onFocusChanged { focused = it.isFocused }
                 .onKeyEvent { e ->
+                    if (e.key == Key.DirectionCenter || e.key == Key.Enter || e.key == Key.NumPadEnter) return@onKeyEvent ok(e)
+                    // Back goes out of the room's lights first: its up too, or the screen would close on it
+                    if (e.key == Key.Back && lamp != null) {
+                        if (e.type == KeyEventType.KeyUp) lamp = null
+                        return@onKeyEvent true
+                    }
                     if (e.type != KeyEventType.KeyDown) return@onKeyEvent false
                     touched++
+                    if (lamp != null) return@onKeyEvent when (e.key) {
+                        Key.DirectionLeft -> moveLamp(-1f, 0f)
+                        Key.DirectionRight -> moveLamp(1f, 0f)
+                        Key.DirectionUp -> moveLamp(0f, -1f)
+                        Key.DirectionDown -> moveLamp(0f, 1f)
+                        Key.ChannelUp, Key.PageUp -> jump(+1)
+                        Key.ChannelDown, Key.PageDown -> jump(-1)
+                        else -> false
+                    }
                     when (e.key) {
                         Key.DirectionLeft -> move(-1f, 0f)
                         // Nothing further right: on to the room's lights beside the model
@@ -234,7 +319,6 @@ fun HouseMap(
                         // Channel ± go straight to the floor above or below, like a lift's buttons
                         Key.ChannelUp, Key.PageUp -> jump(+1)
                         Key.ChannelDown, Key.PageDown -> jump(-1)
-                        Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { if (inRoom.isNotEmpty()) group(inRoom, roomLit == 0); true }
                         else -> false
                     }
                 }
@@ -245,7 +329,11 @@ fun HouseMap(
                 drawFloor(scene, glow, ripple, if (builtFor == floor) build.value else 0f, sky)
             }
             Canvas(Modifier.fillMaxSize()) {
-                drawMarks(scene, glow, room, mark.value, focused, text, measured, if (builtFor == floor) build.value else 0f)
+                val picked = lampIndex?.let { inRoom[it] }
+                drawMarks(
+                    scene, glow, room, mark.value, focused, text, measured, if (builtFor == floor) build.value else 0f,
+                    lamp = picked?.let { lampAt.value }, lampLabel = picked?.let { it.name to Panel.isOn(it, states) },
+                )
             }
             Column(Modifier.align(Alignment.TopStart)) {
                 FloorStack(plan.floors, floor, home.lights, states)
@@ -257,7 +345,8 @@ fun HouseMap(
                 }
             }
             Text(
-                "◀ ▲ ▶ ▼  cômodos, e andares no alto e embaixo     CH ±  andar     OK  acende ou apaga",
+                if (lamp != null) "◀ ▲ ▶ ▼  luzes do cômodo     OK  acende ou apaga     VOLTAR  cômodos     segure OK  o cômodo todo"
+                else "◀ ▲ ▶ ▼  cômodos e andares     CH ±  andar     OK  as luzes do cômodo     segure OK  o cômodo todo",
                 style = Tv.Caption, color = Tv.Tertiary, modifier = Modifier.align(Alignment.BottomStart),
             )
         }
@@ -274,7 +363,10 @@ fun HouseMap(
             Spacer(Modifier.height(14.dp))
             // One grid for every room, its tiles kept by place: a new room refills the tiles already
             // there instead of building new ones (on this TV, building them cost most of a room change)
+            val grid = rememberLazyGridState()
+            LaunchedEffect(lampIndex) { lampIndex?.let { grid.animateScrollToItem(it) } }
             LazyVerticalGrid(
+                state = grid,
                 columns = GridCells.Fixed(2),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -286,8 +378,10 @@ fun HouseMap(
                         light = light,
                         states = statesState,
                         showRoom = false,
-                        modifier = Modifier.fillMaxWidth().height(92.dp),
-                        onClick = { scope.launch { if (!home.toggle(light)) toast("Não consegui falar com o hub") } },
+                        // The light picked in the model, outlined here too
+                        modifier = Modifier.fillMaxWidth().height(92.dp)
+                            .then(if (i == lampIndex) Modifier.border(3.dp, Casa.Amber, RoundedCornerShape(18.dp)) else Modifier),
+                        onClick = { flip(light) },
                     )
                 }
             }
@@ -1052,6 +1146,8 @@ private fun DrawScope.drawMarks(
     text: TextMeasurer,
     measured: HashMap<String, androidx.compose.ui.text.TextLayoutResult>,
     build: Float,
+    lamp: Offset? = null,
+    lampLabel: Pair<String, Boolean>? = null,
 ) {
     val floor = scene.floor
     val iso = fit(scene.plan, dz = (1f - stage(build, 0f, 0.35f)) * 0.9f)
@@ -1071,10 +1167,30 @@ private fun DrawScope.drawMarks(
         drawRoundRect(bg, tl, size, CornerRadius(size.height / 2), alpha = tags)
         drawText(m, topLeft = Offset(tl.x + padX, tl.y + padY), alpha = tags)
     }
+    // The picked light: a ring on the floor under it, a halo round its shade, its name and state above
+    if (lamp != null && lampLabel != null) {
+        val floorAt = iso.p(lamp.x, lamp.y)
+        val ring = 0.62f * 1.414f * COS * iso.s
+        scale(1f, SIN / COS, pivot = floorAt) {
+            drawCircle(Color.White.copy(alpha = 0.12f * tags), ring, floorAt)
+            drawCircle(Color.White.copy(alpha = 0.85f * tags), ring, floorAt, style = Stroke(2.dp.toPx()))
+        }
+        val shade = iso.p(lamp.x, lamp.y, PENDANT)
+        drawCircle(Color.White.copy(alpha = 0.9f * tags), 10.dp.toPx(), shade, style = Stroke(2.dp.toPx()))
+        val (name, on) = lampLabel
+        tag("lamp|$name|$on", {
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = Casa.Ink)) { append(name) }
+                withStyle(SpanStyle(color = if (on) Color(0xFFB86E00) else Casa.Ink.copy(alpha = 0.5f))) { append(if (on) "  Acesa" else "  Apagada") }
+            }
+        }, iso.p(lamp.x, lamp.y, PENDANT + 0.62f), Color.White)
+    }
     floor.rooms.forEach { r ->
         val inRoom = scene.inRoom.getValue(r.room)
         val lit = inRoom.count { (glow[it.key] ?: 0f) > 0.5f }
         val picked = r == chosen
+        // Inside the room its own tag steps aside for the light's
+        if (picked && lamp != null) return@forEach
         tag("${r.room}|$lit|$picked", {
             val ink = if (picked) Casa.Ink else Color.White
             buildAnnotatedString {
