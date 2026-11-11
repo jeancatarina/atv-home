@@ -84,4 +84,31 @@ class QueryParserTest {
         assertEquals(setOf(8), r.filters.providerIds)
         assertEquals("", r.leftover)
     }
+
+    @Test
+    fun specificCategoriesWinOverTheBroadOnes() {
+        assertEquals(setOf(Genre.TRUE_CRIME), parse("true crime").filters.genres)
+        assertEquals(setOf(Genre.TRUE_STORY), parse("baseado em fatos reais").filters.genres)
+        assertEquals(setOf(Genre.TRUE_STORY), parse("uma historia real").filters.genres)
+        assertEquals(setOf(Genre.ANIME), parse("anime na netflix").filters.genres)
+        assertEquals(setOf(Genre.SUPERHERO), parse("filme de super herói").filters.genres)
+    }
+
+    @Test
+    fun countriesAndKindsOfTheirOwn() {
+        assertEquals(setOf(Genre.KOREAN), parse("dorama").filters.genres)
+        assertEquals(setOf(Genre.BRAZILIAN), parse("filmes nacionais").filters.genres)
+        val standup = parse("stand-up na netflix").filters
+        assertEquals(setOf(Genre.STANDUP), standup.genres)
+        assertEquals(MediaType.MOVIE, standup.type)
+        assertEquals(MediaType.TV, parse("novela").filters.type)
+    }
+
+    @Test
+    fun everyCategoryMeansSomethingForTheKindsItShowsWith() {
+        for (g in Genre.entries) for (type in MediaType.entries) {
+            if (g.shown(type)) assertTrue("$g with $type", g.fits(type) || g.only != null)
+        }
+        assertTrue(Genre.entries.all { g -> MediaType.entries.any { g.fits(it) } })
+    }
 }

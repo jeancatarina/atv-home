@@ -131,6 +131,11 @@ class Catalog(val tmdb: TmdbClient) {
         if (providerIds.isNotEmpty()) params["with_watch_providers"] = providerIds.joinToString("|")
         val genreIds = filters.genres.mapNotNull { it.id(type) }.distinct()
         if (genreIds.isNotEmpty()) params["with_genres"] = genreIds.joinToString(",")
+        val keywords = filters.genres.filter { it.fits(type) }.mapNotNull { it.keyword }
+        if (keywords.isNotEmpty()) params["with_keywords"] = keywords.joinToString(",")
+        // Countries are one or the other ("Coreanos" and "Nacionais" together: either)
+        val countries = filters.genres.mapNotNull { it.country }
+        if (countries.isNotEmpty()) params["with_origin_country"] = countries.joinToString("|")
         if (sortByRating) {
             params["sort_by"] = "vote_average.desc"
             params["vote_count.gte"] = if (type == MediaType.MOVIE) "800" else "300"

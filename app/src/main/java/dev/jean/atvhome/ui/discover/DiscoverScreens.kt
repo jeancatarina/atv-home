@@ -194,13 +194,16 @@ fun ExploreScreen(vm: HomeViewModel, onOpen: (Title) -> Unit) {
             }
         }
         ChipRow {
-            // Reality shows exist only as series: shown with films too, and choosing one there turns to series
-            items(Genre.entries.filter { it.id(filters.type) != null || it.seriesOnly }) { g ->
+            // A category of one kind only (reality shows are series, stand-up is films) shows with the
+            // other too, and choosing it there turns to its kind, keeping what still fits
+            items(Genre.entries.filter { it.shown(filters.type) }) { g ->
                 Chip(g.label, g in filters.genres, {
                     filters = when {
                         g in filters.genres -> filters.copy(genres = filters.genres - g)
-                        g.seriesOnly && filters.type != MediaType.TV ->
-                            filters.copy(type = MediaType.TV, maxRuntime = null, genres = filters.genres.filter { it.tvId != null }.toSet() + g)
+                        g.only != null && g.only != filters.type -> filters.copy(
+                            type = g.only, maxRuntime = if (g.only == MediaType.TV) null else filters.maxRuntime,
+                            genres = filters.genres.filter { it.fits(g.only) }.toSet() + g,
+                        )
                         else -> filters.copy(genres = filters.genres + g)
                     }
                 })

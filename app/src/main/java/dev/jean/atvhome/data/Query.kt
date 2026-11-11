@@ -19,10 +19,22 @@ data class Filters(
         minImdb == null && fromYear == null && toYear == null && person == null
 }
 
-/** TMDB's genre ids, which differ between movies and series for a few genres. */
-enum class Genre(val label: String, val movieId: Int?, val tvId: Int?) {
+/**
+ * Explore's categories. Most are TMDB genres, whose ids differ between movies and series for a few;
+ * the rest are a TMDB keyword ("anime", "superhero") or a country of origin, the same for both kinds.
+ * [only]: the one kind it exists for (reality shows are series, stand-up specials are films).
+ */
+enum class Genre(
+    val label: String,
+    val movieId: Int?,
+    val tvId: Int?,
+    val keyword: Int? = null,
+    val country: String? = null,
+    val only: MediaType? = null,
+) {
     COMEDY("Comédia", 35, 35),
     ACTION("Ação", 28, 10759),
+    SUPERHERO("Super-heróis", null, null, keyword = 9715),
     ADVENTURE("Aventura", 12, 10759),
     THRILLER("Suspense", 53, 9648),
     HORROR("Terror", 27, null),
@@ -31,20 +43,38 @@ enum class Genre(val label: String, val movieId: Int?, val tvId: Int?) {
     SCIFI("Ficção científica", 878, 10765),
     FANTASY("Fantasia", 14, 10765),
     ANIMATION("Animação", 16, 16),
+    ANIME("Anime", null, null, keyword = 210024),
     DOCUMENTARY("Documentário", 99, 99),
+    TRUE_STORY("Fatos reais", null, null, keyword = 9672),
     FAMILY("Família", 10751, 10751),
+    KIDS("Infantil", null, 10762, only = MediaType.TV),
     CRIME("Crime", 80, 80),
+    TRUE_CRIME("True crime", null, null, keyword = 33722),
     MYSTERY("Mistério", 9648, 9648),
     WAR("Guerra", 10752, 10768),
     WESTERN("Faroeste", 37, 37),
     HISTORY("História", 36, null),
     MUSIC("Musical", 10402, null),
-    REALITY("Reality show", null, 10764);
+    REALITY("Reality show", null, 10764, only = MediaType.TV),
+    SOAP("Novela", null, 10766, only = MediaType.TV),
+    STANDUP("Stand-up", null, null, keyword = 9716, only = MediaType.MOVIE),
+    KOREAN("Coreanos", null, null, country = "KR"),
+    BRAZILIAN("Nacionais", null, null, country = "BR"),
+    CHRISTMAS("Natal", null, null, keyword = 207317),
+    TIME_TRAVEL("Viagem no tempo", null, null, keyword = 4379),
+    DYSTOPIA("Distopia", null, null, keyword = 4565),
+    HEIST("Assalto", null, null, keyword = 10051),
+    SPY("Espionagem", null, null, keyword = 470),
+    ZOMBIE("Zumbis", null, null, keyword = 12377),
+    SPORTS("Esportes", null, null, keyword = 6075);
 
     fun id(type: MediaType) = if (type == MediaType.MOVIE) movieId else tvId
 
-    /** Only series have it (TMDB has no reality movies): choosing it means series. */
-    val seriesOnly get() = movieId == null
+    /** Whether it means something for [type]: its genre there, or a keyword or country, which fit both. */
+    fun fits(type: MediaType) = (only == null || only == type) && (id(type) != null || keyword != null || country != null)
+
+    /** Whether Explore shows its chip with [type] chosen: also when it is the other kind's own (it switches). */
+    fun shown(type: MediaType) = fits(type) || only != null
 }
 
 /**
@@ -57,6 +87,22 @@ object QueryParser {
     data class Result(val filters: Filters, val leftover: String)
 
     private val genreWords: List<Pair<Regex, Genre>> = listOf(
+        // The specific ones first: "true crime" before "crime", "historia real" before "historia"
+        "true crime" to Genre.TRUE_CRIME,
+        "fatos? reais|historia real|baseado em fatos" to Genre.TRUE_STORY,
+        "super[- ]?hero|super[- ]?heroi" to Genre.SUPERHERO,
+        "\\banimes?\\b" to Genre.ANIME,
+        "stand-?up" to Genre.STANDUP,
+        "novelas?\\b" to Genre.SOAP,
+        "dorama|k-?drama|corean" to Genre.KOREAN,
+        "nacionais|nacional\\b|brasileir" to Genre.BRAZILIAN,
+        "\\bnatal\\b|natalin" to Genre.CHRISTMAS,
+        "viagem no tempo" to Genre.TIME_TRAVEL,
+        "distopi" to Genre.DYSTOPIA,
+        "\\bassaltos?\\b|roubo" to Genre.HEIST,
+        "espiona|\\bespia" to Genre.SPY,
+        "zumbi" to Genre.ZOMBIE,
+        "esporte|futebol" to Genre.SPORTS,
         "comedi|engracad|\\brir\\b|humor" to Genre.COMEDY,
         "\\bacao\\b|tiroteio|\\bluta" to Genre.ACTION,
         "aventura" to Genre.ADVENTURE,
@@ -66,7 +112,7 @@ object QueryParser {
         "romance|romantic|amor\\b" to Genre.ROMANCE,
         "ficcao|sci-?fi|espacial|espaco\\b" to Genre.SCIFI,
         "fantasia" to Genre.FANTASY,
-        "animacao|animad|desenho|anime" to Genre.ANIMATION,
+        "animacao|animad|desenho" to Genre.ANIMATION,
         "documentari" to Genre.DOCUMENTARY,
         "familia|criancas|infantil|kids" to Genre.FAMILY,
         "\\bcrime|policia|mafia" to Genre.CRIME,
@@ -96,7 +142,7 @@ object QueryParser {
         val genres = LinkedHashSet<Genre>()
         for ((regex, genre) in genreWords) if (consume(regex) != null) genres += genre
         filters = filters.copy(genres = genres)
-        if (genres.any { it.seriesOnly }) filters = filters.copy(type = MediaType.TV)
+        genres.firstNotNullOfOrNull { it.only }?.let { filters = filters.copy(type = it) }
 
         val providerIds = HashSet<Int>()
         for (provider in providers) {
