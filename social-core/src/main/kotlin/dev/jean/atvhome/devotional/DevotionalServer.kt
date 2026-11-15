@@ -45,7 +45,6 @@ class DevotionalServer(
         return buildJsonObject {
             put("today", now.toString())
             put("together", board.together(now))
-            Verses.of(now).let { v -> put("verse", buildJsonObject { put("text", v.text); put("ref", v.ref) }) }
             put("people", buildJsonArray {
                 board.standings(now).forEach { s ->
                     val days = board.daysOf(s.person.id)

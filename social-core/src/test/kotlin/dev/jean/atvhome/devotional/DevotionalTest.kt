@@ -54,13 +54,6 @@ class DevotionalTest {
         assertEquals(2, d.pending(today.plusDays(1)).size)
     }
 
-    @Test fun theVerseChangesEveryDayAndRepeatsOnlyAfterTheWholeList() {
-        val seen = (0L until Verses.all.size).map { Verses.of(today.plusDays(it)) }
-        assertEquals(Verses.all.size, seen.toSet().size)
-        assertEquals(Verses.of(today), Verses.of(today.plusDays(Verses.all.size.toLong())))
-        assertTrue(Verses.all.all { it.text.isNotBlank() && it.ref.isNotBlank() })
-    }
-
     @Test fun togetherNeedsTwoPeople() {
         val d = Devotional()
         val p = d.addPerson("Jean")!!

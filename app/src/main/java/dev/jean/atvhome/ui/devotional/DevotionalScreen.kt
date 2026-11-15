@@ -16,13 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.rounded.FormatQuote
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.text.font.FontFamily
-import androidx.compose.ui.text.font.FontStyle
-import androidx.compose.ui.unit.sp
-import dev.jean.atvhome.devotional.Verse
-import dev.jean.atvhome.devotional.Verses
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Celebration
@@ -126,7 +120,7 @@ fun DevotionalScreen() {
             }
             rows.forEachIndexed { i, (s, days) -> PersonCard(i, s, days, today, if (month) 30 else 7); Spacer(Modifier.height(12.dp)) }
         }
-        Column(Modifier.padding(start = 28.dp).width(308.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.width(280.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(30.dp))
             Box(Modifier.size(220.dp).background(Color.White, RoundedCornerShape(22.dp)).padding(14.dp), contentAlignment = Alignment.Center) {
                 val q: Bitmap? = qr
@@ -137,8 +131,6 @@ fun DevotionalScreen() {
             Text("Dar check-in no celular", style = Tv.Headline, color = Tv.Primary)
             Text(url ?: "Site fora do ar", style = Tv.Meta, color = Tv.Tertiary)
             Text("O celular precisa estar no mesmo Wi-Fi da TV", style = Tv.Caption, color = Tv.Tertiary)
-            Spacer(Modifier.height(22.dp))
-            VerseCard(Verses.of(today))
         }
     }
 }
@@ -195,21 +187,6 @@ private fun PersonCard(index: Int, s: Standing, days: Set<LocalDate>, today: Loc
                 ) { Text("$n", style = Tv.Caption, color = if (on) Color(0xFF2A1D00) else Tv.Tertiary) }
             }
         }
-    }
-}
-
-/** The day's verse: the same one the phones show. */
-@Composable
-private fun VerseCard(v: Verse) {
-    Column(
-        Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.03f))), RoundedCornerShape(16.dp))
-            .padding(horizontal = 18.dp, vertical = 14.dp),
-    ) {
-        Icon(Icons.Rounded.FormatQuote, null, Modifier.size(26.dp), tint = Gold)
-        Spacer(Modifier.height(4.dp))
-        Text(v.text, style = Tv.Headline.copy(fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic, fontSize = 16.sp, lineHeight = 22.sp), color = Tv.Primary)
-        Spacer(Modifier.height(8.dp))
-        Text(v.ref.uppercase(), style = Tv.Caption.copy(letterSpacing = 1.5.sp), color = Gold)
     }
 }
 

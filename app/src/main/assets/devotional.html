@@ -53,10 +53,6 @@ h1 .ico{color:var(--glow);margin-right:6px}
 .hint{text-align:center;color:#ffffffa6;font-size:14px;min-height:20px;margin:0 0 6px}
 .undo{display:block;margin:0 auto 14px;background:none;border:0;color:#ffffff90;text-decoration:underline;font-size:13px;padding:8px}
 
-.verse{margin:16px 0;padding:18px 18px 16px;border-radius:22px;background:linear-gradient(160deg,#ffffff14,#ffffff06);border:1px solid #ffffff14}
-.verse .q{color:var(--glow);width:22px;height:22px;display:block;margin-bottom:8px}
-.verse p{margin:0;font:italic 19px/1.45 Georgia,"Times New Roman",serif;color:#fff}
-.verse cite{display:block;margin-top:10px;font:600 12px/1 -apple-system,system-ui,sans-serif;letter-spacing:.12em;text-transform:uppercase;color:var(--glow);font-style:normal}
 
 .pair{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:18px;background:#ffffff0d;border:1px solid #ffffff12;margin-bottom:10px}
 .pair .ic{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#ffffff1a;font-size:21px;flex:none}
@@ -126,11 +122,6 @@ form button{padding:0 18px;border-radius:14px;border:0;background:#ffffff26;font
     <button class="undo" id="yday" hidden></button>
   </section>
 
-  <section class="verse" id="verse" hidden>
-    <span class="q" id="vq"></span>
-    <p id="vt"></p><cite id="vr"></cite>
-  </section>
-
   <div id="pairs"></div>
   <div id="rank"></div>
 
@@ -152,8 +143,7 @@ var PATHS = {
   heart: '<path fill="currentColor" d="M12 21s-8-5.2-8-11.2A4.6 4.6 0 0 1 12 7a4.6 4.6 0 0 1 8 2.8C20 15.8 12 21 12 21z"/>',
   cross: '<path fill="currentColor" d="M10 2.5h4V8h5.5v4H14v9.5h-4V12H4.5V8H10z"/>',
   book: '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="M12 6.5C10 5 7 4.6 4 5v13c3-.4 6 0 8 1.5 2-1.5 5-1.9 8-1.5V5c-3-.4-6 0-8 1.5zM12 6.5v13"/>',
-  spark: '<path fill="currentColor" d="M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3z"/>',
-  quote: '<path fill="currentColor" d="M4 18v-6c0-4 2-6.5 6-7v2.5C8 8 7.2 9 7.2 11H10v7H4zm10 0v-6c0-4 2-6.5 6-7v2.5c-2 .5-2.8 1.5-2.8 3.5H20v7h-6z"/>'
+  spark: '<path fill="currentColor" d="M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3z"/>'
 };
 var PALETTE = [['#f3cf72', '#e08f3c'], ['#9fd9c3', '#4aa88a'], ['#b9b3ff', '#7a6fe0'], ['#ffb3b3', '#e06c7c']];
 function $(i){ return document.getElementById(i); }
@@ -227,10 +217,6 @@ function draw(justDone){
     $('hint').textContent = message(m, justDone);
     big.setAttribute('aria-pressed', m.doneToday ? 'true' : 'false');
   }
-
-  // Palavra do dia
-  $('verse').hidden = !S.verse;
-  if (S.verse) { var q = $('vq'); q.textContent = ''; q.appendChild(ico('quote')); $('vt').textContent = S.verse.text; $('vr').textContent = S.verse.ref; }
 
   // The others and the couple
   var pairs = $('pairs'); pairs.textContent = '';
