@@ -14,7 +14,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.rounded.FormatQuote
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.unit.sp
+import dev.jean.atvhome.devotional.Verse
+import dev.jean.atvhome.devotional.Verses
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Celebration
@@ -118,7 +126,7 @@ fun DevotionalScreen() {
             }
             rows.forEachIndexed { i, (s, days) -> PersonCard(i, s, days, today, if (month) 30 else 7); Spacer(Modifier.height(12.dp)) }
         }
-        Column(Modifier.width(280.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.padding(start = 28.dp).width(308.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(30.dp))
             Box(Modifier.size(220.dp).background(Color.White, RoundedCornerShape(22.dp)).padding(14.dp), contentAlignment = Alignment.Center) {
                 val q: Bitmap? = qr
@@ -129,6 +137,8 @@ fun DevotionalScreen() {
             Text("Dar check-in no celular", style = Tv.Headline, color = Tv.Primary)
             Text(url ?: "Site fora do ar", style = Tv.Meta, color = Tv.Tertiary)
             Text("O celular precisa estar no mesmo Wi-Fi da TV", style = Tv.Caption, color = Tv.Tertiary)
+            Spacer(Modifier.height(22.dp))
+            VerseCard(Verses.of(today))
         }
     }
 }
@@ -143,10 +153,15 @@ private fun subtitle(people: List<Standing>): String = when {
 private fun PersonCard(index: Int, s: Standing, days: Set<LocalDate>, today: LocalDate, span: Int) {
     Column(Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            val ring = listOf(Gold, Silver).getOrNull(index)
+            val (c1, c2) = AVATARS[index % AVATARS.size]
             Box(
-                Modifier.size(32.dp).background(listOf(Gold, Silver, Bronze).getOrElse(index) { Color.White.copy(alpha = 0.2f) }, CircleShape),
+                Modifier.size(44.dp)
+                    .then(if (ring != null) Modifier.border(2.dp, ring, CircleShape) else Modifier)
+                    .padding(if (ring != null) 4.dp else 0.dp)
+                    .background(Brush.linearGradient(listOf(c1, c2)), CircleShape),
                 contentAlignment = Alignment.Center,
-            ) { Text("${index + 1}", style = Tv.Headline, color = if (index < 3) Color(0xFF1B1B1B) else Tv.Primary) }
+            ) { Text(s.person.name.take(1).uppercase(), style = Tv.Title, color = Color(0xFF1A1208)) }
             Spacer(Modifier.width(12.dp))
             Text(s.person.name, style = Tv.Title, color = Tv.Primary, modifier = Modifier.weight(1f))
             if (s.doneToday) Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = Done)
@@ -169,6 +184,36 @@ private fun PersonCard(index: Int, s: Standing, days: Set<LocalDate>, today: Loc
             }
         }
         Spacer(Modifier.height(8.dp))
-        Text("Melhor sequência ${s.best} · ${s.last30} dos últimos 30 dias · ${s.total} no total", style = Tv.Caption, color = Tv.Tertiary)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Melhor sequência ${s.best} · ${s.last30} dos últimos 30 dias · ${s.total} no total", style = Tv.Caption, color = Tv.Tertiary, modifier = Modifier.weight(1f))
+            // Milestones: lit gold once the best streak reaches them
+            listOf(7, 30, 100, 365).forEach { n ->
+                val on = s.best >= n
+                Spacer(Modifier.width(6.dp))
+                Box(
+                    Modifier.background(if (on) Gold else Color.White.copy(alpha = 0.08f), RoundedCornerShape(50)).padding(horizontal = 9.dp, vertical = 3.dp),
+                ) { Text("$n", style = Tv.Caption, color = if (on) Color(0xFF2A1D00) else Tv.Tertiary) }
+            }
+        }
     }
 }
+
+/** The day's verse: the same one the phones show. */
+@Composable
+private fun VerseCard(v: Verse) {
+    Column(
+        Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.03f))), RoundedCornerShape(16.dp))
+            .padding(horizontal = 18.dp, vertical = 14.dp),
+    ) {
+        Icon(Icons.Rounded.FormatQuote, null, Modifier.size(26.dp), tint = Gold)
+        Spacer(Modifier.height(4.dp))
+        Text(v.text, style = Tv.Headline.copy(fontFamily = FontFamily.Serif, fontStyle = FontStyle.Italic, fontSize = 16.sp, lineHeight = 22.sp), color = Tv.Primary)
+        Spacer(Modifier.height(8.dp))
+        Text(v.ref.uppercase(), style = Tv.Caption.copy(letterSpacing = 1.5.sp), color = Gold)
+    }
+}
+
+private val AVATARS = listOf(
+    Color(0xFFF3CF72) to Color(0xFFE08F3C), Color(0xFF9FD9C3) to Color(0xFF4AA88A),
+    Color(0xFFB9B3FF) to Color(0xFF7A6FE0), Color(0xFFFFB3B3) to Color(0xFFE06C7C),
+)
