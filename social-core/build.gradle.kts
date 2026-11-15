@@ -23,3 +23,12 @@ tasks.register<JavaExec>("devRoom") {
     workingDir = rootDir
     standardInput = System.`in`
 }
+
+// The devotional site on this computer, to try the phone page: ./gradlew :social-core:devDevotional
+tasks.register<JavaExec>("devDevotional") {
+    group = "application"
+    description = "Runs the real devotional site on 127.0.0.1:8767."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.jean.atvhome.devotional.DevDevotionalKt")
+    workingDir = rootDir
+}
