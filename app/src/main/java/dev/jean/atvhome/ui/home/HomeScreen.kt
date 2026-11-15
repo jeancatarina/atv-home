@@ -107,11 +107,9 @@ fun HomeScreen(
     inputTick: Int,
     onOpen: (Title) -> Unit,
     onSearch: () -> Unit,
-    onWhatToWatch: () -> Unit,
-    onExplore: () -> Unit,
-    onRoulette: () -> Unit,
-    onMatch: () -> Unit,
+    onWatch: () -> Unit,
     onSocial: () -> Unit,
+    onDevotional: () -> Unit,
     toast: (String) -> Unit,
     home: dev.jean.atvhome.data.SmartHome? = null,
     onCentral: () -> Unit = {},
@@ -256,11 +254,9 @@ fun HomeScreen(
                     providerPackage = heroProviderPackage,
                     vm = vm,
                     onSearch = onSearch,
-                    onWhatToWatch = onWhatToWatch,
-                    onExplore = onExplore,
-                    onRoulette = onRoulette,
-                    onMatch = onMatch,
+                    onWatch = onWatch,
                     onSocial = onSocial,
+                    onDevotional = onDevotional,
                     onCentral = onCentral,
                     soundState = if (!trailerOn) 0 else if (sound) 2 else 1,
                     onOpen = onOpen,
@@ -431,11 +427,9 @@ private fun HeroInfo(
     providerPackage: String?,
     vm: HomeViewModel,
     onSearch: () -> Unit,
-    onWhatToWatch: () -> Unit,
-    onExplore: () -> Unit,
-    onRoulette: () -> Unit,
-    onMatch: () -> Unit,
+    onWatch: () -> Unit,
     onSocial: () -> Unit,
+    onDevotional: () -> Unit,
     onCentral: () -> Unit,
     soundState: Int,
     onOpen: (Title) -> Unit,
@@ -451,11 +445,10 @@ private fun HeroInfo(
     Column(Modifier.fillMaxWidth().height(330.dp).padding(start = Tv.Edge, top = 20.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PillButton("Buscar", onSearch, icon = "⌕", onFocus = onButtonsFocus)
-            PillButton("O que assistir?", onWhatToWatch, icon = "✦", onFocus = onButtonsFocus)
-            PillButton("Roleta", onRoulette, icon = "🎲", onFocus = onButtonsFocus)
-            PillButton("Match", onMatch, icon = "♥", onFocus = onButtonsFocus)
+            // O que assistir?, Roleta, Match and Explorar live behind "Assistir" (WatchMenu): five buttons fit with the clock
+            PillButton("Assistir", onWatch, icon = "▶", onFocus = onButtonsFocus)
             PillButton("Social", onSocial, icon = "☻", onFocus = onButtonsFocus)
-            PillButton("Explorar", onExplore, onFocus = onButtonsFocus)
+            PillButton("Devocional", onDevotional, icon = "✝", onFocus = onButtonsFocus)
             // The Central (Sem anúncios, the TV inputs, Wi-Fi) is also on the MENU key, which Sony's
             // remotes do not have. Only the gear until focused: the clock sits at the end of this row
             PillButton("Central", onCentral, icon = "⚙", onFocus = onButtonsFocus, textWhenFocused = true)

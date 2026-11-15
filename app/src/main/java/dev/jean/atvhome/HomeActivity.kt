@@ -55,6 +55,8 @@ import dev.jean.atvhome.ui.discover.MatchScreen
 import dev.jean.atvhome.social.SocialViewModel
 import dev.jean.atvhome.social.ui.SocialScreen
 import dev.jean.atvhome.ui.home.HomeScreen
+import dev.jean.atvhome.ui.home.WatchMenu
+import dev.jean.atvhome.ui.devotional.DevotionalScreen
 import dev.jean.atvhome.ui.home.HouseScreen
 import dev.jean.atvhome.ui.panel.AdShieldScreen
 import dev.jean.atvhome.ui.panel.QuickPanel
@@ -69,6 +71,8 @@ sealed interface Screen {
     data object Roulette : Screen
     data object Match : Screen
     data object Social : Screen
+    data object Devotional : Screen
+    data object Watch : Screen
     data object AdSettings : Screen
     data object House : Screen
 }
@@ -101,6 +105,7 @@ class HomeActivity : ComponentActivity() {
                 val top = stack.lastOrNull()
                 val toast: (String) -> Unit = { Toast.makeText(this, it, Toast.LENGTH_SHORT).show() }
                 fun open(screen: Screen) { stack.add(screen) }
+                fun replaceTop(screen: Screen) { stack.removeAt(stack.lastIndex); stack.add(screen) }
                 val onOpen: (Title) -> Unit = { open(Screen.Detail(it)) }
 
                 BackHandler(enabled = panelOpen || stack.isNotEmpty()) {
@@ -129,11 +134,9 @@ class HomeActivity : ComponentActivity() {
                             inputTick = inputTick,
                             onOpen = onOpen,
                             onSearch = { open(Screen.Search) },
-                            onWhatToWatch = { open(Screen.WhatToWatch) },
-                            onExplore = { open(Screen.Explore) },
-                            onRoulette = { open(Screen.Roulette) },
-                            onMatch = { open(Screen.Match) },
+                            onWatch = { open(Screen.Watch) },
                             onSocial = { socialUsed = true; open(Screen.Social) },
+                            onDevotional = { open(Screen.Devotional) },
                             home = home,
                             onHouse = { open(Screen.House) },
                             onCentral = { panelOpen = true },
@@ -151,6 +154,14 @@ class HomeActivity : ComponentActivity() {
                                 Screen.Roulette -> RouletteScreen(vm, onOpen)
                                 Screen.Match -> MatchScreen(vm, onOpen, toast)
                                 Screen.Social -> SocialScreen(social, vm, toast)
+                                Screen.Devotional -> DevotionalScreen()
+                                // The menu steps aside for the screen it opens, so Back goes to Home
+                                Screen.Watch -> WatchMenu(
+                                    onWhatToWatch = { replaceTop(Screen.WhatToWatch) },
+                                    onRoulette = { replaceTop(Screen.Roulette) },
+                                    onMatch = { replaceTop(Screen.Match) },
+                                    onExplore = { replaceTop(Screen.Explore) },
+                                )
                                 Screen.AdSettings -> AdShieldScreen(toast, ::askCapture)
                                 Screen.House -> home?.let { HouseScreen(it, toast) }
                             }

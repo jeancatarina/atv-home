@@ -17,6 +17,10 @@
         android:name="android.permission.WRITE_SECURE_SETTINGS"
         tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Devocional: the site stays up with the TV in standby (devotional/DevotionalService) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Required by targetSdk 35 on Android 14+; ignored by the Android 10 TV -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
 
@@ -98,6 +102,19 @@
             android:exported="false"
             android:foregroundServiceType="mediaProjection"
             android:process=":guard" />
+        <service
+            android:name=".devotional.DevotionalService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Local network site for the couple's daily devotional check-in" />
+        </service>
+        <receiver android:name=".devotional.DevotionalBoot" android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
         <!-- ML Kit starts itself in every launcher start; the guard process starts it instead -->
         <provider
             android:name="com.google.mlkit.common.internal.MlKitInitProvider"

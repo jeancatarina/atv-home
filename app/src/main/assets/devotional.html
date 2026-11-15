@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#111">
+<title>Devocional</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:#111;color:#fff;font:16px/1.4 -apple-system,system-ui,sans-serif;padding:max(20px,env(safe-area-inset-top)) 18px 40px}
+main{max-width:460px;margin:0 auto}
+h1{font-size:24px;margin:0 0 4px}
+.sub{color:#ffffff88;margin:0 0 22px;font-size:14px}
+.who{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
+.who button{flex:1;min-width:90px;padding:12px;border-radius:14px;border:2px solid #ffffff22;background:#1c1c1e;color:#fff;font-size:16px}
+.who button.on{border-color:#fff;background:#2c2c2e}
+.big{width:100%;padding:22px;border-radius:20px;border:0;background:#fff;color:#000;font-size:20px;font-weight:700;margin-bottom:10px}
+.big.done{background:#2e7d4f;color:#fff}
+.big:disabled{opacity:.5}
+.link{background:none;border:0;color:#ffffff99;text-decoration:underline;font-size:14px;padding:6px 0;margin-bottom:18px}
+.card{background:#1c1c1e;border-radius:16px;padding:14px 16px;margin-bottom:10px}
+.row{display:flex;align-items:center;gap:10px}
+.pos{font-size:22px;width:30px}
+.name{font-weight:600;flex:1}
+.streak{font-weight:700}
+.dots{display:flex;gap:6px;margin-top:10px}
+.dot{flex:1;height:10px;border-radius:5px;background:#ffffff1f}
+.dot.y{background:#4cc27f}
+.meta{color:#ffffff88;font-size:12px;margin-top:8px}
+form{display:flex;gap:8px;margin-top:18px}
+input{flex:1;padding:12px;border-radius:12px;border:1px solid #ffffff33;background:#1c1c1e;color:#fff;font-size:16px}
+form button{padding:12px 16px;border-radius:12px;border:0;background:#ffffff22;color:#fff}
+.err{color:#f66;text-align:center;font-size:13px;min-height:18px}
+</style>
+</head>
+<body>
+<main>
+<h1>✝ Devocional</h1>
+<p class="sub" id="date"></p>
+<div class="who" id="who"></div>
+<button class="big" id="big" disabled>Escolha quem é você</button>
+<div style="text-align:center"><button class="link" id="yday" hidden></button></div>
+<div id="rank"></div>
+<form id="add" hidden><input id="nm" placeholder="Nome de quem vai participar" maxlength="20" autocomplete="off"><button>Adicionar</button></form>
+<p class="err" id="err"></p>
+</main>
+<script>
+var S=null, me=localStorage.getItem('eu');
+function $(i){return document.getElementById(i)}
+function post(p,b){return fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(function(r){if(!r.ok)throw 0;return r.json()})}
+function iso(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
+function load(){fetch('/state',{cache:'no-store'}).then(function(r){return r.json()}).then(function(s){S=s;draw();$('err').textContent=''}).catch(function(){$('err').textContent='Sem conexão com a TV. Está no mesmo Wi-Fi?'})}
+function mine(){return S&&S.people.filter(function(p){return p.id===me})[0]}
+function draw(){
+  var t=new Date(S.today+'T12:00:00');
+  $('date').textContent=t.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
+  $('who').innerHTML='';
+  S.people.forEach(function(p){var b=document.createElement('button');b.textContent=p.name;if(p.id===me)b.className='on';b.onclick=function(){me=p.id;localStorage.setItem('eu',me);draw()};$('who').appendChild(b)});
+  var m=mine(), big=$('big'), y=$('yday');
+  if(!m){big.disabled=true;big.className='big';big.textContent=S.people.length?'Escolha quem é você':'Adicione o primeiro nome abaixo';y.hidden=true}
+  else{big.disabled=false;big.className='big'+(m.doneToday?' done':'');big.textContent=m.doneToday?'✓ Feito hoje (toque para desfazer)':'Fiz o devocional hoje';
+    var yd=m.week[5];y.hidden=false;y.textContent=yd?'Ontem: feito ✓ (desfazer)':'Esqueci de marcar ontem'}
+  $('rank').innerHTML=S.people.map(function(p,i){
+    var dots=p.week.map(function(d){return '<div class="dot'+(d?' y':'')+'"></div>'}).join('');
+    return '<div class="card"><div class="row"><span class="pos">'+(['🥇','🥈','🥉'][i]||(i+1))+'</span><span class="name"></span><span class="streak">🔥 '+p.streak+'</span></div><div class="dots">'+dots+'</div><div class="meta">Melhor sequência '+p.best+' · '+p.last30+' de 30 dias · '+p.total+' no total</div></div>'}).join('');
+  [].forEach.call(document.querySelectorAll('.name'),function(e,i){e.textContent=S.people[i].name});
+  $('add').hidden=S.people.length>=4;
+}
+$('big').onclick=function(){var m=mine();if(!m)return;post('/checkin',{id:m.id,done:!m.doneToday}).then(function(s){S=s;draw()}).catch(function(){$('err').textContent='Não consegui salvar. Tente de novo.'})};
+$('yday').onclick=function(){var m=mine();if(!m)return;var d=new Date(S.today+'T12:00:00');d.setDate(d.getDate()-1);post('/checkin',{id:m.id,date:iso(d),done:!m.week[5]}).then(function(s){S=s;draw()}).catch(function(){$('err').textContent='Não consegui salvar.'})};
+$('add').onsubmit=function(e){e.preventDefault();var n=$('nm').value.trim();if(!n)return;post('/people',{name:n}).then(function(s){S=s;$('nm').value='';if(!me&&S.people.length===1){me=S.people[0].id;localStorage.setItem('eu',me)}draw()}).catch(function(){$('err').textContent='Esse nome já existe ou o limite foi atingido.'})};
+load();setInterval(load,15000);
+</script>
+</body>
+</html>

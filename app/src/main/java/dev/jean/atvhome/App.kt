@@ -47,6 +47,8 @@ class App : Application(), SingletonImageLoader.Factory {
         dev.jean.atvhome.data.AdShield.keepListed(this, dev.jean.atvhome.casa.HouseKeyService::class.java)
         // "Sem anúncios": the guard is listed only while another app plays sound
         dev.jean.atvhome.data.AdShield.watch(this)
+        // Devocional: the site on the home network, up with the app process even in standby
+        dev.jean.atvhome.devotional.DevotionalService.start(this)
         WorkManager.getInstance(this).enqueueUniquePeriodicWork(
             "daily",
             ExistingPeriodicWorkPolicy.KEEP,
