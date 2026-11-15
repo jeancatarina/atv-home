@@ -16,6 +16,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Casino
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Search
 import dev.jean.atvhome.ui.components.PillButton
 import dev.jean.atvhome.ui.components.requestWhenReady
 import dev.jean.atvhome.ui.theme.LocalAccent
@@ -33,10 +38,10 @@ fun WatchMenu(onWhatToWatch: () -> Unit, onRoulette: () -> Unit, onMatch: () -> 
         Text("Escolha como decidir o que ver", style = Tv.Meta, color = Tv.Tertiary)
         Spacer(Modifier.height(24.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            PillButton("O que assistir?", onWhatToWatch, Modifier.focusRequester(first), icon = "✦")
-            PillButton("Roleta", onRoulette, icon = "🎲")
-            PillButton("Match", onMatch, icon = "♥")
-            PillButton("Explorar", onExplore, icon = "⌕")
+            PillButton("O que assistir?", onWhatToWatch, Modifier.focusRequester(first), iconVector = Icons.Rounded.AutoAwesome)
+            PillButton("Roleta", onRoulette, iconVector = Icons.Rounded.Casino)
+            PillButton("Match", onMatch, iconVector = Icons.Rounded.Favorite)
+            PillButton("Explorar", onExplore, iconVector = Icons.Rounded.Search)
         }
         Spacer(Modifier.height(18.dp))
         Text("Match: cada um escolhe no celular. Roleta: três títulos sorteados. Explorar: filtros por app, gênero e nota.", style = Tv.Meta, color = Tv.Tertiary)

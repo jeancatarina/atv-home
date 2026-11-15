@@ -71,6 +71,12 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.tv.material3.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
 import coil3.compose.AsyncImage
 import coil3.request.transformations
 import coil3.request.crossfade
@@ -444,14 +450,14 @@ private fun HeroInfo(
     val myList by vm.myList.entries.collectAsState()
     Column(Modifier.fillMaxWidth().height(330.dp).padding(start = Tv.Edge, top = 20.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            PillButton("Buscar", onSearch, icon = "⌕", onFocus = onButtonsFocus)
+            PillButton("Buscar", onSearch, iconVector = Icons.Rounded.Search, onFocus = onButtonsFocus)
             // O que assistir?, Roleta, Match and Explorar live behind "Assistir" (WatchMenu): five buttons fit with the clock
-            PillButton("Assistir", onWatch, icon = "▶", onFocus = onButtonsFocus)
-            PillButton("Social", onSocial, icon = "☻", onFocus = onButtonsFocus)
-            PillButton("Devocional", onDevotional, icon = "✝", onFocus = onButtonsFocus)
+            PillButton("Assistir", onWatch, iconVector = Icons.Rounded.PlayArrow, onFocus = onButtonsFocus)
+            PillButton("Social", onSocial, iconVector = Icons.Rounded.Groups, onFocus = onButtonsFocus)
+            PillButton("Devocional", onDevotional, iconVector = Icons.Rounded.MenuBook, onFocus = onButtonsFocus)
             // The Central (Sem anúncios, the TV inputs, Wi-Fi) is also on the MENU key, which Sony's
             // remotes do not have. Only the gear until focused: the clock sits at the end of this row
-            PillButton("Central", onCentral, icon = "⚙", onFocus = onButtonsFocus, textWhenFocused = true)
+            PillButton("Central", onCentral, iconVector = Icons.Rounded.Settings, onFocus = onButtonsFocus, textWhenFocused = true)
         }
         Spacer(Modifier.height(30.dp))
         if (item == null) {

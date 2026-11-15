@@ -1,5 +1,6 @@
 package dev.jean.atvhome.ui.components
 
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -153,11 +154,13 @@ fun PillButton(
     onFocus: (Boolean) -> Unit = {},
     /** Only the [icon] until focused, then the [text] too: for a row with no room to spare. */
     textWhenFocused: Boolean = false,
+    /** A vector icon, drawn instead of the [icon] glyph. */
+    iconVector: androidx.compose.ui.graphics.vector.ImageVector? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val memory = LocalFocusMemory.current
     val requester = remember { FocusRequester() }
-    val showText = !textWhenFocused || focused || icon == null
+    val showText = !textWhenFocused || focused || (icon == null && iconVector == null)
     Surface(
         onClick = onClick,
         modifier = modifier.focusRequester(requester).onFocusChanged {
@@ -177,7 +180,10 @@ fun PillButton(
         glow = ClickableSurfaceDefaults.glow(),
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (icon != null) {
+            if (iconVector != null) {
+                androidx.tv.material3.Icon(iconVector, null, Modifier.size(18.dp), tint = if (focused) Color.Black else Color.White)
+                if (showText) Spacer(Modifier.width(7.dp))
+            } else if (icon != null) {
                 Text(icon, style = Tv.Headline, color = if (focused) Color.Black else Color.White)
                 if (showText) Spacer(Modifier.width(7.dp))
             }
@@ -291,7 +297,10 @@ fun PosterCard(
 /** A toggle chip for filters ("Comédia", "Netflix", "IMDb 7,5+"). */
 @Composable
 fun Chip(text: String, selected: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    PillButton(text = if (selected) "✓ $text" else text, onClick = onClick, selected = selected, modifier = modifier)
+    PillButton(
+        text = text, onClick = onClick, selected = selected, modifier = modifier,
+        iconVector = if (selected) androidx.compose.material.icons.Icons.Rounded.Check else null,
+    )
 }
 
 /** Round cast photo with the name and character. */

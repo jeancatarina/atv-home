@@ -15,6 +15,14 @@ body{margin:0;color:#fff;font:16px/1.45 -apple-system,system-ui,"Segoe UI",sans-
 main{max-width:460px;margin:0 auto}
 button{font:inherit;color:inherit;cursor:pointer}
 button:focus-visible,input:focus-visible{outline:3px solid #8fd6ff;outline-offset:2px}
+.ico{display:inline-block;width:1.15em;height:1.15em;vertical-align:-.2em;flex:none}
+.ico svg{width:100%;height:100%;display:block}
+.rank{display:inline-grid;place-items:center;width:28px;height:28px;border-radius:50%;background:#ffffff26;color:#fff;font-size:14px;font-weight:700}
+.rank.r0{background:#e2b53c;color:#2b2100}.rank.r1{background:#c4c8cf;color:#1d2024}.rank.r2{background:#c58355;color:#2a1608}
+.pair .ic{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#ffffff1a;font-size:22px}
+.pair.ok .ic{background:#2e7d4f}
+.fire{color:#ff9f43}.big .ico{margin-right:8px}
+.streak{display:inline-flex;align-items:center;gap:4px}
 .top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
 h1{font-size:26px;margin:0;letter-spacing:-.3px}
 .date{color:#ffffffa0;font-size:14px;margin:2px 0 20px}
@@ -33,7 +41,6 @@ h1{font-size:26px;margin:0;letter-spacing:-.3px}
 .hint{text-align:center;color:#ffffffa0;font-size:14px;min-height:20px;margin:10px 0 18px}
 
 .pair{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:#1c1c1e;margin-bottom:10px}
-.pair .ic{font-size:26px}
 .pair b{display:block}
 .pair span{color:#ffffffa0;font-size:14px}
 .pair.ok{background:#16301f}
@@ -63,14 +70,14 @@ form button{padding:0 16px;border-radius:12px;border:0;background:#ffffff26;font
 .conn.on{transform:none}
 
 .burst{position:fixed;left:50%;top:40%;pointer-events:none;z-index:9}
-.burst span{position:absolute;font-size:26px;animation:fly .9s ease-out forwards}
+.burst span{position:absolute;width:28px;height:28px;animation:fly .9s ease-out forwards}
 @keyframes fly{from{transform:translate(0,0) scale(.4);opacity:1}to{transform:translate(var(--x),var(--y)) scale(1.1);opacity:0}}
 @media (prefers-reduced-motion:reduce){.burst{display:none}.big,.who button{transition:none}}
 </style>
 </head>
 <body>
 <main>
-  <div class="top"><h1 id="hello">✝ Devocional</h1><button class="swap" id="swap" hidden>Trocar pessoa</button></div>
+  <div class="top"><h1 id="hello"></h1><button class="swap" id="swap" hidden>Trocar pessoa</button></div>
   <p class="date" id="date"></p>
 
   <section id="pick" hidden>
@@ -98,6 +105,15 @@ form button{padding:0 16px;border-radius:12px;border:0;background:#ffffff26;font
 <script>
 'use strict';
 var S = null, me = localStorage.getItem('eu'), busy = false;
+var PATHS = {
+  flame: '<path fill="currentColor" d="M12 2c.8 3.6 6 5.8 6 11.5A6 6 0 0 1 6 13.5c0-2.6 1.4-4 2.6-5.6.4 1.2 1 2 1.9 2.5C10.6 7 11 4.4 12 2z"/>',
+  check: '<path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/>',
+  clock: '<circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M12 7v5.2l3.2 2"/>',
+  heart: '<path fill="currentColor" d="M12 21s-8-5.2-8-11.2A4.6 4.6 0 0 1 12 7a4.6 4.6 0 0 1 8 2.8C20 15.8 12 21 12 21z"/>',
+  cross: '<path fill="currentColor" d="M10 2.5h4V8h5.5v4H14v9.5h-4V12H4.5V8H10z"/>',
+  spark: '<path fill="currentColor" d="M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3z"/>'
+};
+function ico(name, cls){ var e = el('span', 'ico' + (cls ? ' ' + cls : '')); e.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true">' + PATHS[name] + '</svg>'; return e; }
 function $(i){ return document.getElementById(i); }
 function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 function iso(d){ return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
@@ -119,8 +135,9 @@ function setMe(id){ me = id; if (id) localStorage.setItem('eu', id); else localS
 function celebrate(){
   if (navigator.vibrate) navigator.vibrate([30, 40, 30]);
   var b = el('div', 'burst'); document.body.appendChild(b);
-  ['🔥', '✨', '🙏', '💛', '🔥', '✨', '🙏', '💛'].forEach(function(c, i){
-    var s = el('span', null, c), a = (i / 8) * Math.PI * 2;
+  ['flame', 'spark', 'heart', 'spark', 'flame', 'spark', 'heart', 'spark'].forEach(function(c, i){
+    var s = ico(c, i % 4 === 0 ? 'fire' : ''), a = (i / 8) * Math.PI * 2;
+    s.style.color = ['#ff9f43', '#ffd166', '#ff7a90', '#9be7b5'][i % 4];
     s.style.setProperty('--x', Math.round(Math.cos(a) * 120) + 'px');
     s.style.setProperty('--y', Math.round(Math.sin(a) * 120 - 40) + 'px');
     b.appendChild(s);
@@ -130,9 +147,9 @@ function celebrate(){
 
 function message(p, justDone){
   var other = S.people.filter(function(o){ return o.id !== p.id; });
-  if (!p.doneToday) return other.some(function(o){ return o.doneToday; }) ? 'Já fizeram o devocional hoje. Falta você 💛' : 'Um momento com Deus antes de dormir também vale.';
-  if (p.streak >= 2) return 'Que bênção! ' + plural(p.streak, 'dia seguido', 'dias seguidos') + ' 🔥';
-  return justDone ? 'Que bênção! Primeiro dia da sequência 🔥' : 'Feito por hoje. Até amanhã!';
+  if (!p.doneToday) return other.some(function(o){ return o.doneToday; }) ? 'Já fizeram o devocional hoje. Falta você.' : 'Um momento com Deus antes de dormir também vale.';
+  if (p.streak >= 2) return 'Que bênção! ' + plural(p.streak, 'dia seguido', 'dias seguidos') + '.';
+  return justDone ? 'Que bênção! Primeiro dia da sequência.' : 'Feito por hoje. Até amanhã!';
 }
 
 function draw(justDone){
@@ -148,16 +165,18 @@ function draw(justDone){
   var who = $('who'); who.textContent = '';
   S.people.forEach(function(p){ var b = el('button', null, p.name); b.onclick = function(){ setMe(p.id); }; who.appendChild(b); });
   $('swap').hidden = !m;
-  $('hello').textContent = m ? 'Olá, ' + m.name : '✝ Devocional';
+  var h = $('hello'); h.textContent = '';
+  if (m) h.textContent = 'Olá, ' + m.name; else { h.appendChild(ico('cross')); h.appendChild(document.createTextNode(' Devocional')); }
 
   $('mine').hidden = !m;
   if (m) {
     var big = $('big'); big.textContent = '';
     big.className = 'big' + (m.doneToday ? ' done' : '');
-    big.appendChild(document.createTextNode(m.doneToday ? '✓ Devocional de hoje feito' : 'Fiz o devocional hoje'));
+    if (m.doneToday) big.appendChild(ico('check'));
+    big.appendChild(document.createTextNode(m.doneToday ? 'Devocional de hoje feito' : 'Fiz o devocional hoje'));
     big.appendChild(el('small', null, m.doneToday ? 'Toque aqui só se marcou sem querer' : 'Um toque e a TV já mostra'));
     var y = $('yday'), ydone = m.week[5];
-    y.hidden = false; y.textContent = ydone ? 'Ontem: feito ✓ (desfazer)' : 'Esqueci de marcar ontem';
+    y.hidden = false; y.textContent = ydone ? 'Ontem: feito (desfazer)' : 'Esqueci de marcar ontem';
     $('hint').textContent = message(m, justDone);
   }
 
@@ -165,13 +184,13 @@ function draw(justDone){
   var pairs = $('pairs'); pairs.textContent = '';
   if (m) S.people.filter(function(o){ return o.id !== m.id; }).forEach(function(o){
     var d = el('div', 'pair' + (o.doneToday ? ' ok' : ''));
-    d.appendChild(el('div', 'ic', o.doneToday ? '✅' : '⏳'));
+    var ic = el('div', 'ic'); ic.appendChild(ico(o.doneToday ? 'check' : 'clock')); d.appendChild(ic);
     var c = el('div'); c.appendChild(el('b', null, o.doneToday ? o.name + ' já fez hoje' : o.name + ' ainda não fez hoje'));
     c.appendChild(el('span', null, plural(o.streak, 'dia seguido', 'dias seguidos')));
     d.appendChild(c); pairs.appendChild(d);
   });
   if (S.people.length > 1 && S.together > 0) {
-    var tg = el('div', 'pair ok'); tg.appendChild(el('div', 'ic', '💞'));
+    var tg = el('div', 'pair ok'); var tic = el('div', 'ic'); tic.appendChild(ico('heart')); tg.appendChild(tic);
     var tc = el('div'); tc.appendChild(el('b', null, 'Vocês juntos: ' + plural(S.together, 'dia', 'dias')));
     tc.appendChild(el('span', null, 'Todos fizeram, dia após dia')); tg.appendChild(tc); pairs.appendChild(tg);
   }
@@ -181,9 +200,9 @@ function draw(justDone){
   S.people.forEach(function(p, i){
     var c = el('div', 'card' + (p.id === me ? ' me' : ''));
     var r = el('div', 'row');
-    r.appendChild(el('span', 'pos', ['🥇', '🥈', '🥉'][i] || String(i + 1)));
+    r.appendChild(el('span', 'pos', null)); r.lastChild.appendChild(el('span', 'rank' + (i < 3 ? ' r' + i : ''), String(i + 1)));
     r.appendChild(el('span', 'name', p.name));
-    r.appendChild(el('span', 'streak', '🔥 ' + p.streak));
+    var st = el('span', 'streak'); st.appendChild(ico('flame', 'fire')); st.appendChild(document.createTextNode(String(p.streak))); r.appendChild(st);
     c.appendChild(r);
     var w = el('div', 'week');
     p.week.forEach(function(d, k){

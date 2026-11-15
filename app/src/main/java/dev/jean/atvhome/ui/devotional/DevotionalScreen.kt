@@ -14,7 +14,14 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Celebration
+import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.LocalFireDepartment
+import androidx.tv.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -46,6 +53,10 @@ import java.time.format.TextStyle
 import java.util.Locale
 
 private val Done = Color(0xFF4CC27F)
+private val Flame = Color(0xFFFF9F43)
+private val Gold = Color(0xFFE2B53C)
+private val Silver = Color(0xFFC4C8CF)
+private val Bronze = Color(0xFFC58355)
 
 /** The devotional board on the TV: the ranking, the days each of us did it and the phone's address. */
 @Composable
@@ -66,7 +77,7 @@ fun DevotionalScreen() {
         val before = seen
         seen = now.keys
         val fresh = if (before == null) emptyList() else now.filterKeys { it !in before }.values.toList()
-        if (fresh.isNotEmpty()) { banner = fresh.joinToString(" e ") + " fez o devocional 🙌"; delay(8_000); banner = null }
+        if (fresh.isNotEmpty()) { banner = fresh.joinToString(" e ") + " fez o devocional"; delay(8_000); banner = null }
     }
     var month by remember { mutableStateOf(true) }
     val first = remember { FocusRequester() }
@@ -79,7 +90,11 @@ fun DevotionalScreen() {
             Text("Devocional", style = Tv.Title, color = Tv.Primary)
             Spacer(Modifier.height(3.dp))
             val shown = banner
-            if (shown != null) Text(shown, style = Tv.Headline, color = Done)
+            if (shown != null) Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Celebration, null, Modifier.size(18.dp), tint = Done)
+                Spacer(Modifier.width(6.dp))
+                Text(shown, style = Tv.Headline, color = Done)
+            }
             else Text(subtitle(rows.map { it.first }), style = Tv.Meta, color = Tv.Tertiary)
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -95,7 +110,7 @@ fun DevotionalScreen() {
                     Modifier.fillMaxWidth().background(Done.copy(alpha = 0.16f), RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text("💞", style = Tv.Title, color = Tv.Primary)
+                    Icon(Icons.Rounded.Favorite, null, Modifier.size(26.dp), tint = Done)
                     Spacer(Modifier.width(12.dp))
                     Text("Vocês juntos: ${if (together == 1) "1 dia" else "$together dias"} seguidos", style = Tv.Headline, color = Tv.Primary)
                 }
@@ -128,12 +143,19 @@ private fun subtitle(people: List<Standing>): String = when {
 private fun PersonCard(index: Int, s: Standing, days: Set<LocalDate>, today: LocalDate, span: Int) {
     Column(Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(listOf("🥇", "🥈", "🥉").getOrElse(index) { "${index + 1}º" }, style = Tv.Title, color = Tv.Primary)
+            Box(
+                Modifier.size(32.dp).background(listOf(Gold, Silver, Bronze).getOrElse(index) { Color.White.copy(alpha = 0.2f) }, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) { Text("${index + 1}", style = Tv.Headline, color = if (index < 3) Color(0xFF1B1B1B) else Tv.Primary) }
             Spacer(Modifier.width(12.dp))
             Text(s.person.name, style = Tv.Title, color = Tv.Primary, modifier = Modifier.weight(1f))
-            Text(if (s.doneToday) "✓ hoje" else "ainda não hoje", style = Tv.Meta, color = if (s.doneToday) Done else Tv.Tertiary)
+            if (s.doneToday) Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = Done)
+            if (s.doneToday) Spacer(Modifier.width(4.dp))
+            Text(if (s.doneToday) "hoje" else "ainda não hoje", style = Tv.Meta, color = if (s.doneToday) Done else Tv.Tertiary)
             Spacer(Modifier.width(16.dp))
-            Text("🔥 ${s.streak}", style = Tv.Title, color = Tv.Primary)
+            Icon(Icons.Rounded.LocalFireDepartment, null, Modifier.size(26.dp), tint = Flame)
+            Spacer(Modifier.width(2.dp))
+            Text("${s.streak}", style = Tv.Title, color = Tv.Primary)
         }
         Spacer(Modifier.height(10.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(if (span > 7) 4.dp else 8.dp)) {

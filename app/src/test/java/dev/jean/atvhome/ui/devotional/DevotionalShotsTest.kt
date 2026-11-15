@@ -7,6 +7,15 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import dev.jean.atvhome.devotional.DevotionalHost
 import dev.jean.atvhome.ui.home.WatchMenu
 import dev.jean.atvhome.ui.theme.InicioTheme
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Groups
+import androidx.compose.material.icons.rounded.MenuBook
+import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.ui.unit.dp
+import dev.jean.atvhome.ui.components.PillButton
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,6 +39,24 @@ class DevotionalShotsTest {
         (0L..4L).forEach { board.mark(ana.id, today.minusDays(it), today.minusDays(it), true) }
         rule.setContent { InicioTheme { DevotionalScreen() } }
         rule.onRoot().captureRoboImage("build/shots/devocional.png")
+    }
+
+    @Test fun topRow() {
+        rule.setContent {
+            InicioTheme {
+                androidx.compose.foundation.layout.Row(
+                    androidx.compose.ui.Modifier.padding(start = 48.dp, top = 20.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                ) {
+                    PillButton("Buscar", {}, iconVector = Icons.Rounded.Search)
+                    PillButton("Assistir", {}, iconVector = Icons.Rounded.PlayArrow)
+                    PillButton("Social", {}, iconVector = Icons.Rounded.Groups)
+                    PillButton("Devocional", {}, iconVector = Icons.Rounded.MenuBook)
+                    PillButton("Central", {}, iconVector = Icons.Rounded.Settings, textWhenFocused = true)
+                }
+            }
+        }
+        rule.onRoot().captureRoboImage("build/shots/topo.png")
     }
 
     @Test fun watchMenu() {
