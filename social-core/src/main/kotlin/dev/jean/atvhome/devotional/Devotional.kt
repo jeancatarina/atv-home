@@ -15,6 +15,10 @@ data class DevotionalData(
     val people: List<Person> = emptyList(),
     /** person id -> ISO dates (yyyy-MM-dd) done. */
     val done: Map<String, Set<String>> = emptyMap(),
+    /** Days together -> what the couple gives themselves when they reach it. */
+    val rewards: Map<String, String> = emptyMap(),
+    /** Rewards reached and not yet enjoyed. */
+    val unlocked: Set<String> = emptySet(),
 )
 
 data class Standing(
@@ -24,6 +28,8 @@ data class Standing(
     val total: Int,
     val last30: Int,
     val doneToday: Boolean,
+    /** The forgiven day inside the current streak, if any. */
+    val grace: LocalDate? = null,
 )
 
 /**
@@ -55,7 +61,7 @@ class Devotional(
     @Synchronized
     fun removePerson(id: String) {
         if (data.people.none { it.id == id }) return
-        change(DevotionalData(data.people.filter { it.id != id }, data.done - id))
+        change(data.copy(people = data.people.filter { it.id != id }, done = data.done - id))
     }
 
     /** Marks or unmarks [date]. Only today and the two days before are allowed. Returns false when refused. */
@@ -67,7 +73,49 @@ class Devotional(
         val key = date.toString()
         val next = if (done) days + key else days - key
         if (next != days) change(data.copy(done = data.done + (id to next)))
+        if (done && date == today) unlockReward(today)
         return true
+    }
+
+    /** Everyone did it together: marks [today] for the whole house. */
+    @Synchronized
+    fun markAll(today: LocalDate) {
+        data.people.forEach { mark(it.id, today, today, true) }
+    }
+
+    /** Sets (or, with a blank [text], clears) the reward for reaching [days] days together. */
+    @Synchronized
+    fun setReward(days: Int, text: String): Boolean {
+        if (days !in REWARD_DAYS) return false
+        val clean = text.trim().take(REWARD_MAX)
+        val key = days.toString()
+        change(data.copy(rewards = if (clean.isEmpty()) data.rewards - key else data.rewards + (key to clean), unlocked = if (clean.isEmpty()) data.unlocked - key else data.unlocked))
+        return true
+    }
+
+    /** The reward was enjoyed: it goes away, and the couple can set a new one for that mark. */
+    @Synchronized
+    fun claimReward(days: Int) {
+        val key = days.toString()
+        if (key in data.rewards || key in data.unlocked) change(data.copy(rewards = data.rewards - key, unlocked = data.unlocked - key))
+    }
+
+    @Synchronized
+    fun unlockedRewards(): List<Pair<Int, String>> =
+        data.unlocked.mapNotNull { k -> data.rewards[k]?.let { k.toInt() to it } }.sortedBy { it.first }
+
+    /** The nearest reward still ahead of the couple's current run, and how many days together are left for it. */
+    @Synchronized
+    fun nextReward(today: LocalDate): Triple<Int, String, Int>? {
+        val t = together(today)
+        return data.rewards.mapNotNull { (k, v) -> k.toIntOrNull()?.takeIf { it > t && k !in data.unlocked }?.let { Triple(it, v, it - t) } }.minByOrNull { it.first }
+    }
+
+    /** A reward unlocks on the day the couple's run lands exactly on its mark. */
+    private fun unlockReward(today: LocalDate) {
+        val t = together(today)
+        val key = t.toString()
+        if (key in data.rewards && key !in data.unlocked) change(data.copy(unlocked = data.unlocked + key))
     }
 
     @Synchronized
@@ -88,12 +136,8 @@ class Devotional(
     @Synchronized
     fun together(today: LocalDate): Int {
         if (data.people.size < 2) return 0
-        val all = data.people.map { daysOf(it.id) }
-        fun everyone(d: LocalDate) = all.all { d in it }
-        var cursor = if (everyone(today)) today else today.minusDays(1)
-        var n = 0
-        while (everyone(cursor)) { n++; cursor = cursor.minusDays(1) }
-        return n
+        val shared = data.people.map { daysOf(it.id) }.reduce { a, b -> a intersect b }
+        return Game.run(shared, today).length
     }
 
     /** Points of one person: each day counts more inside a run, and days everyone did earn a bonus. */
@@ -150,22 +194,11 @@ class Devotional(
 
     private fun standing(p: Person, today: LocalDate): Standing {
         val days = daysOf(p.id)
-        var cursor = if (today in days) today else today.minusDays(1)
-        var streak = 0
-        while (cursor in days) { streak++; cursor = cursor.minusDays(1) }
-        return Standing(p, streak, best(days), days.size, days.count { !it.isBefore(today.minusDays(29)) && !it.isAfter(today) }, today in days)
+        val run = Game.run(days, today)
+        return Standing(p, run.length, best(days), days.size, days.count { !it.isBefore(today.minusDays(29)) && !it.isAfter(today) }, today in days, run.graceDays.firstOrNull())
     }
 
-    private fun best(days: Set<LocalDate>): Int {
-        var best = 0
-        for (d in days) {
-            if (d.minusDays(1) in days) continue
-            var n = 0; var c = d
-            while (c in days) { n++; c = c.plusDays(1) }
-            best = maxOf(best, n)
-        }
-        return best
-    }
+    private fun best(days: Set<LocalDate>): Int = days.maxOfOrNull { Game.run(days, it).length } ?: 0
 
     private fun change(next: DevotionalData) { data = next; onChange(next) }
 
@@ -173,6 +206,9 @@ class Devotional(
         const val MAX_PEOPLE = 4
         const val NAME_MAX = 20
         const val GRACE_DAYS = 2L
+        /** The marks of days together that can carry a reward. */
+        val REWARD_DAYS = listOf(7, 30, 100, 365)
+        const val REWARD_MAX = 40
         const val NUDGE_COOLDOWN_MS = 10 * 60_000L
         const val NUDGE_LIFETIME_MS = 3 * 3_600_000L
     }

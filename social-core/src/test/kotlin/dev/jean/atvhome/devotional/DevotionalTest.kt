@@ -27,8 +27,11 @@ class DevotionalTest {
     @Test fun aMissedDayBreaksTheStreak() {
         val (d, p) = board()
         d.mark(p.first.id, today.minusDays(2), today, true)
-        assertEquals(0, d.standings(today).first { it.person.name == "Jean" }.streak)
-        assertEquals(1, d.standings(today).first { it.person.name == "Jean" }.best)
+        // Only the day before yesterday: yesterday is forgiven, but that is the whole run
+        assertEquals(1, d.standings(today).first { it.person.name == "Jean" }.streak)
+        // Two days of silence in a row break it
+        val old = Game.run(setOf(today.minusDays(3)), today)
+        assertEquals(0, old.length)
     }
 
     @Test fun togetherCountsOnlyDaysEveryoneDidIt() {
@@ -82,6 +85,48 @@ class DevotionalTest {
         assertEquals(0, Game.tree(39).index)
         assertEquals(1, Game.tree(40).index)
         assertEquals(5, Game.tree(99999).index)
+    }
+
+    @Test fun oneMissedDayPerWeekIsForgiven() {
+        // Done 5, 4, 3 days ago, missed 2 days ago, done yesterday and today: the gap is forgiven
+        val days = setOf(5L, 4L, 3L, 1L, 0L).map { today.minusDays(it) }.toSet()
+        val run = Game.run(days, today)
+        assertEquals(5, run.length)
+        assertEquals(listOf(today.minusDays(2)), run.graceDays)
+    }
+
+    @Test fun twoMissedDaysInARowOrTwoInAWeekBreakTheRun() {
+        val twoInARow = setOf(6L, 5L, 4L, 1L, 0L).map { today.minusDays(it) }.toSet()
+        assertEquals(2, Game.run(twoInARow, today).length)
+        // Gaps 2 and 4 days ago are less than a week apart: the second one is not forgiven
+        val twoInAWeek = setOf(7L, 6L, 5L, 3L, 1L, 0L).map { today.minusDays(it) }.toSet()
+        assertEquals(3, Game.run(twoInAWeek, today).length)
+        // Gaps 2 and 9 days ago are a week apart: both are forgiven
+        val spaced = setOf(11L, 10L, 8L, 7L, 6L, 5L, 4L, 3L, 1L, 0L).map { today.minusDays(it) }.toSet()
+        assertEquals(10, Game.run(spaced, today).length)
+    }
+
+    @Test fun doingItTogetherMarksEveryoneAndUnlocksTheRewardOnTheMark() {
+        val e = Devotional()
+        assertFalse(e.setReward(8, "x"))
+        e.addPerson("A"); e.addPerson("B"); e.setReward(7, "Jantar fora")
+        assertEquals(7, e.nextReward(today)?.first)
+        // Six days together do not unlock it; the seventh does
+        (6L downTo 1L).forEach { back -> e.snapshot().people.forEach { e.mark(it.id, today.minusDays(back), today.minusDays(back), true) } }
+        assertTrue(e.unlockedRewards().isEmpty())
+        e.markAll(today)
+        assertEquals(listOf(7 to "Jantar fora"), e.unlockedRewards())
+        assertNull(e.nextReward(today))
+        e.claimReward(7)
+        assertTrue(e.unlockedRewards().isEmpty())
+        assertTrue(e.snapshot().rewards.isEmpty())
+    }
+
+    @Test fun aBlankRewardClearsIt() {
+        val d = Devotional()
+        d.setReward(30, "Cinema"); assertEquals("Cinema", d.snapshot().rewards["30"])
+        d.setReward(30, "  "); assertTrue(d.snapshot().rewards.isEmpty())
+        d.setReward(30, "x".repeat(100)); assertEquals(Devotional.REWARD_MAX, d.snapshot().rewards["30"]!!.length)
     }
 
     @Test fun theWeekDuelHasAtMostOneLeader() {
@@ -194,6 +239,12 @@ class DevotionalTest {
             val (code2, body2) = post("/nudge", """{"from":"${ids[0]}","to":"${ids[1]}"}""")
             assertEquals(200, code2)
             assertTrue(body2.contains("\"nudgedBy\":\"Ana\""))
+            // "Fizemos juntos" marks the whole house, and a reward is stored, shown and refused for an unknown mark
+            val (c3, b3) = post("/together", "{}")
+            assertEquals(200, c3)
+            assertFalse(b3.contains("\"doneToday\":false"))
+            assertTrue(post("/reward", """{"days":7,"text":"Jantar"}""").second.contains("\"nextReward\""))
+            assertEquals(400, post("/reward", """{"days":8,"text":"x"}""").first)
             // Same person, or someone who already did today, cannot be called
             assertEquals(400, post("/nudge", """{"from":"${ids[1]}","to":"${ids[1]}"}""").first)
             assertEquals(400, post("/nudge", """{"from":"${ids[1]}","to":"${ids[0]}"}""").first)

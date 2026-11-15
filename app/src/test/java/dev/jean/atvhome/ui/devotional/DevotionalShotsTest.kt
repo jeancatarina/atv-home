@@ -40,7 +40,8 @@ class DevotionalShotsTest {
         val ana = board.addPerson("Ana")!!
         (0L..20L).filter { it % 7 != 3L }.forEach { board.mark(jean.id, today.minusDays(it), today.minusDays(it), true) }
         (1L..4L).forEach { board.mark(ana.id, today.minusDays(it), today, true) }
-        board.nudge(jean.id, ana.id, today, System.currentTimeMillis())
+        board.setReward(7, "Jantar a dois")
+        board.setReward(30, "Fim de semana fora")
         rule.setContent { InicioTheme { DevotionalScreen() } }
         rule.onRoot().captureRoboImage("build/shots/devocional.png")
     }

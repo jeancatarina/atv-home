@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CardGiftcard
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Notifications
 import androidx.compose.runtime.Composable
@@ -92,6 +93,8 @@ fun DevotionalScreen() {
     }
     val together = remember(version, today) { board.together(today) }
     val tree = remember(version) { Game.tree(board.couplePoints()) }
+    val unlocked = remember(version) { board.unlockedRewards() }
+    val nextReward = remember(version, today) { board.nextReward(today) }
     // Who was reminded and has not answered: one quiet line under the date
     val calls = remember(version, today, clock) {
         rows.mapNotNull { l -> board.nudgedBy(l.s.person.id, today, clock)?.let { "${it.name} lembrou ${l.s.person.name}" } }
@@ -104,7 +107,7 @@ fun DevotionalScreen() {
         val before = seen
         seen = now.keys
         val fresh = if (before == null) emptyList() else now.filterKeys { it !in before }.values.toList()
-        if (fresh.isNotEmpty()) { banner = fresh.joinToString(" e ") + " registrou o devocional"; delay(8_000); banner = null }
+        if (fresh.isNotEmpty()) { banner = fresh.joinToString(" e ") + (if (fresh.size > 1) " registraram o devocional" else " registrou o devocional"); delay(8_000); banner = null }
     }
     var month by remember { mutableStateOf(true) }
     val first = remember { FocusRequester() }
@@ -118,9 +121,10 @@ fun DevotionalScreen() {
             Spacer(Modifier.height(6.dp))
             Text(dateLine(today), style = TextStyle(fontFamily = Serif, fontWeight = FontWeight.Medium, fontSize = 30.sp, lineHeight = 34.sp), color = Ink)
             Spacer(Modifier.height(6.dp))
-            val note = banner ?: calls.firstOrNull()
+            val prize = unlocked.firstOrNull()?.let { "Prêmio liberado: ${it.second}" }
+            val note = banner ?: calls.firstOrNull() ?: prize
             if (note != null) Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(if (banner != null) Icons.Rounded.Check else Icons.Rounded.Notifications, null, Modifier.size(15.dp), tint = Brass)
+                Icon(if (banner != null) Icons.Rounded.Check else if (calls.isEmpty()) Icons.Rounded.CardGiftcard else Icons.Rounded.Notifications, null, Modifier.size(15.dp), tint = Brass)
                 Spacer(Modifier.width(6.dp))
                 Text(note, style = Tv.Meta, color = Brass)
             } else Text(subtitle(rows.map { it.s }), style = Tv.Meta, color = Mute)
@@ -145,8 +149,8 @@ fun DevotionalScreen() {
             }
         }
         Column(Modifier.padding(start = 40.dp).width(264.dp), horizontalAlignment = Alignment.Start) {
-            Spacer(Modifier.height(30.dp))
-            Box(Modifier.size(188.dp).background(Color.White, RoundedCornerShape(10.dp)).padding(12.dp), contentAlignment = Alignment.Center) {
+            Spacer(Modifier.height(16.dp))
+            Box(Modifier.size(152.dp).background(Color.White, RoundedCornerShape(10.dp)).padding(12.dp), contentAlignment = Alignment.Center) {
                 val q: Bitmap? = qr
                 if (q != null) Image(q.asImageBitmap(), "QR code", filterQuality = FilterQuality.None, modifier = Modifier.fillMaxSize())
                 else Text("…", style = Tv.Title, color = Color.Black)
@@ -156,8 +160,16 @@ fun DevotionalScreen() {
             Spacer(Modifier.height(4.dp))
             Text(url ?: "Site fora do ar", style = Tv.Meta, color = Mute)
             Text("No mesmo Wi-Fi da TV", style = Tv.Caption, color = Faint)
-            Spacer(Modifier.height(28.dp))
+            Spacer(Modifier.height(20.dp))
             TreeBlock(tree)
+            if (nextReward != null) {
+                Spacer(Modifier.height(16.dp))
+                Text("PRÓXIMO PRÊMIO", style = Label, color = Brass)
+                Spacer(Modifier.height(6.dp))
+                Text(nextReward.second, style = TextStyle(fontFamily = Serif, fontSize = 18.sp, lineHeight = 22.sp), color = Ink)
+                Spacer(Modifier.height(2.dp))
+                Text(if (nextReward.third == 1) "falta 1 dia juntos" else "faltam ${nextReward.third} dias juntos", style = Tv.Caption, color = Faint)
+            }
         }
     }
 }
@@ -200,7 +212,7 @@ private fun PersonRow(line: Line, today: LocalDate, span: Int) {
                 Text(s.person.name, style = TextStyle(fontFamily = Serif, fontWeight = FontWeight.Medium, fontSize = 22.sp, lineHeight = 26.sp), color = Ink)
                 Row {
                     Text(if (s.doneToday) "Registrado hoje" else "Ainda não hoje", style = Tv.Meta, color = if (s.doneToday) Brass else Mute)
-                    Text("  ·  ${Game.personLevel(line.points).name}  ·  ${if (line.points == 1) "1 ponto" else "${line.points} pontos"}", style = Tv.Meta, color = Faint)
+                    Text("  ·  ${Game.personLevel(line.points).name}  ·  ${if (line.points == 1) "1 ponto" else "${line.points} pontos"}" + (if (s.grace != null) "  ·  dia de graça usado" else ""), style = Tv.Meta, color = Faint)
                 }
             }
             Column(horizontalAlignment = Alignment.End) {
@@ -234,7 +246,7 @@ private fun TreeBlock(tree: Game.Step) {
     Text("ÁRVORE DE VOCÊS", style = Label, color = Brass)
     Spacer(Modifier.height(8.dp))
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Canvas(Modifier.size(92.dp)) {
+        Canvas(Modifier.size(76.dp)) {
             val k = size.width / 120f
             TreeArt.stage(tree.index).forEach { sh ->
                 val c = Color(0xFF000000L or sh.color.toLong())

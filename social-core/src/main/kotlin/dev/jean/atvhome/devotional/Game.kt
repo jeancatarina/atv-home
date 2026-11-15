@@ -1,6 +1,7 @@
 package dev.jean.atvhome.devotional
 
 import java.time.LocalDate
+import java.time.temporal.ChronoUnit
 
 /** Points, levels and the couple's tree: the playful side of the board. Pure rules, no clock and no disk. */
 object Game {
@@ -38,6 +39,30 @@ object Game {
     private fun step(points: Int, limits: List<Int>, names: List<String>): Step {
         val i = limits.indexOfLast { points >= it }.coerceAtLeast(0)
         return Step(i, names[i], points, limits[i], limits.getOrNull(i + 1))
+    }
+
+    /** At least this many days between two forgiven days: one "dia de graça" a week, so a miss never breaks a long run. */
+    private const val GRACE_SPACING = 7L
+
+    /** A streak: [length] days done, and the forgiven [graceDays] inside it, most recent first. */
+    data class Run(val length: Int, val graceDays: List<LocalDate>)
+
+    /**
+     * The run of days ending today (or yesterday, while today is still open). A single missed day is
+     * forgiven when the day before it was done and no other day was forgiven in the previous week.
+     */
+    fun run(days: Set<LocalDate>, today: LocalDate): Run {
+        var cursor = if (today in days) today else today.minusDays(1)
+        var n = 0
+        var lastGap: LocalDate? = null
+        val gaps = ArrayList<LocalDate>()
+        while (true) {
+            if (cursor in days) { n++; cursor = cursor.minusDays(1); continue }
+            val before = cursor.minusDays(1)
+            val spaced = lastGap == null || ChronoUnit.DAYS.between(cursor, lastGap) >= GRACE_SPACING
+            if (before in days && spaced) { gaps += cursor; lastGap = cursor; cursor = before } else break
+        }
+        return Run(n, gaps)
     }
 
     /** Monday to [today]: the week the duel is played in. */

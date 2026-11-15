@@ -16,6 +16,7 @@
   --sans:-apple-system,system-ui,"Segoe UI",Roboto,sans-serif;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+[hidden]{display:none!important}
 html{background:var(--bg)}
 body{margin:0;color:var(--ink);font:16px/1.5 var(--sans);-webkit-font-smoothing:antialiased;
   padding:max(28px,env(safe-area-inset-top)) 24px max(48px,env(safe-area-inset-bottom))}
@@ -82,6 +83,14 @@ hr{border:0;border-top:1px solid var(--line);margin:26px 0 0}
 .call{display:inline-flex;align-items:center;gap:6px;color:var(--brass);font-size:13px;font-weight:600;letter-spacing:.02em;padding:6px 0}
 .call:active{opacity:.6}
 
+.both{display:block;margin:16px auto 0;padding:11px 22px;border:1px solid var(--brass);border-radius:30px;color:var(--brass);font-size:13px;font-weight:600;letter-spacing:.04em}
+.both:active{opacity:.6}
+.nextr{margin:18px 0 0;color:var(--mute);font-size:13px}
+.nextr b{color:var(--ink);font-weight:500}
+.note .call{margin-left:auto}
+.rwrow{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:10px 0;border-bottom:1px solid var(--line);font-size:14px;color:var(--mute)}
+.rwrow input{flex:1;text-align:right;padding:4px 0;font-size:15px;color:var(--ink)}
+.sect{margin:22px 0 4px}
 /* the pair */
 .duo{display:grid;grid-template-columns:1fr 1fr;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .duo div{padding:18px 0}
@@ -137,12 +146,14 @@ form button{color:var(--brass);font-weight:600;font-size:14px;padding:0 2px}
       <p class="cap" id="cap"></p>
     </div>
     <p class="hint" id="hint" aria-live="polite"></p>
+    <button class="both" id="tog" hidden>Fizemos juntos</button>
     <button class="link undo" id="yday" hidden></button>
   </section>
 
   <hr>
   <div id="people"></div>
   <div class="duo" id="duo" hidden></div>
+  <div id="rewards"></div>
 
   <hr>
   <section class="tree" id="tree" hidden>
@@ -159,6 +170,7 @@ form button{color:var(--brass);font-weight:600;font-size:14px;padding:0 2px}
     <summary>Ajustes</summary>
     <form id="add"><input id="nm" placeholder="Adicionar pessoa" maxlength="20" autocomplete="off" aria-label="Nome"><button>Adicionar</button></form>
     <div id="rm"></div>
+    <div id="rw"></div>
   </details>
   <p class="err" id="err" role="alert"></p>
 </main>
@@ -170,6 +182,7 @@ var MARKS = [7, 30, 100, 365];
 var PATHS = {
   check: '<path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/>',
   book: '<path fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round" d="M12 6.5C10 5 7 4.6 4 5v13c3-.4 6 0 8 1.5 2-1.5 5-1.9 8-1.5V5c-3-.4-6 0-8 1.5zM12 6.5v13"/>',
+  gift: '<path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" d="M4 9h16v4H4zM5 13h14v7H5zM12 9v11M12 9c-2-4-5-4-5-2s3 2 5 2zm0 0c2-4 5-4 5-2s-3 2-5 2z"/>',
   bell: '<path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 1.5h-15L6 16.5zM10 20.5a2 2 0 0 0 4 0"/>'
 };
 function $(i){ return document.getElementById(i); }
@@ -229,6 +242,7 @@ function draw(justDone){
     var core = $('core'); core.textContent = ''; core.appendChild(ico(m.doneToday ? 'check' : 'book'));
     $('cap').textContent = m.doneToday ? 'Registrado hoje' : 'Registrar hoje';
     $('hint').textContent = message(m, justDone);
+    $('tog').hidden = !(S.people.length > 1 && S.people.some(function(o){ return !o.doneToday; }));
     var y = $('yday'), ydone = m.week[5];
     y.hidden = false; y.textContent = ydone ? 'Ontem registrado. Desfazer' : 'Esqueci de registrar ontem';
   }
@@ -241,7 +255,7 @@ function draw(justDone){
     var w = el('div', 'who2'); w.appendChild(el('div', 'nm', p.name));
     var sub = el('div', 'sub');
     if (p.doneToday) { sub.appendChild(el('span', 'ok', 'Registrado hoje')); } else sub.appendChild(document.createTextNode('Ainda não hoje'));
-    sub.appendChild(document.createTextNode('  ·  ' + p.level));
+    sub.appendChild(document.createTextNode('  ·  ' + p.level + (p.grace ? '  ·  dia de graça usado' : '')));
     w.appendChild(sub); head.appendChild(w);
     var st = el('div', 'streak'); st.appendChild(el('div', 'num', String(p.streak))); st.appendChild(el('small', null, p.streak === 1 ? 'dia' : 'dias')); head.appendChild(st);
     row.appendChild(head);
@@ -278,6 +292,19 @@ function draw(justDone){
     var b2 = el('div'); b2.appendChild(el('div', 'num', lead ? lead.name : 'Empate')); b2.appendChild(el('small', null, 'na frente esta semana')); duo.appendChild(b2);
   } else duo.hidden = true;
 
+  // What the couple promised themselves
+  var rwd = $('rewards'); rwd.textContent = '';
+  (S.unlocked || []).forEach(function(u){
+    var n = el('div', 'note'); n.appendChild(ico('gift'));
+    var c = el('div'); c.appendChild(el('b', null, 'Prêmio liberado: ' + u.text)); c.appendChild(el('span', null, 'Vocês chegaram a ' + plural(u.days, 'dia', 'dias') + ' juntos.')); n.appendChild(c);
+    var b = el('button', 'call', 'Resgatei'); b.onclick = function(){ api('/reward', { claim: u.days }).then(function(s2){ S = s2; draw(); }).catch(function(){ $('err').textContent = 'Não consegui falar com a TV.'; }); };
+    n.appendChild(b); rwd.appendChild(n);
+  });
+  if (S.nextReward && S.people.length > 1) {
+    var nr = el('p', 'nextr'); nr.appendChild(document.createTextNode('Próximo prêmio: ')); nr.appendChild(el('b', null, S.nextReward.text));
+    nr.appendChild(document.createTextNode('. Faltam ' + plural(S.nextReward.left, 'dia', 'dias') + ' juntos.')); rwd.appendChild(nr);
+  }
+
   // The tree
   var tr = $('tree'); tr.hidden = !(S.tree && S.people.length);
   if (S.tree) {
@@ -288,6 +315,20 @@ function draw(justDone){
     $('tnext').textContent = S.tree.next ? plural(S.tree.points, 'ponto', 'pontos') + '  ·  faltam ' + (S.tree.next - S.tree.points) : plural(S.tree.points, 'ponto', 'pontos');
   }
 
+  // Rewards are set here; the fields are left alone while one is being typed in
+  var rws = $('rw');
+  if (!(document.activeElement && rws.contains(document.activeElement))) {
+    rws.textContent = '';
+    if (S.people.length > 1) {
+      rws.appendChild(el('div', 'eyebrow sect', 'Prêmios do casal'));
+      S.rewardDays.forEach(function(k){
+        var row = el('label', 'rwrow'); row.appendChild(el('span', null, 'Com ' + k + ' dias juntos'));
+        var inp = el('input'); inp.maxLength = 40; inp.placeholder = 'Ex.: jantar a dois'; inp.value = S.rewards[k] || ''; inp.setAttribute('aria-label', 'Prêmio de ' + k + ' dias');
+        inp.onchange = function(){ api('/reward', { days: k, text: inp.value }).then(function(s2){ S = s2; }).catch(function(){ $('err').textContent = 'Não consegui salvar o prêmio.'; }); };
+        row.appendChild(inp); rws.appendChild(row);
+      });
+    }
+  }
   $('add').hidden = S.people.length >= 4;
   if (!S.people.length) $('more').open = true;
   var rm = $('rm'); rm.textContent = '';
@@ -327,6 +368,10 @@ $('yday').onclick = function(){
   var m = person(me); if (!m) return;
   var d = noon(S.today); d.setDate(d.getDate() - 1);
   toggle(iso(d), !m.week[5], 'yday').catch(function(){});
+};
+$('tog').onclick = function(){
+  if (navigator.vibrate) navigator.vibrate(18);
+  send('/together', {}, function(){ S.people.forEach(function(o){ if (!o.doneToday) { o.doneToday = true; o.week[6] = true; o.streak += 1; } }); }).catch(function(){});
 };
 $('swap').onclick = function(){ setMe(null); };
 $('add').onsubmit = function(e){

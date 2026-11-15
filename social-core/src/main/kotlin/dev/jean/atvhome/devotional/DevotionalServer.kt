@@ -34,6 +34,17 @@ class DevotionalServer(
             val stage = session.parms["stage"]?.toIntOrNull() ?: 0
             newFixedLengthResponse(Response.Status.OK, "image/svg+xml", TreeArt.svg(stage)).apply { addHeader("Cache-Control", "max-age=86400") }
         }
+        "/together" -> {
+            board.markAll(today())
+            jsonResponse(stateJson())
+        }
+        "/reward" -> {
+            val b = jsonBody(session)
+            val claim = (b["claim"] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toIntOrNull()
+            val ok = if (claim != null) { board.claimReward(claim); true }
+            else board.setReward((b["days"] as? JsonPrimitive)?.content?.toIntOrNull() ?: -1, b.str("text").orEmpty())
+            if (ok) jsonResponse(stateJson()) else text(Response.Status.BAD_REQUEST, "")
+        }
         "/nudge" -> {
             val b = jsonBody(session)
             if (board.nudge(b.str("from").orEmpty(), b.str("to").orEmpty(), today(), clock())) jsonResponse(stateJson()) else text(Response.Status.BAD_REQUEST, "")
@@ -57,6 +68,10 @@ class DevotionalServer(
             val tree = Game.tree(board.couplePoints())
             put("tree", buildJsonObject { put("stage", tree.index); put("name", tree.name); put("points", tree.points); put("from", tree.startAt); tree.nextAt?.let { put("next", it) } })
             board.weekLeader(now)?.let { put("weekLeader", it.id) }
+            put("rewardDays", buildJsonArray { Devotional.REWARD_DAYS.forEach { add(JsonPrimitive(it)) } })
+            put("rewards", buildJsonObject { board.snapshot().rewards.forEach { (k, v) -> put(k, v) } })
+            board.nextReward(now)?.let { (d, t, left) -> put("nextReward", buildJsonObject { put("days", d); put("text", t); put("left", left) }) }
+            put("unlocked", buildJsonArray { board.unlockedRewards().forEach { (d, t) -> add(buildJsonObject { put("days", d); put("text", t) }) } })
             put("people", buildJsonArray {
                 board.standings(now).forEach { s ->
                     val days = board.daysOf(s.person.id)
@@ -67,6 +82,7 @@ class DevotionalServer(
                         val level = Game.personLevel(board.points(s.person.id))
                         put("points", level.points); put("level", level.name); level.nextAt?.let { put("levelNext", it) }
                         put("weekCount", board.weekCount(s.person.id, now))
+                        s.grace?.let { put("grace", it.toString()) }
                         board.nudgedBy(s.person.id, now, clock())?.let { put("nudgedBy", it.name) }
                         // Last 7 days, oldest first: true when done
                         put("week", buildJsonArray { (6 downTo 0).forEach { add(JsonPrimitive(now.minusDays(it.toLong()) in days)) } })
