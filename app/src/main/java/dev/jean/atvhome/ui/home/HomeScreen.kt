@@ -72,7 +72,7 @@ import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.tv.material3.Text
 import dev.jean.atvhome.ui.devotional.DevotionalReminder
-import dev.jean.atvhome.ui.devotional.rememberDevotionalPending
+import dev.jean.atvhome.ui.devotional.rememberDevotionalReminder
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.MenuBook
@@ -129,6 +129,8 @@ fun HomeScreen(
     val myList by vm.myList.entries.collectAsState()
     val firstAppFocus = remember { FocusRequester() }
     val titleFocus = remember { FocusRequester() }
+    // One calculation for the chip under the clock and the dot on the Devocional button
+    val reminder = rememberDevotionalReminder()
     val memory = remember { FocusMemory() }
 
     // Focus writes the pending choice; the Top Shelf follows once focus rests for 300 ms, like
@@ -265,6 +267,7 @@ fun HomeScreen(
                     onWatch = onWatch,
                     onSocial = onSocial,
                     onDevotional = onDevotional,
+                    devotionalDot = reminder != null,
                     onCentral = onCentral,
                     soundState = if (!trailerOn) 0 else if (sound) 2 else 1,
                     onOpen = onOpen,
@@ -393,7 +396,7 @@ fun HomeScreen(
         }
 
         Clock(Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = Tv.Edge))
-        DevotionalReminder(rememberDevotionalPending(), Modifier.align(Alignment.TopEnd).padding(top = 54.dp, end = Tv.Edge))
+        DevotionalReminder(reminder, Modifier.align(Alignment.TopEnd).padding(top = 54.dp, end = Tv.Edge))
     }
     }
 }
@@ -439,6 +442,7 @@ private fun HeroInfo(
     onWatch: () -> Unit,
     onSocial: () -> Unit,
     onDevotional: () -> Unit,
+    devotionalDot: Boolean,
     onCentral: () -> Unit,
     soundState: Int,
     onOpen: (Title) -> Unit,
@@ -460,7 +464,7 @@ private fun HeroInfo(
             // A small amber dot while someone still owes today's devotional (from the evening on)
             Box {
                 PillButton("Devocional", onDevotional, iconVector = Icons.Rounded.MenuBook, onFocus = onButtonsFocus)
-                if (rememberDevotionalPending().isNotEmpty()) {
+                if (devotionalDot) {
                     Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(9.dp).background(Color(0xFFC9A96B), CircleShape))
                 }
             }

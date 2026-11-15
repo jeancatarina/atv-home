@@ -71,10 +71,12 @@ class DevotionalShotsTest {
                     androidx.compose.foundation.layout.Column(
                         androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(top = 22.dp, end = 48.dp),
                         horizontalAlignment = androidx.compose.ui.Alignment.End,
+                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp),
                     ) {
                         androidx.tv.material3.Text("20:41", style = dev.jean.atvhome.ui.theme.Tv.Clock, color = androidx.compose.ui.graphics.Color.White)
-                        androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
-                        dev.jean.atvhome.ui.devotional.DevotionalReminder(listOf("Ana"))
+                        dev.jean.atvhome.ui.devotional.DevotionalReminder(dev.jean.atvhome.devotional.Reminder.Missing(listOf("Ana")))
+                        dev.jean.atvhome.ui.devotional.DevotionalReminder(dev.jean.atvhome.devotional.Reminder.Called("Jean", "Ana"))
+                        dev.jean.atvhome.ui.devotional.DevotionalReminder(dev.jean.atvhome.devotional.Reminder.Prize("Jantar a dois"))
                     }
                 }
             }

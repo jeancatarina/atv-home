@@ -129,6 +129,29 @@ class DevotionalTest {
         d.setReward(30, "x".repeat(100)); assertEquals(Devotional.REWARD_MAX, d.snapshot().rewards["30"]!!.length)
     }
 
+    @Test fun theHomeReminderPicksPrizeThenCallThenMissing() {
+        val d = Devotional()
+        val jean = d.addPerson("Jean")!!; val ana = d.addPerson("Ana")!!
+        val t0 = 5_000_000L
+        // Before the evening and with nothing else to say: silence
+        assertNull(d.reminder(today, t0, hour = 10))
+        // In the evening: who is missing
+        assertEquals(Reminder.Missing(listOf("Jean", "Ana")), d.reminder(today, t0, hour = 19))
+        d.mark(jean.id, today, today, true)
+        assertEquals(Reminder.Missing(listOf("Ana")), d.reminder(today, t0, hour = 19))
+        // A call is shown at any hour, and wins over the evening list
+        assertTrue(d.nudge(jean.id, ana.id, today, t0))
+        assertEquals(Reminder.Called("Jean", "Ana"), d.reminder(today, t0 + 1000, hour = 9))
+        // An unclaimed prize wins over everything, at any hour
+        d.setReward(7, "Jantar")
+        (6L downTo 1L).forEach { back -> d.snapshot().people.forEach { d.mark(it.id, today.minusDays(back), today.minusDays(back), true) } }
+        d.markAll(today)
+        assertEquals(Reminder.Prize("Jantar"), d.reminder(today, t0 + 1000, hour = 9))
+        d.claimReward(7)
+        // Everyone done and nothing unclaimed: silence again
+        assertNull(d.reminder(today, t0 + 1000, hour = 22))
+    }
+
     @Test fun theWeekDuelHasAtMostOneLeader() {
         val (d, p) = board()
         val monday = Game.weekStart(today)
