@@ -71,6 +71,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.graphics.drawable.toBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.tv.material3.Text
+import dev.jean.atvhome.ui.devotional.DevotionalReminder
+import dev.jean.atvhome.ui.devotional.rememberDevotionalPending
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.MenuBook
@@ -391,6 +393,7 @@ fun HomeScreen(
         }
 
         Clock(Modifier.align(Alignment.TopEnd).padding(top = 22.dp, end = Tv.Edge))
+        DevotionalReminder(rememberDevotionalPending(), Modifier.align(Alignment.TopEnd).padding(top = 54.dp, end = Tv.Edge))
     }
     }
 }
@@ -454,7 +457,13 @@ private fun HeroInfo(
             // O que assistir?, Roleta, Match and Explorar live behind "Assistir" (WatchMenu): five buttons fit with the clock
             PillButton("Assistir", onWatch, iconVector = Icons.Rounded.PlayArrow, onFocus = onButtonsFocus)
             PillButton("Social", onSocial, iconVector = Icons.Rounded.Groups, onFocus = onButtonsFocus)
-            PillButton("Devocional", onDevotional, iconVector = Icons.Rounded.MenuBook, onFocus = onButtonsFocus)
+            // A small amber dot while someone still owes today's devotional (from the evening on)
+            Box {
+                PillButton("Devocional", onDevotional, iconVector = Icons.Rounded.MenuBook, onFocus = onButtonsFocus)
+                if (rememberDevotionalPending().isNotEmpty()) {
+                    Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(9.dp).background(Color(0xFFFFB454), CircleShape))
+                }
+            }
             // The Central (Sem anúncios, the TV inputs, Wi-Fi) is also on the MENU key, which Sony's
             // remotes do not have. Only the gear until focused: the clock sits at the end of this row
             PillButton("Central", onCentral, iconVector = Icons.Rounded.Settings, onFocus = onButtonsFocus, textWhenFocused = true)

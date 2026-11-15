@@ -43,6 +43,17 @@ class DevotionalTest {
         assertEquals(1, d.together(today))
     }
 
+    @Test fun pendingListsWhoStillOwesToday() {
+        val (d, p) = board()
+        assertEquals(listOf("Jean", "Ana"), d.pending(today).map { it.name })
+        d.mark(p.first.id, today, today, true)
+        assertEquals(listOf("Ana"), d.pending(today).map { it.name })
+        d.mark(p.second.id, today, today, true)
+        assertTrue(d.pending(today).isEmpty())
+        // A new day starts with everyone pending again
+        assertEquals(2, d.pending(today.plusDays(1)).size)
+    }
+
     @Test fun togetherNeedsTwoPeople() {
         val d = Devotional()
         val p = d.addPerson("Jean")!!

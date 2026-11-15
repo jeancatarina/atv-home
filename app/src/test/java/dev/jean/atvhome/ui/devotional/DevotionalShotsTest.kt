@@ -7,6 +7,9 @@ import com.github.takahirom.roborazzi.captureRoboImage
 import dev.jean.atvhome.devotional.DevotionalHost
 import dev.jean.atvhome.ui.home.WatchMenu
 import dev.jean.atvhome.ui.theme.InicioTheme
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Groups
@@ -57,6 +60,24 @@ class DevotionalShotsTest {
             }
         }
         rule.onRoot().captureRoboImage("build/shots/topo.png")
+    }
+
+    @Test fun reminder() {
+        rule.setContent {
+            InicioTheme {
+                androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.ui.graphics.Color(0xFF15221B))) {
+                    androidx.compose.foundation.layout.Column(
+                        androidx.compose.ui.Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(top = 22.dp, end = 48.dp),
+                        horizontalAlignment = androidx.compose.ui.Alignment.End,
+                    ) {
+                        androidx.tv.material3.Text("20:41", style = dev.jean.atvhome.ui.theme.Tv.Clock, color = androidx.compose.ui.graphics.Color.White)
+                        androidx.compose.foundation.layout.Spacer(androidx.compose.ui.Modifier.height(12.dp))
+                        dev.jean.atvhome.ui.devotional.DevotionalReminder(listOf("Ana"))
+                    }
+                }
+            }
+        }
+        rule.onRoot().captureRoboImage("build/shots/lembrete.png")
     }
 
     @Test fun watchMenu() {

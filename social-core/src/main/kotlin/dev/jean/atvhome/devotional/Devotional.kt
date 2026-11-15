@@ -72,6 +72,10 @@ class Devotional(data: DevotionalData = DevotionalData(), private val onChange: 
     fun standings(today: LocalDate): List<Standing> = data.people.map { standing(it, today) }
         .sortedWith(compareByDescending<Standing> { it.streak }.thenByDescending { it.last30 }.thenByDescending { it.total }.thenBy { it.person.name })
 
+    /** Who has not done it on [today] yet, in the order they joined. */
+    @Synchronized
+    fun pending(today: LocalDate): List<Person> = data.people.filter { today !in daysOf(it.id) }
+
     /**
      * Days in a row that everyone did it (two people or more): the couple's own streak. Like a single
      * streak it survives until the end of the next day, so it does not drop while the day is still open.
