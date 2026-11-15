@@ -3,73 +3,255 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#111">
+<meta name="theme-color" content="#111111">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Devocional">
 <title>Devocional</title>
 <style>
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-body{margin:0;background:#111;color:#fff;font:16px/1.4 -apple-system,system-ui,sans-serif;padding:max(20px,env(safe-area-inset-top)) 18px 40px}
+html{background:#111}
+body{margin:0;color:#fff;font:16px/1.45 -apple-system,system-ui,"Segoe UI",sans-serif;padding:max(22px,env(safe-area-inset-top)) 18px max(40px,env(safe-area-inset-bottom))}
 main{max-width:460px;margin:0 auto}
-h1{font-size:24px;margin:0 0 4px}
-.sub{color:#ffffff88;margin:0 0 22px;font-size:14px}
-.who{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}
-.who button{flex:1;min-width:90px;padding:12px;border-radius:14px;border:2px solid #ffffff22;background:#1c1c1e;color:#fff;font-size:16px}
-.who button.on{border-color:#fff;background:#2c2c2e}
-.big{width:100%;padding:22px;border-radius:20px;border:0;background:#fff;color:#000;font-size:20px;font-weight:700;margin-bottom:10px}
-.big.done{background:#2e7d4f;color:#fff}
-.big:disabled{opacity:.5}
-.link{background:none;border:0;color:#ffffff99;text-decoration:underline;font-size:14px;padding:6px 0;margin-bottom:18px}
-.card{background:#1c1c1e;border-radius:16px;padding:14px 16px;margin-bottom:10px}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:3px solid #8fd6ff;outline-offset:2px}
+.top{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+h1{font-size:26px;margin:0;letter-spacing:-.3px}
+.date{color:#ffffffa0;font-size:14px;margin:2px 0 20px}
+.swap{background:none;border:0;color:#ffffffb0;text-decoration:underline;font-size:14px;padding:8px 0}
+
+.who{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:16px}
+.who button{padding:18px 10px;border-radius:16px;border:2px solid #ffffff26;background:#1c1c1e;font-size:18px;font-weight:600}
+.who button:active{transform:scale(.97)}
+.ask{font-size:18px;font-weight:600;margin:0 0 12px}
+
+.big{position:relative;width:100%;min-height:86px;padding:20px;border-radius:22px;border:0;background:#fff;color:#000;font-size:21px;font-weight:700;transition:transform .12s,background .25s}
+.big:active{transform:scale(.98)}
+.big.done{background:#1f6b43;color:#fff}
+.big small{display:block;font-size:14px;font-weight:500;opacity:.85;margin-top:2px}
+.undo{display:block;margin:6px auto 0;background:none;border:0;color:#ffffffa0;text-decoration:underline;font-size:14px;padding:10px}
+.hint{text-align:center;color:#ffffffa0;font-size:14px;min-height:20px;margin:10px 0 18px}
+
+.pair{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:16px;background:#1c1c1e;margin-bottom:10px}
+.pair .ic{font-size:26px}
+.pair b{display:block}
+.pair span{color:#ffffffa0;font-size:14px}
+.pair.ok{background:#16301f}
+
+.card{background:#1c1c1e;border-radius:18px;padding:14px 16px;margin-bottom:10px}
+.card.me{box-shadow:inset 0 0 0 2px #ffffff40}
 .row{display:flex;align-items:center;gap:10px}
-.pos{font-size:22px;width:30px}
-.name{font-weight:600;flex:1}
-.streak{font-weight:700}
-.dots{display:flex;gap:6px;margin-top:10px}
-.dot{flex:1;height:10px;border-radius:5px;background:#ffffff1f}
-.dot.y{background:#4cc27f}
-.meta{color:#ffffff88;font-size:12px;margin-top:8px}
-form{display:flex;gap:8px;margin-top:18px}
-input{flex:1;padding:12px;border-radius:12px;border:1px solid #ffffff33;background:#1c1c1e;color:#fff;font-size:16px}
-form button{padding:12px 16px;border-radius:12px;border:0;background:#ffffff22;color:#fff}
-.err{color:#f66;text-align:center;font-size:13px;min-height:18px}
+.pos{font-size:22px;width:30px;text-align:center}
+.name{font-weight:600;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.streak{font-weight:700;font-variant-numeric:tabular-nums}
+.week{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin-top:12px;text-align:center}
+.day i{display:block;height:12px;border-radius:6px;background:#ffffff1f}
+.day.y i{background:#4cc27f}
+.day.t i{box-shadow:0 0 0 2px #ffffff55}
+.day em{display:block;font-style:normal;font-size:11px;color:#ffffff80;margin-top:4px}
+.meta{color:#ffffff90;font-size:13px;margin-top:10px}
+
+details{margin-top:22px;border-top:1px solid #ffffff1a;padding-top:6px}
+summary{color:#ffffffa0;font-size:14px;padding:10px 0;cursor:pointer}
+form{display:flex;gap:8px;margin:6px 0 14px}
+input{flex:1;min-width:0;padding:13px;border-radius:12px;border:1px solid #ffffff33;background:#1c1c1e;color:#fff;font-size:16px}
+form button{padding:0 16px;border-radius:12px;border:0;background:#ffffff26;font-weight:600}
+.rm{display:flex;justify-content:space-between;align-items:center;padding:8px 0;font-size:15px}
+.rm button{background:none;border:1px solid #ff6b6b66;color:#ff9a9a;border-radius:10px;padding:6px 12px;font-size:13px}
+.err{color:#ff8a8a;text-align:center;font-size:14px;min-height:20px;margin-top:12px}
+.conn{position:fixed;left:0;right:0;bottom:0;background:#6b2a2a;text-align:center;padding:10px;font-size:14px;transform:translateY(110%);transition:transform .2s}
+.conn.on{transform:none}
+
+.burst{position:fixed;left:50%;top:40%;pointer-events:none;z-index:9}
+.burst span{position:absolute;font-size:26px;animation:fly .9s ease-out forwards}
+@keyframes fly{from{transform:translate(0,0) scale(.4);opacity:1}to{transform:translate(var(--x),var(--y)) scale(1.1);opacity:0}}
+@media (prefers-reduced-motion:reduce){.burst{display:none}.big,.who button{transition:none}}
 </style>
 </head>
 <body>
 <main>
-<h1>✝ Devocional</h1>
-<p class="sub" id="date"></p>
-<div class="who" id="who"></div>
-<button class="big" id="big" disabled>Escolha quem é você</button>
-<div style="text-align:center"><button class="link" id="yday" hidden></button></div>
-<div id="rank"></div>
-<form id="add" hidden><input id="nm" placeholder="Nome de quem vai participar" maxlength="20" autocomplete="off"><button>Adicionar</button></form>
-<p class="err" id="err"></p>
+  <div class="top"><h1 id="hello">✝ Devocional</h1><button class="swap" id="swap" hidden>Trocar pessoa</button></div>
+  <p class="date" id="date"></p>
+
+  <section id="pick" hidden>
+    <p class="ask" id="ask">Quem é você?</p>
+    <div class="who" id="who"></div>
+  </section>
+
+  <section id="mine" hidden>
+    <button class="big" id="big"></button>
+    <button class="undo" id="yday" hidden></button>
+    <p class="hint" id="hint" aria-live="polite"></p>
+  </section>
+
+  <div id="pairs"></div>
+  <div id="rank"></div>
+
+  <details id="more">
+    <summary>Ajustes</summary>
+    <form id="add"><input id="nm" placeholder="Adicionar pessoa" maxlength="20" autocomplete="off" aria-label="Nome"><button>Adicionar</button></form>
+    <div id="rm"></div>
+  </details>
+  <p class="err" id="err" role="alert"></p>
 </main>
+<div class="conn" id="conn">Sem conexão com a TV. Confira se está no mesmo Wi-Fi.</div>
 <script>
-var S=null, me=localStorage.getItem('eu');
-function $(i){return document.getElementById(i)}
-function post(p,b){return fetch(p,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(b)}).then(function(r){if(!r.ok)throw 0;return r.json()})}
-function iso(d){return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2)}
-function load(){fetch('/state',{cache:'no-store'}).then(function(r){return r.json()}).then(function(s){S=s;draw();$('err').textContent=''}).catch(function(){$('err').textContent='Sem conexão com a TV. Está no mesmo Wi-Fi?'})}
-function mine(){return S&&S.people.filter(function(p){return p.id===me})[0]}
-function draw(){
-  var t=new Date(S.today+'T12:00:00');
-  $('date').textContent=t.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'});
-  $('who').innerHTML='';
-  S.people.forEach(function(p){var b=document.createElement('button');b.textContent=p.name;if(p.id===me)b.className='on';b.onclick=function(){me=p.id;localStorage.setItem('eu',me);draw()};$('who').appendChild(b)});
-  var m=mine(), big=$('big'), y=$('yday');
-  if(!m){big.disabled=true;big.className='big';big.textContent=S.people.length?'Escolha quem é você':'Adicione o primeiro nome abaixo';y.hidden=true}
-  else{big.disabled=false;big.className='big'+(m.doneToday?' done':'');big.textContent=m.doneToday?'✓ Feito hoje (toque para desfazer)':'Fiz o devocional hoje';
-    var yd=m.week[5];y.hidden=false;y.textContent=yd?'Ontem: feito ✓ (desfazer)':'Esqueci de marcar ontem'}
-  $('rank').innerHTML=S.people.map(function(p,i){
-    var dots=p.week.map(function(d){return '<div class="dot'+(d?' y':'')+'"></div>'}).join('');
-    return '<div class="card"><div class="row"><span class="pos">'+(['🥇','🥈','🥉'][i]||(i+1))+'</span><span class="name"></span><span class="streak">🔥 '+p.streak+'</span></div><div class="dots">'+dots+'</div><div class="meta">Melhor sequência '+p.best+' · '+p.last30+' de 30 dias · '+p.total+' no total</div></div>'}).join('');
-  [].forEach.call(document.querySelectorAll('.name'),function(e,i){e.textContent=S.people[i].name});
-  $('add').hidden=S.people.length>=4;
+'use strict';
+var S = null, me = localStorage.getItem('eu'), busy = false;
+function $(i){ return document.getElementById(i); }
+function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+function iso(d){ return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function noon(s){ return new Date(s + 'T12:00:00'); }
+function person(id){ return S && S.people.filter(function(p){ return p.id === id; })[0]; }
+function plural(n, one, many){ return n + ' ' + (n === 1 ? one : many); }
+
+function api(path, body){
+  var opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : { cache: 'no-store' };
+  return fetch(path, opt).then(function(r){ if (!r.ok) throw new Error(r.status); return r.json(); });
 }
-$('big').onclick=function(){var m=mine();if(!m)return;post('/checkin',{id:m.id,done:!m.doneToday}).then(function(s){S=s;draw()}).catch(function(){$('err').textContent='Não consegui salvar. Tente de novo.'})};
-$('yday').onclick=function(){var m=mine();if(!m)return;var d=new Date(S.today+'T12:00:00');d.setDate(d.getDate()-1);post('/checkin',{id:m.id,date:iso(d),done:!m.week[5]}).then(function(s){S=s;draw()}).catch(function(){$('err').textContent='Não consegui salvar.'})};
-$('add').onsubmit=function(e){e.preventDefault();var n=$('nm').value.trim();if(!n)return;post('/people',{name:n}).then(function(s){S=s;$('nm').value='';if(!me&&S.people.length===1){me=S.people[0].id;localStorage.setItem('eu',me)}draw()}).catch(function(){$('err').textContent='Esse nome já existe ou o limite foi atingido.'})};
-load();setInterval(load,15000);
+function online(ok){ $('conn').classList.toggle('on', !ok); }
+function load(){
+  if (busy) return;
+  api('/state').then(function(s){ S = s; online(true); draw(); }).catch(function(){ online(false); });
+}
+function setMe(id){ me = id; if (id) localStorage.setItem('eu', id); else localStorage.removeItem('eu'); draw(); }
+
+function celebrate(){
+  if (navigator.vibrate) navigator.vibrate([30, 40, 30]);
+  var b = el('div', 'burst'); document.body.appendChild(b);
+  ['🔥', '✨', '🙏', '💛', '🔥', '✨', '🙏', '💛'].forEach(function(c, i){
+    var s = el('span', null, c), a = (i / 8) * Math.PI * 2;
+    s.style.setProperty('--x', Math.round(Math.cos(a) * 120) + 'px');
+    s.style.setProperty('--y', Math.round(Math.sin(a) * 120 - 40) + 'px');
+    b.appendChild(s);
+  });
+  setTimeout(function(){ b.remove(); }, 1000);
+}
+
+function message(p, justDone){
+  var other = S.people.filter(function(o){ return o.id !== p.id; });
+  if (!p.doneToday) return other.some(function(o){ return o.doneToday; }) ? 'Já fizeram o devocional hoje. Falta você 💛' : 'Um momento com Deus antes de dormir também vale.';
+  if (p.streak >= 2) return 'Que bênção! ' + plural(p.streak, 'dia seguido', 'dias seguidos') + ' 🔥';
+  return justDone ? 'Que bênção! Primeiro dia da sequência 🔥' : 'Feito por hoje. Até amanhã!';
+}
+
+function draw(justDone){
+  var t = noon(S.today);
+  var ds = t.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  $('date').textContent = ds.charAt(0).toUpperCase() + ds.slice(1);
+  var m = person(me);
+  if (!m && me) { me = null; localStorage.removeItem('eu'); }
+
+  // Who am I: asked once, then folded into the greeting
+  $('pick').hidden = !!m;
+  $('ask').textContent = S.people.length ? 'Quem é você?' : 'Bem-vindos! Comece adicionando um nome nos Ajustes abaixo.';
+  var who = $('who'); who.textContent = '';
+  S.people.forEach(function(p){ var b = el('button', null, p.name); b.onclick = function(){ setMe(p.id); }; who.appendChild(b); });
+  $('swap').hidden = !m;
+  $('hello').textContent = m ? 'Olá, ' + m.name : '✝ Devocional';
+
+  $('mine').hidden = !m;
+  if (m) {
+    var big = $('big'); big.textContent = '';
+    big.className = 'big' + (m.doneToday ? ' done' : '');
+    big.appendChild(document.createTextNode(m.doneToday ? '✓ Devocional de hoje feito' : 'Fiz o devocional hoje'));
+    big.appendChild(el('small', null, m.doneToday ? 'Toque aqui só se marcou sem querer' : 'Um toque e a TV já mostra'));
+    var y = $('yday'), ydone = m.week[5];
+    y.hidden = false; y.textContent = ydone ? 'Ontem: feito ✓ (desfazer)' : 'Esqueci de marcar ontem';
+    $('hint').textContent = message(m, justDone);
+  }
+
+  // The others and the couple: the nudge is in seeing how the other is doing
+  var pairs = $('pairs'); pairs.textContent = '';
+  if (m) S.people.filter(function(o){ return o.id !== m.id; }).forEach(function(o){
+    var d = el('div', 'pair' + (o.doneToday ? ' ok' : ''));
+    d.appendChild(el('div', 'ic', o.doneToday ? '✅' : '⏳'));
+    var c = el('div'); c.appendChild(el('b', null, o.doneToday ? o.name + ' já fez hoje' : o.name + ' ainda não fez hoje'));
+    c.appendChild(el('span', null, plural(o.streak, 'dia seguido', 'dias seguidos')));
+    d.appendChild(c); pairs.appendChild(d);
+  });
+  if (S.people.length > 1 && S.together > 0) {
+    var tg = el('div', 'pair ok'); tg.appendChild(el('div', 'ic', '💞'));
+    var tc = el('div'); tc.appendChild(el('b', null, 'Vocês juntos: ' + plural(S.together, 'dia', 'dias')));
+    tc.appendChild(el('span', null, 'Todos fizeram, dia após dia')); tg.appendChild(tc); pairs.appendChild(tg);
+  }
+
+  // Ranking with the week as weekday letters
+  var rank = $('rank'); rank.textContent = '';
+  S.people.forEach(function(p, i){
+    var c = el('div', 'card' + (p.id === me ? ' me' : ''));
+    var r = el('div', 'row');
+    r.appendChild(el('span', 'pos', ['🥇', '🥈', '🥉'][i] || String(i + 1)));
+    r.appendChild(el('span', 'name', p.name));
+    r.appendChild(el('span', 'streak', '🔥 ' + p.streak));
+    c.appendChild(r);
+    var w = el('div', 'week');
+    p.week.forEach(function(d, k){
+      var day = noon(S.today); day.setDate(day.getDate() - (6 - k));
+      var cell = el('div', 'day' + (d ? ' y' : '') + (k === 6 ? ' t' : ''));
+      cell.appendChild(el('i')); cell.appendChild(el('em', null, day.toLocaleDateString('pt-BR', { weekday: 'narrow' }).toUpperCase()));
+      cell.setAttribute('aria-label', day.toLocaleDateString('pt-BR', { weekday: 'long' }) + (d ? ': feito' : ': não feito'));
+      w.appendChild(cell);
+    });
+    c.appendChild(w);
+    c.appendChild(el('div', 'meta', 'Melhor sequência ' + p.best + ' · ' + p.last30 + ' dos últimos 30 dias · ' + p.total + ' no total'));
+    rank.appendChild(c);
+  });
+
+  // Settings: add and remove people
+  $('add').hidden = S.people.length >= 4;
+  if (!S.people.length) $('more').open = true;
+  var rm = $('rm'); rm.textContent = '';
+  S.people.forEach(function(p){
+    var row = el('div', 'rm'); row.appendChild(el('span', null, p.name));
+    var b = el('button', null, 'Remover');
+    b.onclick = function(){
+      if (!confirm('Remover ' + p.name + ' e todo o histórico dessa pessoa?')) return;
+      send('/people', { remove: p.id }).then(function(){ if (me === p.id) setMe(null); });
+    };
+    row.appendChild(b); rm.appendChild(row);
+  });
+}
+
+// Taps answer at once and are corrected if the TV refuses or cannot be reached
+function send(path, body, optimistic){
+  busy = true; $('err').textContent = '';
+  var before = JSON.stringify(S);
+  if (optimistic) { optimistic(); draw(); }
+  return api(path, body).then(function(s){ S = s; online(true); busy = false; draw(true); return s; })
+    .catch(function(){ busy = false; S = JSON.parse(before); draw(); $('err').textContent = 'Não consegui falar com a TV. Tente de novo.'; online(false); throw 0; });
+}
+function toggle(date, done, key){
+  var m = person(me); if (!m) return Promise.resolve();
+  return send('/checkin', { id: m.id, date: date, done: done }, function(){
+    if (key === 'today') { m.doneToday = done; m.week[6] = done; m.total += done ? 1 : -1; m.streak = done ? m.streak + 1 : Math.max(m.streak - 1, 0); }
+    else { m.week[5] = done; m.total += done ? 1 : -1; }
+  });
+}
+$('big').onclick = function(){
+  var m = person(me); if (!m) return;
+  var done = !m.doneToday;
+  toggle(S.today, done, 'today').then(function(){ if (done) celebrate(); }).catch(function(){});
+};
+$('yday').onclick = function(){
+  var m = person(me); if (!m) return;
+  var d = noon(S.today); d.setDate(d.getDate() - 1);
+  toggle(iso(d), !m.week[5], 'yday').catch(function(){});
+};
+$('swap').onclick = function(){ setMe(null); };
+$('add').onsubmit = function(e){
+  e.preventDefault();
+  var n = $('nm').value.trim(); if (!n) return;
+  var first = !S.people.length;
+  send('/people', { name: n }).then(function(s){
+    $('nm').value = '';
+    if (!me) { var added = s.people.filter(function(p){ return p.name.toLowerCase() === n.toLowerCase(); })[0]; if (added && first) setMe(added.id); }
+  }).catch(function(){ $('err').textContent = 'Esse nome já existe ou o limite de 4 pessoas foi atingido.'; });
+};
+// Coming back to the page (screen unlocked, tab switched) shows what the other did meanwhile
+document.addEventListener('visibilitychange', function(){ if (!document.hidden) load(); });
+window.addEventListener('online', load);
+load(); setInterval(load, 10000);
 </script>
 </body>
 </html>

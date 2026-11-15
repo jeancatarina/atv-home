@@ -57,6 +57,17 @@ fun DevotionalScreen() {
     // A new day starts at midnight even if the screen stays open
     LaunchedEffect(Unit) { while (true) { delay(60_000); today = LocalDate.now() } }
     val rows = remember(version, today) { board.standings(today).map { it to board.daysOf(it.person.id) } }
+    val together = remember(version, today) { board.together(today) }
+    // Someone checks in on a phone while the board is open: say it, so the other sees it from the sofa
+    var seen by remember { mutableStateOf<Set<String>?>(null) }
+    var banner by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(version, today) {
+        val now = rows.filter { it.first.doneToday }.associate { it.first.person.id to it.first.person.name }
+        val before = seen
+        seen = now.keys
+        val fresh = if (before == null) emptyList() else now.filterKeys { it !in before }.values.toList()
+        if (fresh.isNotEmpty()) { banner = fresh.joinToString(" e ") + " fez o devocional 🙌"; delay(8_000); banner = null }
+    }
     var month by remember { mutableStateOf(true) }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { first.requestWhenReady() }
@@ -67,7 +78,9 @@ fun DevotionalScreen() {
         Column(Modifier.weight(1f)) {
             Text("Devocional", style = Tv.Title, color = Tv.Primary)
             Spacer(Modifier.height(3.dp))
-            Text(subtitle(rows.map { it.first }), style = Tv.Meta, color = Tv.Tertiary)
+            val shown = banner
+            if (shown != null) Text(shown, style = Tv.Headline, color = Done)
+            else Text(subtitle(rows.map { it.first }), style = Tv.Meta, color = Tv.Tertiary)
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Chip("Últimos 30 dias", month, { month = true }, Modifier.focusRequester(first))
@@ -76,6 +89,17 @@ fun DevotionalScreen() {
             Spacer(Modifier.height(20.dp))
             if (rows.isEmpty()) {
                 Text("Ninguém entrou ainda. Abra o endereço ao lado no celular e adicione o seu nome.", style = Tv.Headline, color = Tv.Secondary)
+            }
+            if (together > 0) {
+                Row(
+                    Modifier.fillMaxWidth().background(Done.copy(alpha = 0.16f), RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("💞", style = Tv.Title, color = Tv.Primary)
+                    Spacer(Modifier.width(12.dp))
+                    Text("Vocês juntos: ${if (together == 1) "1 dia" else "$together dias"} seguidos", style = Tv.Headline, color = Tv.Primary)
+                }
+                Spacer(Modifier.height(12.dp))
             }
             rows.forEachIndexed { i, (s, days) -> PersonCard(i, s, days, today, if (month) 30 else 7); Spacer(Modifier.height(12.dp)) }
         }
@@ -89,7 +113,7 @@ fun DevotionalScreen() {
             Spacer(Modifier.height(14.dp))
             Text("Dar check-in no celular", style = Tv.Headline, color = Tv.Primary)
             Text(url ?: "Site fora do ar", style = Tv.Meta, color = Tv.Tertiary)
-            Text("No mesmo Wi-Fi da TV, mesmo com ela em repouso", style = Tv.Caption, color = Tv.Tertiary)
+            Text("O celular precisa estar no mesmo Wi-Fi da TV", style = Tv.Caption, color = Tv.Tertiary)
         }
     }
 }

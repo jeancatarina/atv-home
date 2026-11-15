@@ -31,6 +31,25 @@ class DevotionalTest {
         assertEquals(1, d.standings(today).first { it.person.name == "Jean" }.best)
     }
 
+    @Test fun togetherCountsOnlyDaysEveryoneDidIt() {
+        val (d, p) = board()
+        listOf(0L, 1L, 2L).forEach { d.mark(p.first.id, today.minusDays(it), today, true) }
+        d.mark(p.second.id, today.minusDays(1), today, true)
+        d.mark(p.second.id, today, today, true)
+        // Both did today and yesterday; only Jean did the day before
+        assertEquals(2, d.together(today))
+        // Today still open for Ana: the run up to yesterday stands
+        d.mark(p.second.id, today, today, false)
+        assertEquals(1, d.together(today))
+    }
+
+    @Test fun togetherNeedsTwoPeople() {
+        val d = Devotional()
+        val p = d.addPerson("Jean")!!
+        d.mark(p.id, today, today, true)
+        assertEquals(0, d.together(today))
+    }
+
     @Test fun rankingPutsTheLongerStreakFirst() {
         val (d, p) = board()
         d.mark(p.second.id, today, today, true)

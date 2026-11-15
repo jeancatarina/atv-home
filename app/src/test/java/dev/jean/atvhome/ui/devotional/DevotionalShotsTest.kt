@@ -27,7 +27,7 @@ class DevotionalShotsTest {
         val jean = board.addPerson("Jean")!!
         val ana = board.addPerson("Ana")!!
         (0L..20L).filter { it % 7 != 3L }.forEach { board.mark(jean.id, today.minusDays(it), today.minusDays(it), true) }
-        (0L..1L).forEach { board.mark(ana.id, today.minusDays(it), today.minusDays(it), true) }
+        (0L..4L).forEach { board.mark(ana.id, today.minusDays(it), today.minusDays(it), true) }
         rule.setContent { InicioTheme { DevotionalScreen() } }
         rule.onRoot().captureRoboImage("build/shots/devocional.png")
     }
