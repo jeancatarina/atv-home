@@ -17,6 +17,7 @@ class DevotionalServer(
     private val board: Devotional,
     private val page: () -> String,
     private val today: () -> LocalDate = { LocalDate.now() },
+    private val clock: () -> Long = System::currentTimeMillis,
     port: Int = PORT,
 ) : LanServer(port) {
 
@@ -28,6 +29,14 @@ class DevotionalServer(
             val date = b.str("date")?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today()
             val ok = board.mark(b.str("id").orEmpty(), date, today(), (b["done"] as? JsonPrimitive)?.let { runCatching { it.boolean }.getOrNull() } ?: true)
             if (ok) jsonResponse(stateJson()) else text(Response.Status.BAD_REQUEST, "")
+        }
+        "/tree.svg" -> {
+            val stage = session.parms["stage"]?.toIntOrNull() ?: 0
+            newFixedLengthResponse(Response.Status.OK, "image/svg+xml", TreeArt.svg(stage)).apply { addHeader("Cache-Control", "max-age=86400") }
+        }
+        "/nudge" -> {
+            val b = jsonBody(session)
+            if (board.nudge(b.str("from").orEmpty(), b.str("to").orEmpty(), today(), clock())) jsonResponse(stateJson()) else text(Response.Status.BAD_REQUEST, "")
         }
         "/people" -> {
             val b = jsonBody(session)
@@ -45,6 +54,9 @@ class DevotionalServer(
         return buildJsonObject {
             put("today", now.toString())
             put("together", board.together(now))
+            val tree = Game.tree(board.couplePoints())
+            put("tree", buildJsonObject { put("stage", tree.index); put("name", tree.name); put("points", tree.points); put("from", tree.startAt); tree.nextAt?.let { put("next", it) } })
+            board.weekLeader(now)?.let { put("weekLeader", it.id) }
             put("people", buildJsonArray {
                 board.standings(now).forEach { s ->
                     val days = board.daysOf(s.person.id)
@@ -52,6 +64,10 @@ class DevotionalServer(
                         put("id", s.person.id); put("name", s.person.name)
                         put("streak", s.streak); put("best", s.best); put("total", s.total)
                         put("last30", s.last30); put("doneToday", s.doneToday)
+                        val level = Game.personLevel(board.points(s.person.id))
+                        put("points", level.points); put("level", level.name); level.nextAt?.let { put("levelNext", it) }
+                        put("weekCount", board.weekCount(s.person.id, now))
+                        board.nudgedBy(s.person.id, now, clock())?.let { put("nudgedBy", it.name) }
                         // Last 7 days, oldest first: true when done
                         put("week", buildJsonArray { (6 downTo 0).forEach { add(JsonPrimitive(now.minusDays(it.toLong()) in days)) } })
                     })

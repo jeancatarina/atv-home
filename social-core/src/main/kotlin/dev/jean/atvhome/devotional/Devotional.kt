@@ -31,7 +31,12 @@ data class Standing(
  * A streak survives until the end of the next day, so someone who has not checked in yet today keeps
  * yesterday's streak.
  */
-class Devotional(data: DevotionalData = DevotionalData(), private val onChange: (DevotionalData) -> Unit = {}) {
+class Devotional(
+    data: DevotionalData = DevotionalData(),
+    /** Called after a nudge, which is not saved: a screen open on the board redraws. */
+    private val onEvent: () -> Unit = {},
+    private val onChange: (DevotionalData) -> Unit = {},
+) {
 
     private var data = data
 
@@ -91,6 +96,58 @@ class Devotional(data: DevotionalData = DevotionalData(), private val onChange: 
         return n
     }
 
+    /** Points of one person: each day counts more inside a run, and days everyone did earn a bonus. */
+    @Synchronized
+    fun points(id: String): Int {
+        val everyone = if (data.people.size >= 2) data.people.map { daysOf(it.id) }.reduce { a, b -> a intersect b } else null
+        return Game.points(daysOf(id), everyone)
+    }
+
+    /** The couple's points together: what the tree grows with. */
+    @Synchronized
+    fun couplePoints(): Int = data.people.sumOf { points(it.id) }
+
+    /** Days done in the week that began on Monday, up to [today]. */
+    @Synchronized
+    fun weekCount(id: String, today: LocalDate): Int {
+        val from = Game.weekStart(today)
+        return daysOf(id).count { !it.isBefore(from) && !it.isAfter(today) }
+    }
+
+    /** The week's duel: the one person ahead, or null when it is a tie or nobody has done a day. */
+    @Synchronized
+    fun weekLeader(today: LocalDate): Person? {
+        if (data.people.size < 2) return null
+        val counts = data.people.map { it to weekCount(it.id, today) }
+        val top = counts.maxOf { it.second }
+        return counts.filter { it.second == top }.takeIf { top > 0 && it.size == 1 }?.single()?.first
+    }
+
+    private val nudges = HashMap<String, Pair<String, Long>>()
+
+    /**
+     * [from] calls [to] for the devotional. Refused when it is the same person, when [to] already did
+     * today, or when [from] already called in the last [NUDGE_COOLDOWN_MS]. Kept in memory only.
+     */
+    @Synchronized
+    fun nudge(from: String, to: String, today: LocalDate, now: Long): Boolean {
+        if (from == to || data.people.none { it.id == from } || data.people.none { it.id == to }) return false
+        if (today in daysOf(to)) return false
+        val last = nudges[to]
+        if (last != null && last.first == from && now - last.second < NUDGE_COOLDOWN_MS) return false
+        nudges[to] = from to now
+        onEvent()
+        return true
+    }
+
+    /** Who called [id] and is still waiting: within [NUDGE_LIFETIME_MS] and while [id] has not done today. */
+    @Synchronized
+    fun nudgedBy(id: String, today: LocalDate, now: Long): Person? {
+        val n = nudges[id] ?: return null
+        if (now - n.second > NUDGE_LIFETIME_MS || today in daysOf(id)) return null
+        return data.people.firstOrNull { it.id == n.first }
+    }
+
     private fun standing(p: Person, today: LocalDate): Standing {
         val days = daysOf(p.id)
         var cursor = if (today in days) today else today.minusDays(1)
@@ -116,6 +173,8 @@ class Devotional(data: DevotionalData = DevotionalData(), private val onChange: 
         const val MAX_PEOPLE = 4
         const val NAME_MAX = 20
         const val GRACE_DAYS = 2L
+        const val NUDGE_COOLDOWN_MS = 10 * 60_000L
+        const val NUDGE_LIFETIME_MS = 3 * 3_600_000L
     }
 }
 

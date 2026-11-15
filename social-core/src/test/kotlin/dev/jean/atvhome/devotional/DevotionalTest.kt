@@ -54,6 +54,74 @@ class DevotionalTest {
         assertEquals(2, d.pending(today.plusDays(1)).size)
     }
 
+    @Test fun pointsGrowInsideARunAndWithTheTogetherBonus() {
+        val (d, p) = board()
+        d.mark(p.first.id, today.minusDays(1), today, true)
+        d.mark(p.first.id, today, today, true)
+        // 10 for the first day, 12 for the second (a run of two)
+        assertEquals(22, d.points(p.first.id))
+        d.mark(p.second.id, today, today, true)
+        // Today everyone did it: +5 to each
+        assertEquals(27, d.points(p.first.id))
+        assertEquals(15, d.points(p.second.id))
+        assertEquals(42, d.couplePoints())
+    }
+
+    @Test fun aRunsBonusStopsAfterSevenDays() {
+        val days = (0L..9L).map { today.minusDays(it) }.toSet()
+        // Days 1..7 add 0,2,..,12; days 8..10 stay at the cap of 12
+        assertEquals(10 * 10 + (0 + 2 + 4 + 6 + 8 + 10 + 12) + 3 * 12, Game.points(days, null))
+    }
+
+    @Test fun levelsAndTreeStagesFollowTheThresholds() {
+        assertEquals("Iniciante", Game.personLevel(0).name)
+        assertEquals(30, Game.personLevel(0).nextAt)
+        assertEquals("Constante", Game.personLevel(30).name)
+        assertEquals("Lenda", Game.personLevel(5000).name)
+        assertNull(Game.personLevel(5000).nextAt)
+        assertEquals(0, Game.tree(39).index)
+        assertEquals(1, Game.tree(40).index)
+        assertEquals(5, Game.tree(99999).index)
+    }
+
+    @Test fun theWeekDuelHasAtMostOneLeader() {
+        val (d, p) = board()
+        val monday = Game.weekStart(today)
+        assertNull(d.weekLeader(today))
+        d.mark(p.first.id, today, today, true)
+        assertEquals("Jean", d.weekLeader(today)?.name)
+        d.mark(p.second.id, today, today, true)
+        assertNull(d.weekLeader(today))
+        assertEquals(1, d.weekCount(p.first.id, today))
+        // The week restarts on Monday
+        assertEquals(java.time.DayOfWeek.MONDAY, monday.dayOfWeek)
+        assertEquals(0, d.weekCount(p.first.id, monday.plusDays(7)))
+    }
+
+    @Test fun aNudgeReachesOnlyWhoStillOwesTodayAndIsRateLimited() {
+        val (d, p) = board()
+        val t0 = 1_000_000L
+        assertFalse(d.nudge(p.first.id, p.first.id, today, t0))
+        assertTrue(d.nudge(p.first.id, p.second.id, today, t0))
+        assertEquals("Jean", d.nudgedBy(p.second.id, today, t0 + 1000)?.name)
+        // Same caller again within the cooldown is ignored; after it, allowed
+        assertFalse(d.nudge(p.first.id, p.second.id, today, t0 + 60_000))
+        assertTrue(d.nudge(p.first.id, p.second.id, today, t0 + Devotional.NUDGE_COOLDOWN_MS + 1))
+        // It fades with time and ends once the person checks in
+        assertNull(d.nudgedBy(p.second.id, today, t0 + Devotional.NUDGE_LIFETIME_MS + Devotional.NUDGE_COOLDOWN_MS + 2))
+        d.mark(p.second.id, today, today, true)
+        assertNull(d.nudgedBy(p.second.id, today, t0 + Devotional.NUDGE_COOLDOWN_MS + 2))
+        assertFalse(d.nudge(p.first.id, p.second.id, today, t0 + 99_999_999))
+    }
+
+    @Test fun everyTreeStageDrawsAndGrows() {
+        val counts = (0 until TreeArt.STAGES).map { TreeArt.stage(it).size }
+        assertEquals(counts.sorted(), counts)
+        (0 until TreeArt.STAGES).forEach { assertTrue(TreeArt.svg(it).startsWith("<svg") && TreeArt.svg(it).endsWith("</svg>")) }
+        assertTrue(TreeArt.stage(5).any { it.color == 0xF2C14E })
+        assertEquals(TreeArt.stage(5), TreeArt.stage(99))
+    }
+
     @Test fun togetherNeedsTwoPeople() {
         val d = Devotional()
         val p = d.addPerson("Jean")!!
@@ -88,7 +156,7 @@ class DevotionalTest {
     @Test fun storeSurvivesARestart() {
         val f = File.createTempFile("dev", ".json").apply { deleteOnExit() }
         val store = DevotionalStore(f)
-        val d = Devotional(store.load(), store::save)
+        val d = Devotional(store.load(), onChange = store::save)
         val p = d.addPerson("Jean")!!
         d.mark(p.id, today, today, true)
         val again = Devotional(DevotionalStore(f).load())
@@ -113,6 +181,18 @@ class DevotionalTest {
             assertEquals(200, code)
             assertTrue(body.contains("\"doneToday\":true"))
             assertEquals(400, post("/checkin", """{"id":"nobody"}""").first)
+            // The couple's tree is served as an image, and a nudge shows up for the person called
+            val img = URL("http://127.0.0.1:${s.listeningPort}/tree.svg?stage=3").openConnection() as HttpURLConnection
+            assertEquals("image/svg+xml", img.contentType)
+            assertTrue(img.inputStream.readBytes().decodeToString().contains("<circle"))
+            post("/people", """{"name":"Jean"}""")
+            val ids = d.snapshot().people.map { it.id }
+            val (code2, body2) = post("/nudge", """{"from":"${ids[0]}","to":"${ids[1]}"}""")
+            assertEquals(200, code2)
+            assertTrue(body2.contains("\"nudgedBy\":\"Ana\""))
+            // Same person, or someone who already did today, cannot be called
+            assertEquals(400, post("/nudge", """{"from":"${ids[1]}","to":"${ids[1]}"}""").first)
+            assertEquals(400, post("/nudge", """{"from":"${ids[1]}","to":"${ids[0]}"}""").first)
         } finally { s.stop() }
     }
 }

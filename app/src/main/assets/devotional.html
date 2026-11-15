@@ -54,6 +54,21 @@ h1 .ico{color:var(--glow);margin-right:6px}
 .undo{display:block;margin:0 auto 14px;background:none;border:0;color:#ffffff90;text-decoration:underline;font-size:13px;padding:8px}
 
 
+.tree{display:flex;align-items:center;gap:16px;margin:8px 0 14px;padding:14px 16px;border-radius:22px;background:linear-gradient(160deg,#ffffff14,#ffffff06);border:1px solid #ffffff14}
+.tree img{width:92px;height:92px;flex:none;filter:drop-shadow(0 8px 18px #0008)}
+.tree b{display:block;font-size:17px}
+.tree span{color:#ffffffb0;font-size:14px}
+.bar{height:8px;border-radius:4px;background:#ffffff1c;margin:10px 0 6px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;border-radius:4px;background:linear-gradient(90deg,#4cc27f,#9be7b5);transition:width .8s cubic-bezier(.3,.9,.3,1)}
+.tree small{color:#ffffff80;font-size:12px}
+.call{margin-left:auto;display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border-radius:20px;border:1px solid #ffffff40;background:#ffffff14;font-size:14px;font-weight:600;flex:none}
+.call:active{transform:scale(.95)}
+.alert{display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:18px;margin-top:16px;background:linear-gradient(135deg,#5a3a14,#3b2710);border:1px solid #f3cf7280;animation:pop .5s cubic-bezier(.3,1.4,.5,1)}
+.alert .ic{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#f3cf72;color:#2a1d00;font-size:21px;flex:none;animation:ring 1.4s ease-in-out 2}
+@keyframes pop{from{transform:scale(.92);opacity:0}to{transform:none;opacity:1}}
+@keyframes ring{0%,100%{transform:rotate(0)}20%{transform:rotate(-14deg)}40%{transform:rotate(12deg)}60%{transform:rotate(-8deg)}80%{transform:rotate(5deg)}}
+.crown{color:#f3cf72;margin-left:6px}
+.lvl{display:block;color:#ffffffa0;font-size:12px;font-weight:500;margin-top:1px}
 .pair{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:18px;background:#ffffff0d;border:1px solid #ffffff12;margin-bottom:10px}
 .pair .ic{display:grid;place-items:center;width:40px;height:40px;border-radius:50%;background:#ffffff1a;font-size:21px;flex:none}
 .pair.ok{background:#1b3a2a99;border-color:#5fd49a40}
@@ -105,6 +120,8 @@ form button{padding:0 18px;border-radius:14px;border:0;background:#ffffff26;font
     <button class="swap" id="swap" hidden>Trocar</button>
   </div>
 
+  <div id="nudged"></div>
+
   <section id="pick" hidden>
     <p class="ask" id="ask">Quem é você?</p>
     <div class="who" id="who"></div>
@@ -120,6 +137,11 @@ form button{padding:0 18px;border-radius:14px;border:0;background:#ffffff26;font
     <p class="cap" id="cap"></p>
     <p class="hint" id="hint" aria-live="polite"></p>
     <button class="undo" id="yday" hidden></button>
+  </section>
+
+  <section class="tree" id="tree" hidden>
+    <img id="timg" alt="" width="92" height="92">
+    <div style="flex:1;min-width:0"><b id="tname"></b><span id="tpts"></span><div class="bar"><i id="tbar"></i></div><small id="tnext"></small></div>
   </section>
 
   <div id="pairs"></div>
@@ -143,8 +165,11 @@ var PATHS = {
   heart: '<path fill="currentColor" d="M12 21s-8-5.2-8-11.2A4.6 4.6 0 0 1 12 7a4.6 4.6 0 0 1 8 2.8C20 15.8 12 21 12 21z"/>',
   cross: '<path fill="currentColor" d="M10 2.5h4V8h5.5v4H14v9.5h-4V12H4.5V8H10z"/>',
   book: '<path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round" d="M12 6.5C10 5 7 4.6 4 5v13c3-.4 6 0 8 1.5 2-1.5 5-1.9 8-1.5V5c-3-.4-6 0-8 1.5zM12 6.5v13"/>',
+  bell: '<path fill="currentColor" d="M12 2.5a1.6 1.6 0 0 1 1.6 1.6v.6A6 6 0 0 1 18 10.5v3.2l1.7 2.6c.4.6 0 1.4-.8 1.4H5.1c-.8 0-1.2-.8-.8-1.4L6 13.7v-3.2a6 6 0 0 1 4.4-5.8v-.6A1.6 1.6 0 0 1 12 2.5zM9.8 19h4.4a2.2 2.2 0 0 1-4.4 0z"/>',
+  crown: '<path fill="currentColor" d="M3 8l4.5 4L12 5l4.5 7L21 8l-1.8 10H4.8L3 8zm2.2 11.5h13.6V21H5.2v-1.5z"/>',
   spark: '<path fill="currentColor" d="M12 2l2.3 7.7L22 12l-7.7 2.3L12 22l-2.3-7.7L2 12l7.7-2.3z"/>'
 };
+var MARKS = [7, 30, 100, 365];
 var PALETTE = [['#f3cf72', '#e08f3c'], ['#9fd9c3', '#4aa88a'], ['#b9b3ff', '#7a6fe0'], ['#ffb3b3', '#e06c7c']];
 function $(i){ return document.getElementById(i); }
 function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -171,7 +196,7 @@ function load(){
 }
 function setMe(id){ me = id; if (id) localStorage.setItem('eu', id); else localStorage.removeItem('eu'); draw(); }
 
-function celebrate(){
+function celebrate(big){
   if (navigator.vibrate) navigator.vibrate([30, 40, 30]);
   var b = el('div', 'burst'); document.body.appendChild(b);
   ['flame', 'spark', 'heart', 'spark', 'flame', 'spark', 'heart', 'spark', 'flame', 'spark'].forEach(function(c, i, all){
@@ -182,11 +207,13 @@ function celebrate(){
     b.appendChild(s);
   });
   setTimeout(function(){ b.remove(); }, 1100);
+  if (big) setTimeout(function(){ celebrate(false); }, 350);
 }
 
 function message(p, justDone){
   var other = S.people.filter(function(o){ return o.id !== p.id; });
   if (!p.doneToday) return other.some(function(o){ return o.doneToday; }) ? 'Já fizeram o devocional hoje. Falta você.' : 'Um momento com Deus antes de dormir também vale.';
+  if (justDone && MARKS.indexOf(p.streak) >= 0) return 'Marco de ' + p.streak + ' dias alcançado! Que fidelidade.';
   if (p.streak >= 2) return 'Que bênção! ' + plural(p.streak, 'dia seguido', 'dias seguidos') + '.';
   return justDone ? 'Que bênção! Primeiro dia da sequência.' : 'Feito por hoje. Até amanhã!';
 }
@@ -225,12 +252,52 @@ function draw(justDone){
     var ic = el('div', 'ic'); ic.appendChild(ico(o.doneToday ? 'check' : 'clock')); d.appendChild(ic);
     var c = el('div'); c.appendChild(el('b', null, o.doneToday ? o.name + ' já fez hoje' : o.name + ' ainda não fez hoje'));
     c.appendChild(el('span', null, plural(o.streak, 'dia seguido', 'dias seguidos')));
-    d.appendChild(c); pairs.appendChild(d);
+    d.appendChild(c);
+    if (!o.doneToday) {
+      var call = el('button', 'call'); call.appendChild(ico('bell')); call.appendChild(document.createTextNode('Chamar'));
+      call.onclick = function(){
+        api('/nudge', { from: m.id, to: o.id }).then(function(s2){ S = s2; draw(); $('hint').textContent = 'Chamei ' + o.name + '.'; })
+          .catch(function(){ $('err').textContent = 'Você já chamou ' + o.name + ' agora há pouco. Espere um pouco.'; });
+      };
+      d.appendChild(call);
+    }
+    pairs.appendChild(d);
   });
   if (S.people.length > 1 && S.together > 0) {
     var tg = el('div', 'pair ok'); var tic = el('div', 'ic'); tic.appendChild(ico('heart')); tg.appendChild(tic);
     var tc = el('div'); tc.appendChild(el('b', null, 'Vocês juntos: ' + plural(S.together, 'dia', 'dias')));
     tc.appendChild(el('span', null, 'Todos fizeram, dia após dia')); tg.appendChild(tc); pairs.appendChild(tg);
+  }
+
+  // The week's duel
+  if (S.people.length > 1) {
+    var lead = S.weekLeader && person(S.weekLeader), top = Math.max.apply(null, S.people.map(function(p){ return p.weekCount; }));
+    if (lead || top > 0) {
+      var du = el('div', 'pair'); var dic = el('div', 'ic'); dic.appendChild(ico('crown')); du.appendChild(dic);
+      var dc = el('div');
+      dc.appendChild(el('b', null, lead ? 'Na frente esta semana: ' + lead.name : 'Semana empatada'));
+      dc.appendChild(el('span', null, 'Quem fizer mais dias até domingo leva a coroa'));
+      du.appendChild(dc); pairs.appendChild(du);
+    }
+  }
+
+  // Someone called me
+  var nd = $('nudged'); nd.textContent = '';
+  if (m && m.nudgedBy && !m.doneToday) {
+    var al = el('div', 'alert'); var aic = el('div', 'ic'); aic.appendChild(ico('bell')); al.appendChild(aic);
+    var ac = el('div'); ac.appendChild(el('b', null, m.nudgedBy + ' te chamou')); ac.appendChild(el('span', null, 'Hora do devocional de hoje'));
+    ac.firstChild.style.display = 'block'; al.appendChild(ac); nd.appendChild(al);
+  }
+
+  // The couple's tree grows with everyone's points
+  var tr = $('tree'); tr.hidden = !(S.tree && S.people.length);
+  if (S.tree) {
+    var src = '/tree.svg?stage=' + S.tree.stage; if ($('timg').getAttribute('src') !== src) $('timg').setAttribute('src', src);
+    $('tname').textContent = 'Árvore de vocês: ' + S.tree.name;
+    $('tpts').textContent = plural(S.tree.points, 'ponto', 'pontos') + ' juntos';
+    var span = S.tree.next ? S.tree.next - S.tree.from : 1;
+    $('tbar').style.width = (S.tree.next ? Math.min(100, Math.round((S.tree.points - S.tree.from) / span * 100)) : 100) + '%';
+    $('tnext').textContent = S.tree.next ? 'Faltam ' + (S.tree.next - S.tree.points) + ' para crescer' : 'Está no auge. Que lindo de ver.';
   }
 
   // Ranking
@@ -239,7 +306,9 @@ function draw(justDone){
     var c = el('div', 'card' + (p.id === me ? ' me' : ''));
     var r = el('div', 'row');
     r.appendChild(avatar(p, true));
-    var nm = el('div', 'name', p.name); r.appendChild(nm);
+    var nm = el('div', 'name'); nm.appendChild(document.createTextNode(p.name));
+    if (S.weekLeader === p.id) nm.appendChild(ico('crown', 'crown'));
+    nm.appendChild(el('span', 'lvl', p.level + ' · ' + plural(p.points, 'ponto', 'pontos'))); r.appendChild(nm);
     var st = el('span', 'streak'); st.appendChild(ico('flame', 'fire' + (p.streak > 0 ? ' live' : ''))); st.appendChild(document.createTextNode(String(p.streak))); r.appendChild(st);
     c.appendChild(r);
     var w = el('div', 'week');
@@ -258,7 +327,7 @@ function draw(justDone){
       marks.appendChild(k);
     });
     c.appendChild(marks);
-    c.appendChild(el('div', 'meta', 'Melhor sequência ' + p.best + ' · ' + p.last30 + ' dos últimos 30 dias · ' + p.total + ' no total'));
+    c.appendChild(el('div', 'meta', 'Esta semana ' + plural(p.weekCount, 'dia', 'dias') + ' · melhor sequência ' + p.best + ' · ' + p.total + ' no total'));
     rank.appendChild(c);
   });
 
@@ -294,7 +363,7 @@ function toggle(date, done, key){
 $('big').onclick = function(){
   var m = person(me); if (!m) return;
   var done = !m.doneToday;
-  toggle(S.today, done, 'today').then(function(){ if (done) celebrate(); }).catch(function(){});
+  toggle(S.today, done, 'today').then(function(){ if (done) celebrate(MARKS.indexOf((person(me) || {}).streak) >= 0); }).catch(function(){});
 };
 $('yday').onclick = function(){
   var m = person(me); if (!m) return;

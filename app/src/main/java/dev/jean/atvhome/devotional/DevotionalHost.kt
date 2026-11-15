@@ -28,7 +28,7 @@ object DevotionalHost {
     @Synchronized
     fun board(context: Context): Devotional = board ?: run {
         val store = DevotionalStore(File(context.applicationContext.filesDir, "devotional.json"))
-        Devotional(store.load()) { data -> store.save(data); tick.value++ }.also { board = it }
+        Devotional(store.load(), onEvent = { tick.value++ }) { data -> store.save(data); tick.value++ }.also { board = it }
     }
 
     /** The site's address on the home network, or null when it is not running. */

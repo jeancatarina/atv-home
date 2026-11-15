@@ -21,7 +21,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Celebration
 import androidx.compose.material.icons.rounded.Check
+import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Notifications
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.material.icons.rounded.LocalFireDepartment
 import androidx.tv.material3.Icon
 import androidx.compose.runtime.Composable
@@ -42,7 +48,11 @@ import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
 import dev.jean.atvhome.devotional.Devotional
 import dev.jean.atvhome.devotional.DevotionalHost
+import dev.jean.atvhome.devotional.Block
+import dev.jean.atvhome.devotional.Disc
+import dev.jean.atvhome.devotional.Game
 import dev.jean.atvhome.devotional.Standing
+import dev.jean.atvhome.devotional.TreeArt
 import dev.jean.atvhome.ui.components.Chip
 import dev.jean.atvhome.ui.components.QrCode
 import dev.jean.atvhome.ui.components.requestWhenReady
@@ -69,13 +79,23 @@ fun DevotionalScreen() {
     var today by remember { mutableStateOf(LocalDate.now()) }
     // A new day starts at midnight even if the screen stays open
     LaunchedEffect(Unit) { while (true) { delay(60_000); today = LocalDate.now() } }
-    val rows = remember(version, today) { board.standings(today).map { it to board.daysOf(it.person.id) } }
+    var clock by remember { mutableStateOf(System.currentTimeMillis()) }
+    LaunchedEffect(Unit) { while (true) { delay(60_000); clock = System.currentTimeMillis() } }
+    val leader = remember(version, today) { board.weekLeader(today)?.id }
+    val rows = remember(version, today) {
+        board.standings(today).map { Line(it, board.daysOf(it.person.id), board.points(it.person.id), board.weekCount(it.person.id, today), it.person.id == leader) }
+    }
+    val tree = remember(version) { Game.tree(board.couplePoints()) }
+    // Who was called and has not answered: a short line under the title, for whoever is on the sofa
+    val calls = remember(version, today, clock) {
+        rows.mapNotNull { l -> board.nudgedBy(l.s.person.id, today, clock)?.let { "${it.name} chamou ${l.s.person.name} para o devocional" } }
+    }
     val together = remember(version, today) { board.together(today) }
     // Someone checks in on a phone while the board is open: say it, so the other sees it from the sofa
     var seen by remember { mutableStateOf<Set<String>?>(null) }
     var banner by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(version, today) {
-        val now = rows.filter { it.first.doneToday }.associate { it.first.person.id to it.first.person.name }
+        val now = rows.filter { it.s.doneToday }.associate { it.s.person.id to it.s.person.name }
         val before = seen
         seen = now.keys
         val fresh = if (before == null) emptyList() else now.filterKeys { it !in before }.values.toList()
@@ -97,7 +117,12 @@ fun DevotionalScreen() {
                 Spacer(Modifier.width(6.dp))
                 Text(shown, style = Tv.Headline, color = Done)
             }
-            else Text(subtitle(rows.map { it.first }), style = Tv.Meta, color = Tv.Tertiary)
+            else if (calls.isNotEmpty()) Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Rounded.Notifications, null, Modifier.size(18.dp), tint = Gold)
+                Spacer(Modifier.width(6.dp))
+                Text(calls.first(), style = Tv.Headline, color = Gold)
+            }
+            else Text(subtitle(rows.map { it.s }), style = Tv.Meta, color = Tv.Tertiary)
             Spacer(Modifier.height(16.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Chip("Últimos 30 dias", month, { month = true }, Modifier.focusRequester(first))
@@ -118,9 +143,9 @@ fun DevotionalScreen() {
                 }
                 Spacer(Modifier.height(12.dp))
             }
-            rows.forEachIndexed { i, (s, days) -> PersonCard(i, s, days, today, if (month) 30 else 7); Spacer(Modifier.height(12.dp)) }
+            rows.forEachIndexed { i, l -> PersonCard(i, l, today, if (month) 30 else 7); Spacer(Modifier.height(12.dp)) }
         }
-        Column(Modifier.width(280.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(Modifier.padding(start = 28.dp).width(308.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Spacer(Modifier.height(30.dp))
             Box(Modifier.size(220.dp).background(Color.White, RoundedCornerShape(22.dp)).padding(14.dp), contentAlignment = Alignment.Center) {
                 val q: Bitmap? = qr
@@ -131,6 +156,8 @@ fun DevotionalScreen() {
             Text("Dar check-in no celular", style = Tv.Headline, color = Tv.Primary)
             Text(url ?: "Site fora do ar", style = Tv.Meta, color = Tv.Tertiary)
             Text("O celular precisa estar no mesmo Wi-Fi da TV", style = Tv.Caption, color = Tv.Tertiary)
+            Spacer(Modifier.height(22.dp))
+            TreeCard(tree)
         }
     }
 }
@@ -142,7 +169,9 @@ private fun subtitle(people: List<Standing>): String = when {
 }
 
 @Composable
-private fun PersonCard(index: Int, s: Standing, days: Set<LocalDate>, today: LocalDate, span: Int) {
+private fun PersonCard(index: Int, line: Line, today: LocalDate, span: Int) {
+    val s = line.s
+    val days = line.days
     Column(Modifier.fillMaxWidth().background(Color.White.copy(alpha = 0.08f), RoundedCornerShape(16.dp)).padding(horizontal = 18.dp, vertical = 12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             val ring = listOf(Gold, Silver).getOrNull(index)
@@ -155,7 +184,13 @@ private fun PersonCard(index: Int, s: Standing, days: Set<LocalDate>, today: Loc
                 contentAlignment = Alignment.Center,
             ) { Text(s.person.name.take(1).uppercase(), style = Tv.Title, color = Color(0xFF1A1208)) }
             Spacer(Modifier.width(12.dp))
-            Text(s.person.name, style = Tv.Title, color = Tv.Primary, modifier = Modifier.weight(1f))
+            Column(Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(s.person.name, style = Tv.Title, color = Tv.Primary)
+                    if (line.leader) { Spacer(Modifier.width(8.dp)); Icon(Icons.Rounded.EmojiEvents, null, Modifier.size(22.dp), tint = Gold) }
+                }
+                Text("${Game.personLevel(line.points).name} · ${if (line.points == 1) "1 ponto" else "${line.points} pontos"}", style = Tv.Caption, color = Tv.Tertiary)
+            }
             if (s.doneToday) Icon(Icons.Rounded.Check, null, Modifier.size(16.dp), tint = Done)
             if (s.doneToday) Spacer(Modifier.width(4.dp))
             Text(if (s.doneToday) "hoje" else "ainda não hoje", style = Tv.Meta, color = if (s.doneToday) Done else Tv.Tertiary)
@@ -177,7 +212,7 @@ private fun PersonCard(index: Int, s: Standing, days: Set<LocalDate>, today: Loc
         }
         Spacer(Modifier.height(8.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Melhor sequência ${s.best} · ${s.last30} dos últimos 30 dias · ${s.total} no total", style = Tv.Caption, color = Tv.Tertiary, modifier = Modifier.weight(1f))
+            Text("Esta semana ${if (line.week == 1) "1 dia" else "${line.week} dias"} · melhor sequência ${s.best} · ${s.total} no total", style = Tv.Caption, color = Tv.Tertiary, modifier = Modifier.weight(1f))
             // Milestones: lit gold once the best streak reaches them
             listOf(7, 30, 100, 365).forEach { n ->
                 val on = s.best >= n
@@ -194,3 +229,38 @@ private val AVATARS = listOf(
     Color(0xFFF3CF72) to Color(0xFFE08F3C), Color(0xFF9FD9C3) to Color(0xFF4AA88A),
     Color(0xFFB9B3FF) to Color(0xFF7A6FE0), Color(0xFFFFB3B3) to Color(0xFFE06C7C),
 )
+
+private data class Line(val s: Standing, val days: Set<LocalDate>, val points: Int, val week: Int, val leader: Boolean)
+
+/** The couple's tree and how far it is from growing: drawn from the very shapes the phones' image uses. */
+@Composable
+private fun TreeCard(tree: Game.Step) {
+    Row(
+        Modifier.fillMaxWidth().background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.10f), Color.White.copy(alpha = 0.03f))), RoundedCornerShape(16.dp)).padding(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Canvas(Modifier.size(88.dp)) {
+            val k = size.width / 120f
+            TreeArt.stage(tree.index).forEach { sh ->
+                val c = Color(0xFF000000L or sh.color.toLong())
+                when (sh) {
+                    is Disc -> drawCircle(c, sh.r * k, Offset(sh.cx * k, sh.cy * k))
+                    is Block -> drawRoundRect(c, Offset(sh.x * k, sh.y * k), Size(sh.w * k, sh.h * k), CornerRadius(sh.radius * k))
+                }
+            }
+        }
+        Spacer(Modifier.width(12.dp))
+        Column {
+            Text("Árvore de vocês", style = Tv.Caption, color = Tv.Tertiary)
+            Text(tree.name, style = Tv.Headline, color = Tv.Primary)
+            Spacer(Modifier.height(6.dp))
+            val next = tree.nextAt
+            val fraction = if (next == null) 1f else ((tree.points - tree.startAt).toFloat() / (next - tree.startAt)).coerceIn(0f, 1f)
+            Box(Modifier.fillMaxWidth().height(6.dp).background(Color.White.copy(alpha = 0.14f), RoundedCornerShape(3.dp))) {
+                Box(Modifier.fillMaxWidth(fraction).height(6.dp).background(Done, RoundedCornerShape(3.dp)))
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(if (next == null) "No auge" else "Faltam ${next - tree.points} pontos", style = Tv.Caption, color = Tv.Tertiary)
+        }
+    }
+}
