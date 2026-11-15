@@ -10,7 +10,7 @@ object Game {
     private const val RUN_STEP = 2
 
     private val PERSON = listOf(0, 30, 100, 250, 500, 1000)
-    val personLevels = listOf("Iniciante", "Constante", "Dedicado", "Fiel", "Mestre", "Lenda")
+    val personLevels = listOf("Início", "Constância", "Dedicação", "Fidelidade", "Perseverança", "Plenitude")
 
     /** The tree grows with the couple's points together. */
     private val TREE = listOf(0, 40, 120, 300, 600, 1200)

@@ -74,10 +74,10 @@ class DevotionalTest {
     }
 
     @Test fun levelsAndTreeStagesFollowTheThresholds() {
-        assertEquals("Iniciante", Game.personLevel(0).name)
+        assertEquals("Início", Game.personLevel(0).name)
         assertEquals(30, Game.personLevel(0).nextAt)
-        assertEquals("Constante", Game.personLevel(30).name)
-        assertEquals("Lenda", Game.personLevel(5000).name)
+        assertEquals("Constância", Game.personLevel(30).name)
+        assertEquals("Plenitude", Game.personLevel(5000).name)
         assertNull(Game.personLevel(5000).nextAt)
         assertEquals(0, Game.tree(39).index)
         assertEquals(1, Game.tree(40).index)
@@ -115,10 +115,14 @@ class DevotionalTest {
     }
 
     @Test fun everyTreeStageDrawsAndGrows() {
-        val counts = (0 until TreeArt.STAGES).map { TreeArt.stage(it).size }
-        assertEquals(counts.sorted(), counts)
+        // Each stage reaches higher than the one before: the tree really grows
+        val tops = (0 until TreeArt.STAGES).map { n ->
+            TreeArt.stage(n).minOf { sh -> when (sh) { is Disc -> sh.cy - sh.r; is Block -> sh.y } }
+        }
+        assertEquals(tops.sortedDescending(), tops)
+        assertTrue(tops.first() > tops.last())
         (0 until TreeArt.STAGES).forEach { assertTrue(TreeArt.svg(it).startsWith("<svg") && TreeArt.svg(it).endsWith("</svg>")) }
-        assertTrue(TreeArt.stage(5).any { it.color == 0xF2C14E })
+        assertTrue(TreeArt.stage(5).any { it.color == TreeArt.FRUIT })
         assertEquals(TreeArt.stage(5), TreeArt.stage(99))
     }
 

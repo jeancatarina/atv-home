@@ -54,12 +54,12 @@ fun DevotionalReminder(names: List<String>, modifier: Modifier = Modifier) {
     AnimatedVisibility(names.isNotEmpty(), modifier = modifier, enter = fadeIn(), exit = fadeOut()) {
         Row(
             Modifier
-                .background(Color.White.copy(alpha = 0.10f), RoundedCornerShape(50))
-                .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(50))
+                .background(Color.Black.copy(alpha = 0.32f), RoundedCornerShape(50))
+                .border(1.dp, Color.White.copy(alpha = 0.12f), RoundedCornerShape(50))
                 .padding(start = 10.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Rounded.MenuBook, null, Modifier.size(15.dp), tint = Tv.Secondary)
+            Icon(Icons.Rounded.MenuBook, null, Modifier.size(15.dp), tint = Color(0xFFC9A96B))
             Spacer(Modifier.width(7.dp))
             Text(
                 "Devocional  ·  " + if (names.size == 1) "falta ${names.first()}" else "faltam ${names.joinToString(" e ")}",

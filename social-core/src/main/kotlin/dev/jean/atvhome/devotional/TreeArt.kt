@@ -11,16 +11,17 @@ data class Block(val x: Float, val y: Float, val w: Float, val h: Float, val rad
  */
 object TreeArt {
     const val STAGES = 6
-    private const val GROUND = 0x3A2F22
-    private const val TRUNK = 0x8A5A33
-    private const val LEAF = 0x3FAF72
-    private const val LEAF_LIGHT = 0x6FD79A
-    private const val FRUIT = 0xF2C14E
+    // Muted on purpose: one brass note (the fruit) over quiet greens and a bark brown
+    private const val GROUND = 0x5A5347
+    private const val TRUNK = 0x7A6650
+    private const val LEAF = 0x6B8764
+    private const val LEAF_LIGHT = 0x88A07F
+    const val FRUIT = 0xC9A96B
 
     fun stage(n: Int): List<Shape> {
-        val ground = Block(18f, 102f, 84f, 10f, 5f, GROUND)
+        val ground = Block(24f, 103.5f, 72f, 1.6f, 0.8f, GROUND)
         return listOf(ground) + when (n.coerceIn(0, STAGES - 1)) {
-            0 -> listOf(Disc(60f, 100f, 9f, TRUNK), Disc(55f, 92f, 5f, LEAF), Disc(65f, 92f, 5f, LEAF_LIGHT))
+            0 -> listOf(Disc(60f, 100f, 12f, TRUNK), Disc(52f, 86f, 8f, LEAF), Disc(68f, 86f, 8f, LEAF_LIGHT), Disc(60f, 78f, 6f, LEAF))
             1 -> trunk(4f, 24f) + listOf(Disc(53f, 76f, 8f, LEAF), Disc(67f, 76f, 8f, LEAF_LIGHT))
             2 -> trunk(5f, 36f) + listOf(Disc(50f, 66f, 11f, LEAF), Disc(70f, 66f, 11f, LEAF_LIGHT), Disc(60f, 56f, 12f, LEAF))
             3 -> trunk(8f, 46f) + listOf(Disc(46f, 54f, 17f, LEAF), Disc(74f, 54f, 17f, LEAF_LIGHT), Disc(60f, 38f, 18f, LEAF))

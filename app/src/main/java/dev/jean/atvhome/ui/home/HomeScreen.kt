@@ -461,7 +461,7 @@ private fun HeroInfo(
             Box {
                 PillButton("Devocional", onDevotional, iconVector = Icons.Rounded.MenuBook, onFocus = onButtonsFocus)
                 if (rememberDevotionalPending().isNotEmpty()) {
-                    Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(9.dp).background(Color(0xFFFFB454), CircleShape))
+                    Box(Modifier.align(Alignment.TopEnd).padding(top = 2.dp, end = 2.dp).size(9.dp).background(Color(0xFFC9A96B), CircleShape))
                 }
             }
             // The Central (Sem anúncios, the TV inputs, Wi-Fi) is also on the MENU key, which Sony's
