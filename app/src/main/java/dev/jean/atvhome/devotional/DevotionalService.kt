@@ -43,9 +43,11 @@ class DevotionalService : Service() {
     }
 }
 
-/** Starts the site when the TV boots, before anyone opens the launcher. */
+/** Starts the site when the TV boots or the app updates, before anyone opens the launcher. */
 class DevotionalBoot : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) DevotionalService.start(context)
+        if (intent.action == Intent.ACTION_BOOT_COMPLETED || intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) {
+            DevotionalService.start(context)
+        }
     }
 }
