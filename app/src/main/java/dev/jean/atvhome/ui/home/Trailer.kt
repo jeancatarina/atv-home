@@ -13,7 +13,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalLifecycleOwner
@@ -46,12 +45,13 @@ fun TrailerBackdrop(
     var player by remember { mutableStateOf<YouTubePlayer?>(null) }
     var playing by remember { mutableStateOf(false) }
     val fade = remember { Animatable(0f) }
-    val scrim = remember { Scrim.overlay().asImageBitmap() }
+    val scrim = Scrim.overlayImage
 
     // The caller composes this only while the remote rests, and drops it at the first key press:
     // even an invisible WebView costs ~6 ms of GPU per frame on this TV
     LaunchedEffect(videoKey, player) {
         val p = player ?: return@LaunchedEffect
+        playing = false
         fade.snapTo(0f)
         onAlpha(0f)
         p.mute()

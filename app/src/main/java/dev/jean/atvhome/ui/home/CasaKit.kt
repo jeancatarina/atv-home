@@ -6,6 +6,7 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -248,11 +249,12 @@ internal fun SceneCard(
         onFocus = { focused = it },
         modifier = modifier.width(206.dp).height(112.dp),
     ) {
-        // The scene's colour washes in from the corner: one radial fill on a small card, no blur
-        Box(Modifier.fillMaxSize().drawBehind {
+        // The scene's colour washes in from the corner: cached radial fill on a small card, no blur
+        Box(Modifier.fillMaxSize().drawWithCache {
             val corner = androidx.compose.ui.geometry.Offset(size.width, 0f)
             val r = size.width * 0.9f
-            drawCircle(Brush.radialGradient(listOf(tint.copy(alpha = if (focused) 0.30f else 0.24f), Color.Transparent), corner, r), radius = r, center = corner)
+            val brush = Brush.radialGradient(listOf(tint.copy(alpha = if (focused) 0.30f else 0.24f), Color.Transparent), corner, r)
+            onDrawBehind { drawCircle(brush, radius = r, center = corner) }
         })
         Column(Modifier.fillMaxSize().padding(14.dp)) {
             Box(Modifier.size(36.dp).background(if (focused) tint else tint.copy(alpha = 0.2f), CircleShape), contentAlignment = Alignment.Center) {

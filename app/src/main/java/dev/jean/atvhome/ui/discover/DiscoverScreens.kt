@@ -177,6 +177,14 @@ fun ExploreScreen(vm: HomeViewModel, onOpen: (Title) -> Unit) {
         val ids = providerIds.ifEmpty { vm.myProviders.map { it.id }.toSet() }
         items = vm.explore(filters, ids)
     }
+    val uniqueProviders = remember(vm.myProviders) { vm.myProviders.distinctBy { vm.packageFor(it) } }
+    val genresForType = remember(filters.type) { Genre.entries.filter { it.shown(filters.type) } }
+    val decades = remember {
+        listOf<Pair<String, Pair<Int?, Int?>>>(
+            "Qualquer época" to (null to null), "Recentes" to (java.time.LocalDate.now().year - 2 to null),
+            "2010s" to (2010 to 2019), "2000s" to (2000 to 2009), "Anos 90" to (1990 to 1999), "Anos 80" to (1980 to 1989), "Clássicos" to (null to 1979),
+        )
+    }
     Column(Modifier.fillMaxSize().background(LocalAccent.current.screen())) {
         Header("Explorar", "Combine os filtros; só aparece o que está nos seus streamings, pela nota do IMDb")
         Spacer(Modifier.height(10.dp))
@@ -188,7 +196,7 @@ fun ExploreScreen(vm: HomeViewModel, onOpen: (Title) -> Unit) {
                     if (t == MediaType.MOVIE) Modifier.focusRequester(firstChip) else Modifier,
                 )
             }
-            items(vm.myProviders.distinctBy { vm.packageFor(it) }, key = { it.id }) { p ->
+            items(uniqueProviders, key = { it.id }) { p ->
                 val label = vm.packageFor(p)?.let(vm::appFor)?.label ?: p.name
                 Chip(label, p.id in providerIds, { providerIds = if (p.id in providerIds) providerIds - p.id else providerIds + p.id })
             }
@@ -196,7 +204,7 @@ fun ExploreScreen(vm: HomeViewModel, onOpen: (Title) -> Unit) {
         ChipRow {
             // A category of one kind only (reality shows are series, stand-up is films) shows with the
             // other too, and choosing it there turns to its kind, keeping what still fits
-            items(Genre.entries.filter { it.shown(filters.type) }) { g ->
+            items(genresForType) { g ->
                 Chip(g.label, g in filters.genres, {
                     filters = when {
                         g in filters.genres -> filters.copy(genres = filters.genres - g)
@@ -213,10 +221,6 @@ fun ExploreScreen(vm: HomeViewModel, onOpen: (Title) -> Unit) {
             items(listOf(null, 6.5, 7.0, 7.5, 8.0)) { r ->
                 Chip(r?.let { "IMDb ${Format.rating(it)}+" } ?: "Qualquer nota", filters.minImdb == r, { filters = filters.copy(minImdb = r) })
             }
-            val decades = listOf<Pair<String, Pair<Int?, Int?>>>(
-                "Qualquer época" to (null to null), "Recentes" to (java.time.LocalDate.now().year - 2 to null),
-                "2010s" to (2010 to 2019), "2000s" to (2000 to 2009), "Anos 90" to (1990 to 1999), "Anos 80" to (1980 to 1989), "Clássicos" to (null to 1979),
-            )
             items(decades) { (label, range) ->
                 Chip(label, filters.fromYear == range.first && filters.toYear == range.second, {
                     filters = filters.copy(fromYear = range.first, toYear = range.second)

@@ -131,7 +131,7 @@ class HomeActivity : ComponentActivity() {
                             active = top == null && !panelOpen,
                             restoreSignal = restoreSignal,
                             resetSignal = resetSignal,
-                            inputTick = inputTick,
+                            inputTick = { inputTick },
                             onOpen = onOpen,
                             onSearch = { open(Screen.Search) },
                             onWatch = { open(Screen.Watch) },
@@ -199,7 +199,7 @@ class HomeActivity : ComponentActivity() {
             return true
         }
         if (event.action == KeyEvent.ACTION_DOWN) {
-            inputTick++
+            if (event.keyCode !in MEDIA_SOUND_KEYS) inputTick++
             // A screen or the Central with nothing focused: the first arrow or OK brings the focus back
             if (event.keyCode in NAV_KEYS && regainFocus()) return true
             when (event.keyCode) {
@@ -232,13 +232,18 @@ class HomeActivity : ComponentActivity() {
         if (hasFocus) window.decorView.post { regainFocus() }
     }
 
+    private fun resetToHome() {
+        stack.clear()
+        panelOpen = false
+        resetSignal++
+    }
+
     /** HOME pressed while the launcher is already in front: back to the top of Home. */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         if (intent.hasCategory(Intent.CATEGORY_HOME)) {
-            stack.clear()
-            panelOpen = false
-            resetSignal++
+            (application as App).consumeReturnHomeOnWake()
+            resetToHome()
         }
     }
 
@@ -267,9 +272,14 @@ class HomeActivity : ComponentActivity() {
 
     override fun onStart() {
         super.onStart()
+        val app = application as App
+        app.onWake = {
+            if (app.consumeReturnHomeOnWake()) resetToHome()
+        }
+        if (app.consumeReturnHomeOnWake()) resetToHome()
         // "Casa": the hub connection opens with Home in front, so a click never waits for it
         home?.connect(true)
-        // The guard steps aside while Home is in front: browsing pays nothing for it
+        // The guard and film-overlay service step aside while Home is in front: browsing pays nothing for them
         lifecycleScope.launch { AdShield.launcherInFront(this@HomeActivity, true) }
         // A network filter that stopped answering must not leave the TV without internet
         if (AdShield.dnsOn(this) && healing?.isActive != true) healing = lifecycleScope.launch {
@@ -283,6 +293,7 @@ class HomeActivity : ComponentActivity() {
     /** Another app took the screen: a Social game freezes instead of running its clocks behind the app. */
     override fun onStop() {
         super.onStop()
+        (application as App).onWake = null
         home?.connect(false)
         if (socialUsed) social.background()
         lifecycleScope.launch { AdShield.launcherInFront(this@HomeActivity, false) }
@@ -299,4 +310,8 @@ class HomeActivity : ComponentActivity() {
 private val NAV_KEYS = setOf(
     KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN, KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
     KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER,
+)
+
+private val MEDIA_SOUND_KEYS = setOf(
+    KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE, KeyEvent.KEYCODE_MEDIA_PLAY, KeyEvent.KEYCODE_MEDIA_PAUSE,
 )

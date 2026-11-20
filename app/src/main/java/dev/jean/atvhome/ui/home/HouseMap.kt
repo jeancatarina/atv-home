@@ -36,6 +36,7 @@ import androidx.compose.material.icons.rounded.WbTwilight
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -139,7 +140,7 @@ fun HouseMap(
     val floorRooms = plan.floors.getOrNull(floor)?.rooms.orEmpty()
     val room = chosen?.takeIf { it in floorRooms } ?: floorRooms.firstOrNull()
     val inRoom = home.lights.filter { it.room == room?.room }
-    val roomLit = inRoom.count { Panel.isOn(it, states) }
+    val roomLit by remember(inRoom) { derivedStateOf { inRoom.count { Panel.isOn(it, statesState.value) } } }
     val tvRoom = home.lights.firstOrNull()?.room
     val text = rememberTextMeasurer()
     // What does not move on this floor, built once; the tags' text, measured once per label

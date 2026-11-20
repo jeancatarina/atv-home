@@ -163,8 +163,15 @@ Abra **Decoração do Ambiente** nos apps, aperte **OK** e escolha **Rainforest 
 aparece pelo serviço de acessibilidade do Início (o mesmo da Casa no filme), que
 `tools/ad-guard-setup.sh` ou `tools/tuya-setup.sh` deixam ligado.
 
-A Alexa liga e desliga a TV pelo app **Controle da TV com alto-falantes inteligentes** da Sony. Ele
-também não pode estar desativado: `adb shell pm enable com.sony.dtv.seeds.iot`.
+A Alexa liga e desliga a TV pelo app **Controle da TV com alto-falantes inteligentes** da Sony, e o **Apple Home / AirPlay** depende dos serviços de HomeKit/AirPlay da Sony e do motor web usado por ele (`com.vewd.core.service`, sem o qual o AirPlay entra em loop de crash em segundo plano). Nenhum deles pode estar desativado:
+
+```sh
+adb shell pm enable com.sony.dtv.seeds.iot
+adb shell cmd package install-existing com.vewd.core.service
+adb shell pm enable com.vewd.core.service
+adb shell pm enable com.sony.dtv.homekit
+adb shell pm enable com.sony.dtv.airplayapp
+```
 
 ---
 

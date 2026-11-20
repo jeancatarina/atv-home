@@ -106,14 +106,18 @@ class Apps(private val context: Context) {
  */
 object ProviderMatch {
 
+    private val DIACRITICS = Regex("\\p{M}+")
+    private val NON_ALNUM = Regex("[^a-z0-9]")
+    private val NON_ALNUM_RUN = Regex("[^a-z0-9]+")
+
     fun normalize(name: String): String = java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFD)
-        .replace(Regex("\\p{M}+"), "")
+        .replace(DIACRITICS, "")
         .lowercase()
         .replace("+", "plus")
-        .replace(Regex("[^a-z0-9]"), "")
+        .replace(NON_ALNUM, "")
 
     private fun firstWord(name: String) = java.text.Normalizer.normalize(name, java.text.Normalizer.Form.NFD)
-        .replace(Regex("\\p{M}+"), "").lowercase().split(Regex("[^a-z0-9]+")).firstOrNull { it.isNotBlank() }.orEmpty()
+        .replace(DIACRITICS, "").lowercase().split(NON_ALNUM_RUN).firstOrNull { it.isNotBlank() }.orEmpty()
 
     /** provider id → package name of the installed app that plays it. */
     fun match(providers: List<Provider>, apps: List<Pair<String, String>>): Map<Int, String> {

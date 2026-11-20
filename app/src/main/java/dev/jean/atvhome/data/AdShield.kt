@@ -64,7 +64,10 @@ object AdShield {
     // Touched on the writer thread only
     private var homeInFront = true
     private var playing = false
+    private var dreaming = false
+    private var houseManaged = false
     private var pendingOff: Job? = null
+    private var pendingPlaybackCheck: Job? = null
     private var playback: AudioManager.AudioPlaybackCallback? = null
 
     private fun prefs(context: Context) = context.getSharedPreferences("adshield", Context.MODE_PRIVATE)
@@ -120,7 +123,8 @@ object AdShield {
         val audio = app.getSystemService(AudioManager::class.java)
         val callback = object : AudioManager.AudioPlaybackCallback() {
             override fun onPlaybackConfigChanged(configs: MutableList<AudioPlaybackConfiguration>?) {
-                scope.launch {
+                pendingPlaybackCheck?.cancel()
+                pendingPlaybackCheck = scope.launch {
                     playbackChanged(app, audio.isMusicActive)
                     // A player reports starting a moment before its sound really reaches the output
                     delay(1_000)
@@ -150,17 +154,47 @@ object AdShield {
         update(context)
     }
 
+    /**
+     * Manages [dev.jean.atvhome.casa.HouseKeyService] on the same writer: unlisted while Home is in
+     * front so Compose pays nothing for accessibility semantics, and listed as soon as another app
+     * or the screensaver takes over.
+     */
+    fun manageHouse(context: Context, on: Boolean = true) {
+        val app = context.applicationContext
+        scope.launch {
+            houseManaged = on
+            if (allowed(app)) updateHouse(app)
+        }
+    }
+
+    /** Ensures [HouseKeyService] stays listed while the TV dreams, even before Home stops. */
+    fun setDreaming(context: Context, active: Boolean) {
+        val app = context.applicationContext
+        scope.launch {
+            dreaming = active
+            if (houseManaged && allowed(app)) updateHouse(app)
+        }
+    }
+
     /** Listed only while another app plays sound, and only with something to do: it costs nothing anywhere else. */
     private fun update(context: Context) {
         pendingOff?.cancel()
         pendingOff = null
-        if (!isOn(context) || !allowed(context)) return
+        if (!allowed(context)) return
+        if (houseManaged) updateHouse(context)
+        if (!isOn(context)) return
         if (!settings(context).acts) { write(context, false); return }
         when {
             !homeInFront && playing -> write(context, true)
             homeInFront -> write(context, false) // Home must never pay for it, at once
             else -> pendingOff = scope.launch { delay(offDelayMs); write(context, false) }
         }
+    }
+
+    private fun updateHouse(context: Context) {
+        val want = houseManaged && (!homeInFront || dreaming)
+        runCatching { listService(context, dev.jean.atvhome.casa.HouseKeyService::class.java, want) }
+            .onFailure { Log.w(TAG, "house $want", it) }
     }
 
     private fun write(context: Context, on: Boolean) {
@@ -193,9 +227,10 @@ object AdShield {
         Settings.Secure.putString(cr, A11Y_SERVICES, next.joinToString(":"))
         when {
             next.isNotEmpty() -> Settings.Secure.putString(cr, A11Y_ENABLED, "1")
-            // Never switch accessibility off for the others (TalkBack, Sony's own services)
-            p.contains("a11y_before") -> {
-                Settings.Secure.putString(cr, A11Y_ENABLED, p.getString("a11y_before", "0"))
+            // No accessibility service left at all: restore what was there before (0 by default)
+            else -> {
+                val before = if (p.contains("a11y_before")) p.getString("a11y_before", "0") else "0"
+                Settings.Secure.putString(cr, A11Y_ENABLED, before)
                 p.edit().remove("a11y_before").commit()
             }
         }

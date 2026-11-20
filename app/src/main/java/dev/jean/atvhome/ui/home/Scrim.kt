@@ -5,6 +5,8 @@ import android.graphics.Canvas
 import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Shader
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import coil3.size.Size
 import coil3.transform.Transformation
 
@@ -26,6 +28,9 @@ object Scrim : Transformation() {
     /** The same scrim on a transparent bitmap, laid over the trailer video as a single texture. */
     fun overlay(width: Int = 960, height: Int = 540): Bitmap =
         Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888).also { paint(Canvas(it), width.toFloat(), height.toFloat()) }
+
+    /** Cached 960×540 overlay texture reused across trailer previews without reallocating 2 MB each idle. */
+    val overlayImage: ImageBitmap by lazy { overlay().asImageBitmap() }
 
     private fun paint(canvas: Canvas, w: Float, h: Float) {
         val paint = Paint(Paint.ANTI_ALIAS_FLAG)

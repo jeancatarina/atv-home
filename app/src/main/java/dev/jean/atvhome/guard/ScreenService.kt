@@ -57,6 +57,11 @@ class ScreenService : Service() {
     private var images: ImageReader? = null
     private var frame: Bitmap? = null // the whole captured frame, reused between reads
     private var bands: Bitmap? = null // top and bottom bands stacked: what the OCR gets, reused
+    private var bandsCanvas: Canvas? = null
+    private val srcTop = Rect(0, 0, W, TOP)
+    private val dstTop = Rect(0, 0, W, TOP)
+    private val srcBot = Rect(0, H - BOTTOM, W, H)
+    private val dstBot = Rect(0, TOP, W, TOP + BOTTOM)
     private var busy = false          // from a look's start until its OCR is done
     private var waiting = false       // a look waits for its frame
     private var seq = 0L
@@ -73,7 +78,7 @@ class ScreenService : Service() {
             if (busy) { handler.postDelayed(this, IDLE_MS); return }
             display?.surface = null
             images?.close(); images = null
-            frame = null; bands = null
+            frame = null; bands = null; bandsCanvas = null
             recognizer?.close(); recognizer = null
         }
     }
@@ -201,11 +206,13 @@ class ScreenService : Service() {
         val full = frame?.takeIf { it.width == rowPixels }
             ?: Bitmap.createBitmap(rowPixels, H, Bitmap.Config.ARGB_8888).also { frame = it }
         full.copyPixelsFromBuffer(plane.buffer)
-        val out = bands ?: Bitmap.createBitmap(W, TOP + BOTTOM, Bitmap.Config.ARGB_8888).also { bands = it }
-        Canvas(out).apply {
-            drawBitmap(full, Rect(0, 0, W, TOP), Rect(0, 0, W, TOP), null)
-            drawBitmap(full, Rect(0, H - BOTTOM, W, H), Rect(0, TOP, W, TOP + BOTTOM), null)
+        val out = bands ?: Bitmap.createBitmap(W, TOP + BOTTOM, Bitmap.Config.ARGB_8888).also {
+            bands = it
+            bandsCanvas = Canvas(it)
         }
+        val canvas = bandsCanvas ?: Canvas(out).also { bandsCanvas = it }
+        canvas.drawBitmap(full, srcTop, dstTop, null)
+        canvas.drawBitmap(full, srcBot, dstBot, null)
         return out
     }
 

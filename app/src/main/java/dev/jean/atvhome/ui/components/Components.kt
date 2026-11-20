@@ -43,11 +43,13 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.ClickableSurfaceDefaults
+import androidx.tv.material3.Icon
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
@@ -56,6 +58,8 @@ import dev.jean.atvhome.data.ImdbRating
 import dev.jean.atvhome.ui.theme.Tv
 import dev.jean.atvhome.ui.theme.LocalAccent
 import dev.jean.atvhome.ui.theme.pill
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 
 /** Remembers the last focused control of a screen, so coming back lands exactly there. */
 class FocusMemory {
@@ -69,6 +73,12 @@ val LocalFocusMemory = staticCompositionLocalOf<FocusMemory?> { null }
 object LastKey {
     var dx by mutableStateOf(0)
 }
+
+private val SHEEN_STOPS = arrayOf(
+    0f to Color.Transparent,
+    0.5f to Color.White.copy(alpha = 0.22f),
+    1f to Color.Transparent,
+)
 
 /**
  * A focusable card with tvOS's focus: it grows, lifts on a long soft shadow, leans in from the
@@ -93,14 +103,16 @@ fun FocusCard(
     val lean = remember { Animatable(0f) }
     LaunchedEffect(focused) {
         if (focused) {
-            lean.snapTo(LastKey.dx * 9f)
-            lean.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow))
-        }
-    }
-    LaunchedEffect(focused) {
-        if (focused) {
-            sheen.snapTo(-1f)
-            sheen.animateTo(2f, tween(900, easing = FastOutSlowInEasing))
+            coroutineScope {
+                launch {
+                    lean.snapTo(LastKey.dx * 9f)
+                    lean.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessLow))
+                }
+                launch {
+                    sheen.snapTo(-1f)
+                    sheen.animateTo(2f, tween(550, easing = FastOutSlowInEasing))
+                }
+            }
         }
     }
     Surface(
@@ -125,18 +137,18 @@ fun FocusCard(
         Box(
             Modifier.fillMaxSize().drawWithContent {
                 drawContent()
-                val p = sheen.value
-                if (focused && p > -1f && p < 2f) {
-                    val x = size.width * p
-                    drawRect(
-                        Brush.linearGradient(
-                            0f to Color.Transparent,
-                            0.5f to Color.White.copy(alpha = 0.22f),
-                            1f to Color.Transparent,
-                            start = Offset(x - size.width * 0.35f, 0f),
-                            end = Offset(x + size.width * 0.35f, size.height),
-                        ),
-                    )
+                if (focused) {
+                    val p = sheen.value
+                    if (p > -1f && p < 2f) {
+                        val x = size.width * p
+                        drawRect(
+                            Brush.linearGradient(
+                                colorStops = SHEEN_STOPS,
+                                start = Offset(x - size.width * 0.35f, 0f),
+                                end = Offset(x + size.width * 0.35f, size.height),
+                            ),
+                        )
+                    }
                 }
             },
         ) { content(focused) }
@@ -155,7 +167,7 @@ fun PillButton(
     /** Only the [icon] until focused, then the [text] too: for a row with no room to spare. */
     textWhenFocused: Boolean = false,
     /** A vector icon, drawn instead of the [icon] glyph. */
-    iconVector: androidx.compose.ui.graphics.vector.ImageVector? = null,
+    iconVector: ImageVector? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val memory = LocalFocusMemory.current
@@ -181,7 +193,7 @@ fun PillButton(
     ) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (iconVector != null) {
-                androidx.tv.material3.Icon(iconVector, null, Modifier.size(18.dp), tint = if (focused) Color.Black else Color.White)
+                Icon(iconVector, contentDescription = null, modifier = Modifier.size(18.dp), tint = if (focused) Color.Black else Color.White)
                 if (showText) Spacer(Modifier.width(7.dp))
             } else if (icon != null) {
                 Text(icon, style = Tv.Headline, color = if (focused) Color.Black else Color.White)

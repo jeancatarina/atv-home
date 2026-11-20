@@ -44,19 +44,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.input.key.Key
@@ -79,6 +82,8 @@ import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Settings
+import androidx.compose.material.icons.rounded.VolumeOff
+import androidx.compose.material.icons.rounded.VolumeUp
 import coil3.compose.AsyncImage
 import coil3.request.transformations
 import coil3.request.crossfade
@@ -102,6 +107,7 @@ import dev.jean.atvhome.ui.components.RowSpacing
 import dev.jean.atvhome.ui.components.RowTitle
 import dev.jean.atvhome.ui.theme.Tv
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
@@ -112,7 +118,7 @@ fun HomeScreen(
     active: Boolean,
     restoreSignal: Int,
     resetSignal: Int,
-    inputTick: Int,
+    inputTick: () -> Int,
     onOpen: (Title) -> Unit,
     onSearch: () -> Unit,
     onWatch: () -> Unit,
@@ -159,18 +165,39 @@ fun HomeScreen(
     // with nobody touching it: a playing video keeps the screen awake and the screensaver away
     var resting by remember { mutableStateOf(false) }
     var away by remember { mutableStateOf(false) }
-    LaunchedEffect(inputTick) {
-        resting = false
-        away = false
-        delay(3_000)
-        resting = true
-        delay(120_000)
-        away = true
-    }
     var trailerAlpha by remember { mutableFloatStateOf(0f) }
     var sound by remember { mutableStateOf(false) }
-    val trailerOn = trailerAlpha > 0.05f
-    LaunchedEffect(hero?.title?.key) { sound = false }
+    var pinTrailer by remember { mutableStateOf(false) }
+    val trailerOn by remember { derivedStateOf { trailerAlpha > 0.05f } }
+    LaunchedEffect(hero?.title?.key) {
+        sound = false
+        pinTrailer = false
+    }
+    LaunchedEffect(Unit) {
+        snapshotFlow(inputTick).collectLatest {
+            away = false
+            // Brief settle window lets focus callbacks mark heroButtonsFocused before dropping a playing trailer
+            if (resting) {
+                delay(80)
+                if (!heroButtonsFocused && !pinTrailer) resting = false
+            }
+            if (!resting) {
+                delay(3_000)
+                resting = true
+            }
+            delay(120_000)
+            away = true
+        }
+    }
+    val toggleSound = {
+        val next = !sound
+        sound = next
+        pinTrailer = next || heroButtonsFocused
+        if (next) {
+            away = false
+            resting = true
+        }
+    }
     var manualTick by remember { mutableIntStateOf(0) }
     val step: (Int) -> Unit = { d ->
         if (heroItems.size > 1 && override == null) {
@@ -220,6 +247,12 @@ fun HomeScreen(
 
     val scrolled by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 120 } }
     val dim = animateFloatAsState(if (scrolled) 0.6f else 0f, tween(400), label = "dim")
+    val showDim by remember { derivedStateOf { dim.value > 0f } }
+    val scrollToTop: () -> Unit = {
+        if (listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0) {
+            scope.launch { listState.animateScrollToItem(0) }
+        }
+    }
 
     CompositionLocalProvider(LocalFocusMemory provides memory) {
     // No background here: the window is already black, and every full-screen fill costs a frame budget
@@ -231,21 +264,23 @@ fun HomeScreen(
                 Key.MediaFastForward, Key.MediaNext -> { step(1); true }
                 Key.MediaRewind, Key.MediaPrevious -> { step(-1); true }
                 // Play/Pause turns the trailer's sound on and off, like tvOS
-                Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> { if (trailerOn) { sound = !sound; true } else false }
+                Key.MediaPlayPause, Key.MediaPlay, Key.MediaPause -> {
+                    if (trailerOn || hero?.details?.trailerKey != null) { toggleSound(); true } else false
+                }
                 else -> false
             }
         },
     ) {
         // Scrolled down, the page takes the artwork's colour; at the top the artwork covers it
-        if (dim.value > 0f) Box(Modifier.fillMaxSize().background(LocalAccent.current.screen()))
+        if (showDim) Box(Modifier.fillMaxSize().background(LocalAccent.current.screen()))
         val trailerKey = hero?.details?.trailerKey
-        if (trailerKey != null && active && resting && !away && !scrolled && editing == null) {
+        if (trailerKey != null && active && (resting || pinTrailer) && !away && !scrolled && editing == null) {
             TrailerBackdrop(
                 videoKey = trailerKey,
                 sound = sound,
                 dim = { dim.value },
                 onAlpha = { trailerAlpha = it },
-                onEnded = { sound = false; if (override == null) step(1) },
+                onEnded = { sound = false; pinTrailer = false; if (override == null) step(1) },
             )
         }
         HeroBackdrop(hero) { (1f - trailerAlpha) * (1f - dim.value) }
@@ -269,11 +304,13 @@ fun HomeScreen(
                     onDevotional = onDevotional,
                     devotionalDot = reminder != null,
                     onCentral = onCentral,
-                    soundState = if (!trailerOn) 0 else if (sound) 2 else 1,
+                    sound = sound,
+                    onToggleSound = toggleSound,
+                    inList = hero?.let { h -> myList.any { it.title.key == h.title.key } } == true,
                     onOpen = onOpen,
                     onStep = step,
                     titleFocus = titleFocus,
-                    onButtonsFocus = { heroButtonsFocused = it; if (it) scope.launch { listState.animateScrollToItem(0) } },
+                    onButtonsFocus = { heroButtonsFocused = it; if (it) scrollToTop() },
                     toast = toast,
                 )
             }
@@ -287,7 +324,7 @@ fun HomeScreen(
                         memory.lastInDock = true
                         pendingPackage = app.packageName
                         pendingOverride = null
-                        scope.launch { listState.animateScrollToItem(0) }
+                        scrollToTop()
                     },
                     onClick = { app ->
                         if (editing != null) { editing = null; vm.saveOrder() }
@@ -444,7 +481,9 @@ private fun HeroInfo(
     onDevotional: () -> Unit,
     devotionalDot: Boolean,
     onCentral: () -> Unit,
-    soundState: Int,
+    sound: Boolean,
+    onToggleSound: () -> Unit,
+    inList: Boolean,
     onOpen: (Title) -> Unit,
     onButtonsFocus: (Boolean) -> Unit,
     onStep: (Int) -> Unit,
@@ -454,7 +493,6 @@ private fun HeroInfo(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var titleFocused by remember { mutableStateOf(false) }
-    val myList by vm.myList.entries.collectAsState()
     Column(Modifier.fillMaxWidth().height(330.dp).padding(start = Tv.Edge, top = 20.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             PillButton("Buscar", onSearch, iconVector = Icons.Rounded.Search, onFocus = onButtonsFocus)
@@ -505,8 +543,14 @@ private fun HeroInfo(
                     }
                     .focusable()
                     .offset(x = (-14).dp)
-                    .background(Color.White.copy(alpha = 0.08f * ring), RoundedCornerShape(16.dp))
-                    .border(2.dp, Color.White.copy(alpha = 0.7f * ring), RoundedCornerShape(16.dp))
+                    .drawBehind {
+                        val a = ring
+                        if (a > 0.01f) {
+                            val r = CornerRadius(16.dp.toPx(), 16.dp.toPx())
+                            drawRoundRect(Color.White.copy(alpha = 0.08f * a), cornerRadius = r)
+                            drawRoundRect(Color.White.copy(alpha = 0.7f * a), cornerRadius = r, style = Stroke(2.dp.toPx()))
+                        }
+                    }
                     .padding(horizontal = 14.dp, vertical = 10.dp),
             ) {
             Column(Modifier.widthIn(max = 440.dp).graphicsLayer { alpha = fade.value }) {
@@ -530,17 +574,17 @@ private fun HeroInfo(
             }
         }
         Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(end = Tv.Edge),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             if (watchApp != null) {
                 PillButton("Assistir no ${watchApp.label}", {
                     scope.launch { vm.watch(item, watchApp.packageName)?.let(toast) }
                 }, icon = "▶", onFocus = onButtonsFocus)
             }
             PillButton("Detalhes", { onOpen(item.title) }, onFocus = onButtonsFocus)
-            item.details.trailerKey?.let { key ->
-                PillButton("Trailer", { if (!TvSystem.trailer(context, key)) toast("Não consegui abrir o YouTube") }, onFocus = onButtonsFocus)
-            }
-            val inList = myList.any { it.title.key == item.title.key }
             PillButton(
                 if (inList) "Na Minha Lista" else "Minha Lista",
                 {
@@ -550,23 +594,32 @@ private fun HeroInfo(
                 icon = if (inList) "✓" else "+",
                 onFocus = onButtonsFocus,
             )
+            item.details.trailerKey?.let { key ->
+                PillButton("Trailer", { if (!TvSystem.trailer(context, key)) toast("Não consegui abrir o YouTube") }, onFocus = onButtonsFocus)
+                HeroSoundButton(sound = sound, onToggle = onToggleSound, onFocus = onButtonsFocus)
+            }
             if (count > 1) {
-                Spacer(Modifier.width(8.dp))
-                Column {
-                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                        repeat(minOf(count, 12)) { i ->
-                            val on = i == index.mod(count) % 12
-                            Box(Modifier.size(if (on) 7.dp else 5.dp).background(if (on) Color.White else Tv.Tertiary, CircleShape))
-                        }
-                        if (soundState > 0) {
-                            Spacer(Modifier.width(10.dp))
-                            Text(if (soundState == 2) "🔊" else "🔇", style = Tv.Meta, color = Tv.Secondary)
-                        }
+                Spacer(Modifier.weight(1f))
+                Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                    repeat(minOf(count, 12)) { i ->
+                        val on = i == index.mod(count) % 12
+                        Box(Modifier.size(if (on) 7.dp else 5.dp).background(if (on) Color.White else Tv.Tertiary, CircleShape))
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+internal fun HeroSoundButton(sound: Boolean, onToggle: () -> Unit, onFocus: (Boolean) -> Unit = {}) {
+    PillButton(
+        text = if (sound) "Com som" else "Sem som",
+        onClick = onToggle,
+        iconVector = if (sound) Icons.Rounded.VolumeUp else Icons.Rounded.VolumeOff,
+        selected = sound,
+        onFocus = onFocus,
+    )
 }
 
 /** The title's logo from TMDB, or its name set large when there is no logo. */
@@ -600,6 +653,7 @@ private fun Dock(
     onDone: () -> Unit,
 ) {
     var focusedLabel by remember { mutableStateOf<String?>(null) }
+    val artCache = remember { HashMap<String, Pair<BitmapPainter?, BitmapPainter?>>() }
     Column {
         LazyRow(
             contentPadding = PaddingValues(horizontal = Tv.Edge, vertical = 14.dp),
@@ -610,6 +664,7 @@ private fun Dock(
                 AppCard(
                     app = app,
                     editing = isEditing,
+                    artCache = artCache,
                     modifier = (if (index == 0) Modifier.focusRequester(firstFocus) else Modifier)
                         // ▲ from any app lands on the Top Shelf title, where ◀ ▶ browse it
                         .focusProperties { if (upTo != null) up = upTo }
@@ -646,15 +701,19 @@ fun AppCard(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     modifier: Modifier = Modifier,
+    artCache: MutableMap<String, Pair<BitmapPainter?, BitmapPainter?>>? = null,
 ) {
     // The jiggle only exists while editing: an infinite animation per card kept the screen redrawing
     val angle = if (editing) {
         val wiggle = rememberInfiniteTransition(label = "wiggle")
         wiggle.animateFloat(-1.6f, 1.6f, infiniteRepeatable(tween(140), RepeatMode.Reverse), label = "angle").value
     } else 0f
-    val banner = remember(app.packageName) { app.banner?.let { runCatching { BitmapPainter(it.toBitmap(320, 180).asImageBitmap()) }.getOrNull() } }
-    val icon = remember(app.packageName) {
-        if (banner != null) null else app.icon?.let { runCatching { BitmapPainter(it.toBitmap(128, 128).asImageBitmap()) }.getOrNull() }
+    val (banner, icon) = remember(app.packageName) {
+        artCache?.get(app.packageName) ?: run {
+            val b = app.banner?.let { runCatching { BitmapPainter(it.toBitmap(320, 180).asImageBitmap()) }.getOrNull() }
+            val i = if (b != null) null else app.icon?.let { runCatching { BitmapPainter(it.toBitmap(128, 128).asImageBitmap()) }.getOrNull() }
+            (b to i).also { artCache?.put(app.packageName, it) }
+        }
     }
     FocusCard(
         onClick = onClick,
@@ -702,14 +761,17 @@ fun TitleCard(title: Title, vm: HomeViewModel, badge: String?, onOpen: (Title) -
     }
 }
 
+private val CLOCK_FORMAT = DateTimeFormatter.ofPattern("HH:mm")
+
 @Composable
 private fun Clock(modifier: Modifier) {
     var now by remember { mutableStateOf(LocalTime.now()) }
     LaunchedEffect(Unit) {
         while (true) {
             now = LocalTime.now()
-            delay(1000L * (60 - now.second))
+            val waitMs = ((60 - now.second) * 1000L - (now.nano / 1_000_000L) + 50L).coerceAtLeast(250L)
+            delay(waitMs)
         }
     }
-    Text(now.format(DateTimeFormatter.ofPattern("HH:mm")), style = Tv.Clock, color = Tv.Primary, modifier = modifier)
+    Text(now.format(CLOCK_FORMAT), style = Tv.Clock, color = Tv.Primary, modifier = modifier)
 }

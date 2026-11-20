@@ -34,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -43,6 +42,9 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.launch
 import androidx.tv.material3.Text
 import coil3.compose.AsyncImage
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import coil3.request.transformations
 import dev.jean.atvhome.data.Catalog
 import dev.jean.atvhome.data.Format
 import dev.jean.atvhome.data.Item
@@ -59,6 +61,7 @@ import dev.jean.atvhome.ui.components.PosterCard
 import dev.jean.atvhome.ui.components.RowPadding
 import dev.jean.atvhome.ui.components.RowSpacing
 import dev.jean.atvhome.ui.components.RowTitle
+import dev.jean.atvhome.ui.home.Scrim
 import dev.jean.atvhome.ui.home.TitleArt
 import dev.jean.atvhome.ui.home.TitleCard
 import dev.jean.atvhome.ui.theme.Tv
@@ -77,7 +80,6 @@ fun DetailScreen(
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var item by remember(title.key) { mutableStateOf<Item?>(null) }
     var failed by remember(title.key) { mutableStateOf(false) }
-    val myList by vm.myList.entries.collectAsState()
     val firstButton = remember { FocusRequester() }
     LaunchedEffect(title.key) {
         item = vm.item(title)
@@ -87,13 +89,14 @@ fun DetailScreen(
     val loaded = item
     LaunchedEffect(loaded != null) { if (loaded != null) runCatching { firstButton.requestFocus() } }
 
+    val backdropUrl = TmdbClient.image(loaded?.title?.backdrop ?: title.backdrop, "w1280")
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AsyncImage(
-            model = TmdbClient.image(loaded?.title?.backdrop ?: title.backdrop, "w1280"),
+            model = remember(backdropUrl) {
+                ImageRequest.Builder(context).data(backdropUrl).transformations(Scrim).crossfade(150).build()
+            },
             contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize(),
         )
-        Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to Color.Black.copy(alpha = 0.92f), 0.55f to Color.Black.copy(alpha = 0.5f), 0.85f to Color.Transparent)))
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.4f to Color.Transparent, 0.75f to Color.Black.copy(alpha = 0.8f), 1f to Color.Black)))
 
         if (loaded == null) {
             Text(
@@ -103,7 +106,8 @@ fun DetailScreen(
             return@Box
         }
         val d = loaded.details
-        val mine = vm.myProvidersOf(loaded)
+        val mine = remember(d, vm.myProviders) { vm.myProvidersOf(loaded) }
+        val similar = remember(d) { d.recommendations.filter { it.backdrop != null }.take(16) }
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
             item(key = "info") {
                 Column(Modifier.fillMaxWidth().padding(top = 56.dp)) {
@@ -140,6 +144,7 @@ fun DetailScreen(
                             }
                         }
                         item(key = "list") {
+                            val myList by vm.myList.entries.collectAsState()
                             val inList = myList.any { it.title.key == d.title.key }
                             PillButton(
                                 if (inList) "Na Minha Lista" else "Minha Lista",
@@ -164,7 +169,6 @@ fun DetailScreen(
                     }
                 }
             }
-            val similar = d.recommendations.filter { it.backdrop != null }.take(16)
             if (similar.isNotEmpty()) {
                 item(key = "similar") {
                     Column(Modifier.padding(top = 26.dp)) {
@@ -255,7 +259,7 @@ fun ItemGrid(items: List<Item>, vm: HomeViewModel, onOpen: (Title) -> Unit, modi
         verticalArrangement = Arrangement.spacedBy(22.dp),
     ) {
         items(items, key = { it.title.key }) { item ->
-            val mine = vm.myProvidersOf(item)
+            val mine = remember(item.details, vm.myProviders) { vm.myProvidersOf(item) }
             PosterCard(
                 image = TmdbClient.image(item.title.poster, "w342"),
                 title = item.title.name,

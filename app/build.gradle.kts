@@ -24,6 +24,10 @@ android {
         versionName = "1.0.0"
         // Personal TMDB read token: lives in local.properties (git-ignored), never in source
         buildConfigField("String", "TMDB_TOKEN", "\"${localProps.getProperty("tmdb.token", "")}\"")
+        // Optional fixed weather location (git-ignored) when IP geolocation resolves the ISP's city
+        buildConfigField("String", "WEATHER_CITY", "\"${localProps.getProperty("weather.city", "").replace("\"", "\\\"")}\"")
+        buildConfigField("String", "WEATHER_LAT", "\"${localProps.getProperty("weather.lat", "")}\"")
+        buildConfigField("String", "WEATHER_LON", "\"${localProps.getProperty("weather.lon", "")}\"")
         ndk { abiFilters += listOf("armeabi-v7a", "arm64-v8a") }
     }
 

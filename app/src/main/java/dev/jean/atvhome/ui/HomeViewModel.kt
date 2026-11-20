@@ -8,6 +8,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import coil3.request.transformations
 import dev.jean.atvhome.App
 import dev.jean.atvhome.data.Filters
 import dev.jean.atvhome.data.Genre
@@ -43,6 +44,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     var appProvider by mutableStateOf<Map<String, Provider>>(emptyMap()); private set
     /** Providers the user can watch right now (an app for them is installed). */
     var myProviders by mutableStateOf<List<Provider>>(emptyList()); private set
+    private var providerPackage: Map<Int, String> = emptyMap()
+    private var myProviderIds: Set<Int> = emptySet()
     var trending by mutableStateOf<List<Item>>(emptyList()); private set
     var highImdb by mutableStateOf<List<Item>>(emptyList()); private set
     /** "Esta semana": new on the user's services, with the reason as a badge. */
@@ -67,9 +70,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 refreshApps()
             }
             launch { loadImdb() }
-            loadTrending()
+            val restTrending = loadTrendingFirst()
             launch { loadThisWeek() }
-            loadHighImdb()
+            launch { loadHighImdb() }
+            if (restTrending.isNotEmpty()) {
+                trending = trending + catalog.items(restTrending)
+                if (trending.isEmpty() && problem == null) problem = "Não consegui carregar as tendências do TMDB."
+            }
         }
         refreshWatchNext()
     }
@@ -79,14 +86,22 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun refreshApps() {
         val all = app.apps.load()
         val hidden = app.apps.hidden()
-        apps = all.filter { it.packageName !in hidden }
-        hiddenApps = all.filter { it.packageName in hidden }
-        Log.i(TAG, "apps: " + all.joinToString { "${it.label} (${it.packageName})" })
+        val nextApps = all.filter { it.packageName !in hidden }
+        val nextHidden = all.filter { it.packageName in hidden }
+        val appsChanged = nextApps.map { it.packageName to it.label } != apps.map { it.packageName to it.label }
+        val hiddenChanged = nextHidden.map { it.packageName to it.label } != hiddenApps.map { it.packageName to it.label }
+        if (appsChanged) apps = nextApps
+        if (hiddenChanged) hiddenApps = nextHidden
+        if (appsChanged || hiddenChanged) Log.i(TAG, "apps: " + all.joinToString { "${it.label} (${it.packageName})" })
     }
 
     fun refreshAppsAsync() = viewModelScope.launch {
+        val before = (apps + hiddenApps).map { it.packageName to it.label }
         refreshApps()
-        catalog.runCatching { providersBR() }.getOrNull()?.let(::matchProviders)
+        val after = (apps + hiddenApps).map { it.packageName to it.label }
+        if (before != after || appProvider.isEmpty()) {
+            catalog.runCatching { providersBR() }.getOrNull()?.let(::matchProviders)
+        }
     }
 
     fun launch(app: TvApp) = this.app.apps.launch(app.packageName)
@@ -134,20 +149,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         // providers come most relevant first: keep the first one per app (Netflix over "Netflix with Ads")
         val byApp = LinkedHashMap<String, Provider>()
         providers.forEach { p -> match[p.id]?.let { pkg -> byApp.putIfAbsent(pkg, p) } }
+        providerPackage = match
         appProvider = byApp
         myProviders = providers.filter { it.id in match }
+        myProviderIds = myProviders.map { it.id }.toSet()
         Log.i(TAG, "streaming apps: " + byApp.entries.joinToString { "${it.key}=${it.value.name}" })
     }
 
     /** Package of the installed app that plays [provider], if any. */
     fun packageFor(provider: Provider): String? {
+        providerPackage[provider.id]?.let { return it }
         appProvider.entries.firstOrNull { it.value.id == provider.id }?.let { return it.key }
         val match = ProviderMatch.match(listOf(provider), (apps + hiddenApps).map { it.packageName to it.label })
         return match[provider.id]
     }
 
     fun myProvidersOf(item: Item): List<Provider> {
-        val mine = myProviders.map { it.id }.toSet()
+        val mine = myProviderIds
         return item.details.providers.filter { it.id in mine }.distinctBy { packageFor(it) }
     }
 
@@ -166,24 +184,32 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private fun rerate(item: Item) = Item(item.details, catalog.imdb(item.details))
 
-    /** Warms the image cache with the Top Shelf art so it's there before the shelf turns. */
+    /** Warms the image cache with the Top Shelf art (including its Scrim) so it's there before the shelf turns. */
     private fun prefetch(items: List<Item>) {
         val loader = coil3.SingletonImageLoader.get(app)
         items.take(6).forEach { item ->
-            listOfNotNull(
-                dev.jean.atvhome.data.TmdbClient.image(item.title.backdrop, "w1280"),
-                dev.jean.atvhome.data.TmdbClient.image(item.details.logo, "w500"),
-            ).forEach { url -> loader.enqueue(coil3.request.ImageRequest.Builder(app).data(url).build()) }
+            dev.jean.atvhome.data.TmdbClient.image(item.title.backdrop, "w1280")?.let { url ->
+                loader.enqueue(
+                    coil3.request.ImageRequest.Builder(app).data(url)
+                        .transformations(dev.jean.atvhome.ui.home.Scrim).build(),
+                )
+            }
+            dev.jean.atvhome.data.TmdbClient.image(item.details.logo, "w500")?.let { url ->
+                loader.enqueue(coil3.request.ImageRequest.Builder(app).data(url).build())
+            }
         }
     }
 
-    private suspend fun loadTrending() {
+    private suspend fun loadTrendingFirst(): List<Title> {
         val titles = catalog.trending(pages = 2).filter { it.backdrop != null }
-        // The first eight first, so the Top Shelf fills in quickly; the rest right after
+        // The first eight first, so the Top Shelf fills in quickly; the rest loads alongside other rows
         trending = catalog.items(titles.take(8))
         prefetch(trending)
-        trending = trending + catalog.items(titles.drop(8).take(32))
-        if (trending.isEmpty() && problem == null) problem = "Não consegui carregar as tendências do TMDB."
+        val rest = titles.drop(8).take(32)
+        if (trending.isEmpty() && rest.isEmpty() && problem == null) {
+            problem = "Não consegui carregar as tendências do TMDB."
+        }
+        return rest
     }
 
     private suspend fun loadHighImdb() {
@@ -242,8 +268,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun refreshWatchNext() = viewModelScope.launch {
-        watchNext = TvSystem.watchNext(app)
-        fromApps = TvSystem.previewPrograms(app)
+        val nextWatch = TvSystem.watchNext(app)
+        val nextFrom = TvSystem.previewPrograms(app)
+        if (nextWatch != watchNext) watchNext = nextWatch
+        if (nextFrom != fromApps) fromApps = nextFrom
     }
 
     /** What the Top Shelf shows: a label, its titles, and the app they all play in (if one). */

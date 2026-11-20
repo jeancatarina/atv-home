@@ -25,6 +25,7 @@ class AdShieldTest {
     private val app = RuntimeEnvironment.getApplication()
     private val cr get() = app.contentResolver
     private val guard = "dev.jean.atvhome/dev.jean.atvhome.guard.AdGuardService"
+    private val house = "dev.jean.atvhome/dev.jean.atvhome.casa.HouseKeyService"
     private var dnsAnswers = true
 
     private fun mode() = Settings.Global.getString(cr, "private_dns_mode")
@@ -35,6 +36,7 @@ class AdShieldTest {
     @Before fun startOnHome() = runBlocking {
         AdShield.dnsCheck = { dnsAnswers }
         AdShield.offDelayMs = 0
+        AdShield.manageHouse(app, false)
         AdShield.saveSettings(app, GuardSettings())
         AdShield.launcherInFront(app, true)
         AdShield.playbackChanged(app, false)
@@ -158,5 +160,22 @@ class AdShieldTest {
         assertTrue(AdShield.captureRefused(app))
         AdShield.rememberCapture(app, granted = true)
         assertFalse(AdShield.captureRefused(app))
+    }
+
+    @Test fun houseServiceIsUnlistedWhileHomeIsInFront() = runBlocking {
+        allow()
+        // Simulate tuya-setup.sh having already listed HouseKeyService with accessibility_enabled=1
+        Settings.Secure.putString(cr, "enabled_accessibility_services", house)
+        Settings.Secure.putString(cr, "accessibility_enabled", "1")
+        AdShield.manageHouse(app, true)
+        delay(100)
+        assertFalse(house in services()) // Home is in front: zero accessibility overhead
+        assertEquals("0", Settings.Secure.getString(cr, "accessibility_enabled"))
+        AdShield.launcherInFront(app, false)
+        assertTrue(house in services()) // another app or screensaver: listed even with guard off
+        assertEquals("1", Settings.Secure.getString(cr, "accessibility_enabled"))
+        AdShield.launcherInFront(app, true)
+        assertFalse(house in services()) // back on Home: unlisted at once
+        assertEquals("0", Settings.Secure.getString(cr, "accessibility_enabled"))
     }
 }

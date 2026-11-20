@@ -456,11 +456,13 @@ private fun HouseRooms(
         SideEffect { state.keep = state.keep + litNow.map { it.key } }
     }
     val shown = if (state.show == Show.LIT) lights.filter { it.key in state.keep || Panel.isOn(it, now) } else Panel.filter(lights, now, state.show)
-    val onRow = row.map { it.key }.toSet()
+    val onRow = remember(row) { row.map { it.key }.toSet() }
     val litAll = litNow.size
     val litRooms = litNow.map { it.room }.distinct().size
     // The floor beside a room's name only says something when there is more than one
-    val floorOf = home.plan.floors.takeIf { it.size > 1 }.orEmpty().flatMap { f -> f.rooms.map { it.room to f.name } }.toMap()
+    val floorOf = remember(home.plan) {
+        home.plan.floors.takeIf { it.size > 1 }.orEmpty().flatMap { f -> f.rooms.map { it.room to f.name } }.toMap()
+    }
     val first = remember { FocusRequester() }
     LaunchedEffect(Unit) { first.requestWhenReady() }
     fun group(of: List<Light>, on: Boolean) = scope.launch { if (!home.switchAll(of, on)) toast("Algumas luzes não responderam") }

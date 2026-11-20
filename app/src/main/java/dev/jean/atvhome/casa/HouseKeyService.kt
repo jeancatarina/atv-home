@@ -1,17 +1,21 @@
 package dev.jean.atvhome.casa
 
 import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.graphics.PixelFormat
+import android.media.AudioManager
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
 import android.util.Log
 import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
+import android.view.ViewConfiguration
 import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.widget.Toast
@@ -48,6 +52,7 @@ import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.jean.atvhome.data.SmartHome
+import dev.jean.atvhome.saver.HouseStrip
 import dev.jean.atvhome.saver.WeatherStrip
 import dev.jean.atvhome.ui.components.TvScroll
 import dev.jean.atvhome.ui.components.requestWhenReady
@@ -56,6 +61,7 @@ import dev.jean.atvhome.ui.home.HousePanel
 import dev.jean.atvhome.ui.home.PanelState
 import dev.jean.atvhome.ui.theme.InicioTheme
 import kotlinx.coroutines.delay
+import java.io.File
 
 /**
  * "Casa no filme": the shortcut key ([Shortcut], yellow unless changed in "Ver a casa") opens the
@@ -63,13 +69,12 @@ import kotlinx.coroutines.delay
  * still playing beside it. The same key or Back closes it, and it closes on its own after [IDLE_MS]
  * without a key.
  *
- * An accessibility service only to see that one key: every other key goes straight to the app
- * (onKeyEvent returns false at once), and it asks for no events. It runs in its own process
- * (":casa"), so a film never holds the launcher's memory, and keeps its own connection to the hub
- * while the screen is on: the panel opens with every light already current.
+ * Key filtering (`flagRequestFilterKeyEvents`) is turned on only when a house and shortcut are
+ * configured and the TV is not dreaming; while active, held volume keys are repeated through
+ * [AudioManager] because Android's key-filter pipeline suppresses hardware auto-repeat.
  *
  * It also writes the week's weather over the TV's screensaver ([WeatherStrip]) while the system
- * dreams, so it stays listed even with no shortcut and no house.
+ * dreams, and returns the TV to Home when woken from standby.
  */
 class HouseKeyService : AccessibilityService() {
 
@@ -79,14 +84,60 @@ class HouseKeyService : AccessibilityService() {
     private var overlay: Overlay? = null
     private val main = Handler(Looper.getMainLooper())
     private val weather by lazy { WeatherStrip(this) }
+    private val houseStrip by lazy { HouseStrip(this) }
+    private val audio by lazy { getSystemService(AudioManager::class.java) }
+    private val volumeRepeatDelay by lazy { ViewConfiguration.getKeyRepeatDelay().toLong().coerceIn(50L, 100L) }
+    private val volumeRepeatTimeout by lazy { ViewConfiguration.getKeyRepeatTimeout().toLong().coerceIn(300L, 500L) }
+    private var activeVolumeKey = 0
+    private var dreaming = false
+    private var screenWasOff = false
+
+    private val volumeRepeater = object : Runnable {
+        override fun run() {
+            val dir = VolumeHold.direction(activeVolumeKey) ?: return
+            stepVolume(dir)
+            main.postDelayed(this, volumeRepeatDelay)
+        }
+    }
 
     private val screen = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
             when (intent.action) {
-                Intent.ACTION_SCREEN_ON -> ensureHome()?.connect(true)
-                Intent.ACTION_SCREEN_OFF -> { overlay?.hide(); weather.hide(); home?.connect(false, graceMs = 0) }
-                Intent.ACTION_DREAMING_STARTED -> { overlay?.hide(); weather.show() }
-                Intent.ACTION_DREAMING_STOPPED -> weather.hide()
+                Intent.ACTION_SCREEN_ON -> {
+                    DreamState.set(context, false)
+                    dreaming = false
+                    if (screenWasOff) {
+                        screenWasOff = false
+                        goHomeOnWake()
+                    } else {
+                        ensureHome()?.connect(true)
+                    }
+                    syncKeyFilter()
+                }
+                Intent.ACTION_SCREEN_OFF -> {
+                    screenWasOff = true
+                    dreaming = false
+                    DreamState.set(context, false)
+                    cancelVolumeRepeat()
+                    overlay?.hide()
+                    hideDreamOverlays()
+                    home?.connect(false, graceMs = 0)
+                    syncKeyFilter()
+                }
+                Intent.ACTION_DREAMING_STARTED -> {
+                    dreaming = true
+                    DreamState.set(context, true)
+                    cancelVolumeRepeat()
+                    overlay?.hide()
+                    showDreamOverlays()
+                    syncKeyFilter()
+                }
+                Intent.ACTION_DREAMING_STOPPED -> {
+                    dreaming = false
+                    DreamState.set(context, false)
+                    hideDreamOverlays()
+                    syncKeyFilter()
+                }
             }
         }
     }
@@ -97,8 +148,41 @@ class HouseKeyService : AccessibilityService() {
             addAction(Intent.ACTION_DREAMING_STARTED); addAction(Intent.ACTION_DREAMING_STOPPED)
         })
         if (ensureHome() == null) Log.i(TAG, "no tuya.json yet: the shortcut key stays with the apps")
-        // Built once, a while after start, and kept hidden: the first press opens it at once
-        main.postDelayed({ ensureOverlay() }, WARM_UP_MS)
+        val interactive = getSystemService(PowerManager::class.java)?.isInteractive != false
+        dreaming = interactive && DreamState.isDreaming(this)
+        if (dreaming) showDreamOverlays()
+        syncKeyFilter()
+    }
+
+    private fun showDreamOverlays() {
+        weather.show()
+        ensureHome()?.let {
+            it.connect(true)
+            houseStrip.show(it)
+        }
+    }
+
+    private fun hideDreamOverlays() {
+        weather.hide()
+        houseStrip.hide()
+    }
+
+    private fun syncKeyFilter() {
+        val info = serviceInfo ?: return
+        val want = !dreaming && ensureHome() != null && Shortcut.get(this) != Shortcut.NONE
+        val has = (info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS) != 0
+        if (has == want) return
+        info.flags = if (want) info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
+        else info.flags and AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS.inv()
+        runCatching { serviceInfo = info }.onFailure { Log.w(TAG, "serviceInfo", it) }
+    }
+
+    private fun goHomeOnWake() {
+        if (performGlobalAction(GLOBAL_ACTION_HOME)) return
+        val homeIntent = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_HOME)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        runCatching { startActivity(homeIntent) }.onFailure { Log.w(TAG, "wake home", it) }
     }
 
     /**
@@ -110,6 +194,7 @@ class HouseKeyService : AccessibilityService() {
         val stamp = SmartHome.configStamp(this)
         if (home != null && (stamp == loaded || SmartHome.isOwnWrite(stamp))) return home.also { loaded = stamp }
         if (stamp == 0L) return null
+        houseStrip.hide()
         overlay?.destroy()
         overlay = null
         home?.close()
@@ -123,6 +208,24 @@ class HouseKeyService : AccessibilityService() {
     private var replayingUntil = 0L
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
+        when (val step = VolumeHold.step(event.keyCode, event.action, event.repeatCount, event.flags)) {
+            is VolumeHold.Step.Start -> {
+                cancelVolumeRepeat()
+                activeVolumeKey = event.keyCode
+                main.postDelayed(volumeRepeater, volumeRepeatTimeout)
+                return false
+            }
+            is VolumeHold.Step.Repeat -> {
+                main.removeCallbacks(volumeRepeater)
+                stepVolume(step.direction)
+                return true
+            }
+            VolumeHold.Step.Stop -> {
+                if (event.keyCode == activeVolumeKey) cancelVolumeRepeat()
+                return false
+            }
+            VolumeHold.Step.None -> Unit
+        }
         // HOME leaves whatever is open: the sheet must not stay over the launcher
         if (event.keyCode == KeyEvent.KEYCODE_HOME) { overlay?.hide(); return false }
         val choice = Shortcut.get(this)
@@ -141,16 +244,27 @@ class HouseKeyService : AccessibilityService() {
         return true
     }
 
+    private fun stepVolume(direction: Int) {
+        runCatching {
+            audio?.adjustSuggestedStreamVolume(direction, AudioManager.USE_DEFAULT_STREAM_TYPE, AudioManager.FLAG_SHOW_UI)
+        }.onFailure { Log.w(TAG, "volume", it) }
+    }
+
+    private fun cancelVolumeRepeat() {
+        activeVolumeKey = 0
+        main.removeCallbacks(volumeRepeater)
+    }
+
     /** A short press of a held shortcut goes back to the app, as if nothing had stopped it. */
     private fun replay(code: Int) {
         replayingUntil = android.os.SystemClock.uptimeMillis() + 400
         when (code) {
             // Back goes to whatever window is in front, the overlay included (it closes)
             KeyEvent.KEYCODE_BACK -> performGlobalAction(GLOBAL_ACTION_BACK)
-            else -> getSystemService(android.media.AudioManager::class.java)?.let { audio ->
+            else -> audio?.let { a ->
                 val now = android.os.SystemClock.uptimeMillis()
-                audio.dispatchMediaKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, code, 0))
-                audio.dispatchMediaKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, code, 0))
+                a.dispatchMediaKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_DOWN, code, 0))
+                a.dispatchMediaKeyEvent(KeyEvent(now, now, KeyEvent.ACTION_UP, code, 0))
             }
         }
     }
@@ -164,9 +278,10 @@ class HouseKeyService : AccessibilityService() {
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
+        cancelVolumeRepeat()
         main.removeCallbacksAndMessages(null)
         runCatching { unregisterReceiver(screen) }
-        weather.hide()
+        hideDreamOverlays()
         overlay?.destroy()
         overlay = null
         home?.close()
@@ -276,6 +391,61 @@ class HouseKeyService : AccessibilityService() {
     companion object {
         private const val TAG = "CasaOverlay"
         private const val IDLE_MS = 20_000L
-        private const val WARM_UP_MS = 8_000L
+    }
+}
+
+/**
+ * Shared dreaming flag between `:main` and `:casa`: when the screensaver starts over Home,
+ * `:casa` is bound right after `ACTION_DREAMING_STARTED`, so it reads this marker on connect.
+ */
+object DreamState {
+    private const val FILE = "dreaming"
+    private const val MAX_AGE_MS = 12 * 3_600_000L
+
+    fun set(context: Context, active: Boolean) {
+        val f = File(context.filesDir, FILE)
+        runCatching {
+            if (active) {
+                f.writeText("1")
+                f.setLastModified(System.currentTimeMillis())
+            } else {
+                f.delete()
+            }
+        }
+    }
+
+    fun isDreaming(context: Context): Boolean {
+        val f = File(context.filesDir, FILE)
+        return f.isFile && (System.currentTimeMillis() - f.lastModified()) in 0..MAX_AGE_MS
+    }
+}
+
+/**
+ * Volume hold handling while `flagRequestFilterKeyEvents` is active: the first press passes through
+ * natively, and holding repeats volume changes through [AudioManager] instead of relying on
+ * Android's filtered-key auto-repeat (which stops on re-injected events).
+ */
+object VolumeHold {
+    sealed interface Step {
+        data object None : Step
+        data class Start(val direction: Int) : Step
+        data class Repeat(val direction: Int) : Step
+        data object Stop : Step
+    }
+
+    fun direction(keyCode: Int): Int? = when (keyCode) {
+        KeyEvent.KEYCODE_VOLUME_UP -> AudioManager.ADJUST_RAISE
+        KeyEvent.KEYCODE_VOLUME_DOWN -> AudioManager.ADJUST_LOWER
+        else -> null
+    }
+
+    fun step(keyCode: Int, action: Int, repeatCount: Int, flags: Int = 0): Step {
+        val dir = direction(keyCode) ?: return Step.None
+        return when {
+            (flags and KeyEvent.FLAG_CANCELED) != 0 || action == KeyEvent.ACTION_UP -> Step.Stop
+            action == KeyEvent.ACTION_DOWN && repeatCount == 0 -> Step.Start(dir)
+            action == KeyEvent.ACTION_DOWN -> Step.Repeat(dir)
+            else -> Step.None
+        }
     }
 }
