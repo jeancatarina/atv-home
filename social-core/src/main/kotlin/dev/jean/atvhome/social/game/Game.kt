@@ -113,6 +113,12 @@ interface Game<S : Any> {
     /** Why the game cannot start with this content pack (no internet for the films, say), or null. */
     fun unavailable(content: List<String>): String? = null
 
+    /** How many unplayed entries of the content pack this game needs to deal a fresh game; below it the pack starts over. */
+    val freshNeeded: Int get() = 12
+
+    /** The entries of [pack] that [state] just dealt, for the house's memory of what it already played. */
+    fun used(state: S, pack: List<String>): List<String> = dev.jean.atvhome.social.kit.Variety.used(pack, state as Any)
+
     fun setup(ctx: Setup): S
 
     fun act(s: S, by: PlayerId, a: Action, now: Long): Step<S>

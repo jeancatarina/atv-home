@@ -64,6 +64,10 @@ object Tribunal : Game<TribunalState> {
 
     private fun pickValues(list: List<String>, random: Random) = list.shuffled(random)
 
+    override val freshNeeded get() = 1
+
+    override fun used(state: TribunalState, pack: List<String>) = pack.filter { it.substringBefore('|') == state.crime }
+
     override fun setup(ctx: Setup): TribunalState {
         val row = ctx.content.map { it.split("|") }.filter { it.size >= 4 }.ifEmpty {
             listOf(listOf("O sumiço do bolo", "cozinha,sala,quintal,garagem,varanda,quarto,escada,porão", "faca,vassoura,lanterna,chapéu,balde,mala,guarda-chuva,martelo", "18h,19h,20h,21h,22h,23h,meia-noite,1h"))

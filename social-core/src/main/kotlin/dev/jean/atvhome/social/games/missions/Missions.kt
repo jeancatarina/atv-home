@@ -45,6 +45,12 @@ object Missions : Game<MissionsState> {
         settings = listOf(Setting("time", "Duração", listOf("15 min", "30 min", "60 min"), default = 0)),
     )
 
+    // Only the missions dealt to people count; the state keeps the rest of the deck for refills
+    override fun used(state: MissionsState, pack: List<String>): List<String> {
+        val dealt = state.hands.values.flatten().map { it.text }.toSet()
+        return pack.filter { it.substringBefore('|') in dealt }
+    }
+
     override fun setup(ctx: Setup): MissionsState {
         val pool = ctx.content.map { l -> l.split("|").let { Mission(it[0], it.getOrNull(1)?.toIntOrNull()?.coerceIn(1, 3) ?: 1) } }
             .ifEmpty { listOf(Mission("Faça alguém dizer “pipoca”", 1)) }.shuffled(ctx.random)

@@ -45,6 +45,10 @@ object Insider : Game<InsiderState> {
         settings = listOf(Setting("time", "Tempo", listOf("3 min", "5 min", "7 min"), default = 1)),
     )
 
+    override val freshNeeded get() = 1
+
+    override fun used(state: InsiderState, pack: List<String>) = pack.filter { it == state.word }
+
     override fun setup(ctx: Setup): InsiderState {
         val order = ctx.players.shuffled(ctx.random)
         return InsiderState(

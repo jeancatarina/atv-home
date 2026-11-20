@@ -1,0 +1,272 @@
+"""Quem Sabia? words (one per game) and Infiltrados pairs of look-alike words (one pair per game)."""
+WORDS = """Escorregador|Cabideiro|Liquidificador|Churrasqueira|Mergulhador|Pipoqueiro|Bicicletário|Lava-jato|Cinzeiro|Espremedor|Rodoviária|Hidratante|Calculadora|Condomínio|Guardanapo|Marcapasso|Pára-quedas|Tobogã|Marmita|Pedalinho|Feijoada|Sombrinha|Saca-rolhas|Trampolim|Passarela|Gangorra|Cozinheiro|Zeladoria|Despertador|Cafeteira|Ventilador|Maçaneta|Fechadura|Campainha|Interfone|Varal|Pregador|Rodo|Vassoura|Balde|Esfregão|Detergente|Sabão|Esponja|Escova de dentes|Fio dental|Secador|Chapinha|Pente|Gel|Perfume|Desodorante|Toalha|Roupão|Chinelo|Meia|Cueca|Camiseta|Boné|Cachecol|Luva|Gravata|Suspensório|Cinto|Mochila|Carteira|Chaveiro|Óculos|Relógio|Anel|Brinco|Colar|Pulseira|Guarda-roupa|Sofá|Poltrona|Cortina|Tapete|Abajur|Lustre|Quadro|Espelho|Estante|Escrivaninha|Gaveta|Prateleira|Travesseiro|Edredom|Colchão|Berço|Rede|Hamaca|Gangorra|Pipa|Peão|Bola de gude|Boneca|Carrinho|Lego|Quebra-cabeça|Baralho|Dominó|Xadrez|Dama|Bingo|Palhaço|Mágico|Acrobata|Domador|Trapezista|Bombeiro|Padeiro|Açougueiro|Pedreiro|Eletricista|Encanador|Carpinteiro|Pintor|Jardineiro|Motorista|Cobrador|Piloto|Comissário|Capitão|Marinheiro|Pescador|Salva-vidas|Guarda|Delegado|Juiz|Advogado|Médico|Dentista|Enfermeiro|Farmacêutico|Veterinário|Professor|Diretor|Bibliotecário|Cientista|Astronauta|Detetive|Espião|Pirata|Cavaleiro|Princesa|Rei|Bruxa|Fada|Duende|Sereia|Dragão|Unicórnio|Zumbi|Vampiro|Fantasma|Lobisomem|Múmia|Esqueleto|Alienígena|Robô|Super-herói|Vilão|Elevador|Escada rolante|Catraca|Semáforo|Lombada|Rotatória|Pedágio|Posto de gasolina|Borracharia|Oficina|Lava-rápido|Estacionamento|Heliponto|Porto|Farol|Cais|Ponte|Túnel|Viaduto|Cachoeira|Vulcão|Geleira|Deserto|Pântano|Savana|Floresta|Ilha|Península|Caverna|Cânion|Gruta|Recife|Atol|Oásis|Duna|Planície|Montanha|Vale|Cratera|Penhasco|Praia|Lagoa|Riacho|Nascente|Poça|Chuva de granizo|Furacão|Tornado|Arco-íris|Eclipse|Cometa|Estrela cadente|Lua cheia|Nuvem|Neblina|Orvalho|Geada|Raio|Trovão""".split("|")
+PAIRS = """Gato|Cachorro
+Café|Chá
+Praia|Piscina
+Pizza|Hambúrguer
+Carro|Moto
+Ônibus|Trem
+Avião|Helicóptero
+Rio|Lago
+Montanha|Morro
+Floresta|Mata
+Casa|Apartamento
+Sofá|Poltrona
+Cama|Beliche
+Mesa|Bancada
+Faca|Tesoura
+Garfo|Colher
+Prato|Tigela
+Copo|Xícara
+Caneta|Lápis
+Livro|Revista
+Jornal|Panfleto
+Violão|Cavaquinho
+Piano|Teclado
+Guitarra|Baixo
+Bateria|Pandeiro
+Futebol|Futsal
+Vôlei|Basquete
+Natação|Hidroginástica
+Corrida|Caminhada
+Boxe|Judô
+Chocolate|Bombom
+Sorvete|Picolé
+Bolo|Torta
+Pão|Bolacha
+Queijo|Requeijão
+Manteiga|Margarina
+Arroz|Macarrão
+Feijão|Lentilha
+Carne|Frango
+Peixe|Camarão
+Salada|Legumes
+Maçã|Pera
+Banana|Mamão
+Laranja|Tangerina
+Limão|Lima
+Uva|Cereja
+Morango|Framboesa
+Melancia|Melão
+Tomate|Pimentão
+Cenoura|Beterraba
+Alface|Couve
+Batata|Mandioca
+Cebola|Alho
+Sal|Açúcar
+Leite|Iogurte
+Suco|Refrigerante
+Cerveja|Chopp
+Vinho|Champanhe
+Água|Água de coco
+Verão|Primavera
+Inverno|Outono
+Chuva|Garoa
+Neve|Granizo
+Sol|Lua
+Estrela|Planeta
+Mar|Oceano
+Ilha|Península
+Praça|Parque
+Rua|Avenida
+Ponte|Viaduto
+Escola|Colégio
+Faculdade|Universidade
+Hospital|Clínica
+Mercado|Feira
+Loja|Shopping
+Banco|Cooperativa
+Hotel|Pousada
+Restaurante|Lanchonete
+Cinema|Teatro
+Museu|Galeria
+Show|Festival
+Casamento|Noivado
+Aniversário|Formatura
+Natal|Ano-Novo
+Páscoa|Carnaval
+Presente|Lembrança
+Cartão|Bilhete
+Médico|Enfermeiro
+Professor|Instrutor
+Juiz|Árbitro
+Rei|Príncipe
+Bruxa|Feiticeira
+Vampiro|Zumbi
+Fantasma|Assombração
+Dragão|Dinossauro
+Leão|Tigre
+Urso|Panda
+Cavalo|Burro
+Vaca|Boi
+Porco|Javali
+Galinha|Pato
+Cobra|Lagarto
+Sapo|Rã
+Abelha|Vespa
+Formiga|Cupim
+Borboleta|Mariposa
+Tubarão|Golfinho
+Baleia|Orca
+Polvo|Lula
+Camisa|Camiseta
+Calça|Bermuda
+Saia|Vestido
+Casaco|Jaqueta
+Tênis|Sapatênis
+Sandália|Chinelo
+Boné|Chapéu
+Anel|Aliança
+Brinco|Argola
+Relógio|Pulseira
+Óculos|Lente
+Bolsa|Mochila
+Mala|Maleta
+Celular|Tablet
+Computador|Notebook
+Televisão|Monitor
+Geladeira|Freezer
+Fogão|Cooktop
+Micro-ondas|Forno
+Liquidificador|Batedeira
+Ventilador|Ar-condicionado
+Lâmpada|Lanterna
+Vela|Lampião
+Chave|Cadeado
+Porta|Portão
+Janela|Basculante
+Escada|Rampa
+Elevador|Escada rolante
+Quadro|Pôster
+Espelho|Vidro
+Tapete|Capacho
+Cortina|Persiana
+Travesseiro|Almofada
+Cobertor|Edredom
+Toalha|Pano de prato
+Sabonete|Sabão
+Shampoo|Condicionador
+Perfume|Desodorante
+Escova|Pente
+Batom|Brilho
+Esmalte|Base
+Dentista|Ortodontista
+Padaria|Confeitaria
+Açougue|Peixaria
+Farmácia|Drogaria
+Barbearia|Salão
+Lavanderia|Tinturaria
+Oficina|Borracharia
+Posto|Garagem
+Estação|Rodoviária
+Aeroporto|Heliponto
+Porto|Cais
+Farol|Torre
+Castelo|Palácio
+Igreja|Capela
+Templo|Mesquita
+Cemitério|Jazigo
+Fazenda|Sítio
+Celeiro|Estábulo
+Horta|Pomar
+Jardim|Quintal
+Piscina|Sauna
+Academia|Estúdio
+Estádio|Ginásio
+Quadra|Campo
+Pista|Circuito
+Tobogã|Escorregador
+Gangorra|Balanço
+Pipa|Papagaio
+Bola|Bambolê
+Boneca|Boneco
+Carrinho|Patinete
+Quebra-cabeça|Dominó
+Baralho|Truco
+Xadrez|Damas
+Dado|Roleta
+Moeda|Nota
+Cofre|Cofrinho
+Carteira|Porta-moedas
+Cartão|Cheque
+Pix|Boleto
+Conta|Fatura
+Salário|Mesada
+Imposto|Taxa
+Multa|Pedágio
+Ônibus escolar|Van
+Táxi|Carro de aplicativo
+Bicicleta|Patins
+Skate|Patinete
+Barco|Lancha
+Canoa|Caiaque
+Navio|Balsa
+Submarino|Mergulhador
+Foguete|Satélite
+Telescópio|Binóculo
+Microscópio|Lupa
+Termômetro|Barômetro
+Régua|Esquadro
+Compasso|Transferidor
+Borracha|Corretivo
+Cola|Fita adesiva
+Grampeador|Clipe
+Tesoura|Estilete
+Papel|Cartolina
+Caderno|Agenda
+Mochila|Estojo
+Giz|Pincel
+Quadro negro|Lousa
+Prova|Teste
+Nota|Conceito
+Recreio|Intervalo
+Férias|Recesso
+Formatura|Colação""".split("\n")
+GROUPS = [
+ "Leão|Tigre|Onça|Pantera|Guepardo|Lince|Puma",
+ "Cavalo|Zebra|Burro|Mula|Pônei|Jumento",
+ "Macaco|Gorila|Chimpanzé|Orangotango|Mico|Babuíno",
+ "Águia|Falcão|Coruja|Gavião|Urubu|Condor",
+ "Papagaio|Arara|Tucano|Periquito|Calopsita|Canário",
+ "Tubarão|Atum|Salmão|Tainha|Sardinha|Bacalhau",
+ "Maçã|Pera|Pêssego|Ameixa|Goiaba|Caqui|Kiwi|Abacaxi",
+ "Alface|Rúcula|Agrião|Espinafre|Couve|Repolho",
+ "Cenoura|Beterraba|Nabo|Rabanete|Batata-doce|Inhame",
+ "Água|Suco|Chá|Café|Leite|Refrigerante|Energético|Vitamina",
+ "Futebol|Handebol|Rúgbi|Beisebol|Críquete|Hóquei|Polo",
+ "Tênis|Squash|Badminton|Pingue-pongue|Padel|Beach tennis",
+ "Violino|Viola|Violoncelo|Contrabaixo|Harpa|Cavaquinho",
+ "Flauta|Clarinete|Saxofone|Trompete|Trombone|Oboé",
+ "Mesa|Escrivaninha|Aparador|Balcão|Bancada|Cômoda",
+ "Cadeira|Banco|Banqueta|Poltrona|Pufe|Sofá",
+ "Padeiro|Confeiteiro|Cozinheiro|Churrasqueiro|Garçom|Barista",
+ "Pedreiro|Carpinteiro|Marceneiro|Serralheiro|Encanador|Eletricista",
+ "Médico|Dentista|Veterinário|Fisioterapeuta|Psicólogo|Nutricionista",
+ "Cantor|Dançarino|Ator|Mágico|Palhaço|Comediante",
+ "Carro|Caminhão|Ônibus|Van|Moto|Trator",
+ "Hotel|Hostel|Pousada|Resort|Camping|Albergue",
+ "Pizza|Lasanha|Nhoque|Risoto|Ravióli|Macarronada",
+ "Bolo|Pão de ló|Cupcake|Torta|Brownie|Muffin",
+ "Brigadeiro|Beijinho|Cajuzinho|Olho de sogra|Quindim|Pé de moleque",
+ "Rio|Córrego|Riacho|Ribeirão|Igarapé|Canal",
+ "Pedra|Seixo|Cascalho|Rocha|Areia|Barro",
+ "Rosa|Margarida|Girassol|Tulipa|Orquídea|Violeta",
+ "Pinheiro|Carvalho|Palmeira|Bananeira|Mangueira|Coqueiro",
+ "Camisa|Blusa|Regata|Camiseta|Polo|Body",
+ "Tênis|Bota|Sapatilha|Mocassim|Salto|Chinelo",
+ "Escova|Pente|Pinça|Tesoura|Alicate|Lixa",
+ "Facebook|Instagram|Twitter|TikTok|LinkedIn|YouTube",
+ "Netflix|Prime Video|Disney+|Globoplay|HBO Max|Apple TV",
+ "Comédia|Drama|Terror|Ação|Romance|Ficção científica|Animação",
+ "Rock|Pop|Samba|Sertanejo|Funk|Forró|Jazz|Reggae",
+]
+def group_pairs():
+    import itertools
+    out=[]
+    for g in GROUPS:
+        out+=[f"{a}|{b}" for a,b in itertools.combinations(g.split("|"),2)]
+    return out
+
+def build_words(): return list(dict.fromkeys(WORDS))
+def build_pairs(): return list(dict.fromkeys(PAIRS+group_pairs()))
+if __name__=='__main__': print(len(build_words()),len(build_pairs()))

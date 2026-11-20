@@ -59,6 +59,8 @@ object Frequency : Game<FrequencyState> {
         return pool[(turn / (if (coop) 1 else 2)) % pool.size].id
     }
 
+    override fun used(state: FrequencyState, pack: List<String>) = pack.filter { it in state.spectrums }
+
     override fun setup(ctx: Setup): FrequencyState {
         val n = CARDS[(ctx.settings["cards"] ?: 1).coerceIn(0, CARDS.lastIndex)]
         val coop = ctx.players.size < 4

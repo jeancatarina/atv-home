@@ -43,6 +43,10 @@ object Psychologist : Game<PsychologistState> {
         ),
     )
 
+    override val freshNeeded get() = 1
+
+    override fun used(state: PsychologistState, pack: List<String>) = pack.filter { it.substringBefore('|') == state.rule }
+
     override fun setup(ctx: Setup): PsychologistState {
         val row = ctx.content.map { it.split("|") }.filter { it.size >= 2 }.ifEmpty { listOf(listOf("Responda sempre com uma pergunta", "— Que horas são? — E você tem pressa?")) }.random(ctx.random)
         return PsychologistState(ctx.players, row[0], row.drop(1), ctx.players.random(ctx.random).id, deadline = ctx.now + READ_MS)

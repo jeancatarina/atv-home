@@ -43,6 +43,10 @@ object BlackStory : Game<BlackStoryState> {
         coop = true,
     )
 
+    override val freshNeeded get() = 1
+
+    override fun used(state: BlackStoryState, pack: List<String>) = pack.filter { it.substringBefore('|') == state.mystery.riddle }
+
     override fun setup(ctx: Setup): BlackStoryState {
         val m = ctx.content.mapNotNull(Mystery::parse).ifEmpty { listOf(Mystery("Um homem entra num bar e pede água.", "Ele estava com soluço.", listOf("É sobre saúde."))) }.random(ctx.random)
         return BlackStoryState(ctx.players, m, ctx.players.random(ctx.random).id, deadline = ctx.now + PLAY_MS)

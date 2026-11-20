@@ -55,6 +55,10 @@ object Spyfall : Game<SpyState> {
         settings = listOf(Setting("time", "Tempo", listOf("5 min", "7 min", "10 min"), default = 1)),
     )
 
+    // One place a game; the state also lists every possible place for the TV, which must not count as played
+    override val freshNeeded get() = 1
+    override fun used(state: SpyState, pack: List<String>) = pack.filter { it.substringBefore('|') == state.location }
+
     override fun setup(ctx: Setup): SpyState {
         val rows = ctx.content.map { it.split("|") }.filter { it.size >= 3 }.ifEmpty { listOf(listOf("Padaria", "Padeiro", "Cliente")) }
         val row = rows.random(ctx.random)

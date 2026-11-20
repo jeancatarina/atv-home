@@ -63,6 +63,10 @@ object Undercover : Game<UndercoverState> {
         settings = listOf(Setting("white", "Sr. Branco", listOf("Não", "Sim"), default = 1)),
     )
 
+    override val freshNeeded get() = 1
+
+    override fun used(state: UndercoverState, pack: List<String>) = pack.filter { it.split('|').toSet() == setOf(state.civilWord, state.infiltratorWord) }
+
     override fun setup(ctx: Setup): UndercoverState {
         val n = ctx.players.size
         val white = (ctx.settings["white"] ?: 1) == 1 && n >= 5

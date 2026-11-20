@@ -56,6 +56,8 @@ object Couple : Game<CoupleState> {
         settings = listOf(Setting("rounds", "Perguntas", ROUNDS.map { "$it" }, default = 1)),
     )
 
+    override fun used(state: CoupleState, pack: List<String>): List<String> { val texts = state.questions.map { it.text }.toSet(); return pack.filter { Question.parse(it)?.text in texts } }
+
     override fun setup(ctx: Setup): CoupleState {
         val n = ROUNDS[(ctx.settings["rounds"] ?: 1).coerceIn(0, ROUNDS.lastIndex)]
         val qs = ContentDeck.draw(ctx.content, n, ctx.random).mapNotNull(Question::parse)

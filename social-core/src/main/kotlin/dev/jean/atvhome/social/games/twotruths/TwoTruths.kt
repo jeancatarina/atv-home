@@ -44,6 +44,8 @@ object TwoTruths : Game<TwoTruthsState> {
         ),
     )
 
+    override fun used(state: TwoTruthsState, pack: List<String>) = pack.filter { it in state.themes }
+
     override fun setup(ctx: Setup) = TwoTruthsState(
         ctx.players.shuffled(ctx.random), ContentDeck.draw(ctx.content.ifEmpty { listOf("Qualquer assunto") }, ctx.players.size, ctx.random),
         deadline = ctx.now + PREP_MS,

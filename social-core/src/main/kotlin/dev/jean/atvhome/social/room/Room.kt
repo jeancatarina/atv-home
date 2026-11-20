@@ -352,13 +352,13 @@ class Room(
         }
         val all = content(info.id)
         // Only what this house has not played yet; the pack starts over when too little is left
-        val pack = Variety.fresh(all, ledger.seen(info.id)) ?: run { ledger.resetSeen(info.id); all }
+        val pack = Variety.fresh(all, ledger.seen(info.id), game.freshNeeded) ?: run { ledger.resetSeen(info.id); all }
         game.unavailable(pack)?.let { return it }
         gains = emptyMap()
         paused = false
         pausedTotal = 0
         val s = game.setup(Setup(players, settings, random, gameNow(), pack))
-        ledger.markSeen(info.id, Variety.used(pack, s).map(Variety::key))
+        ledger.markSeen(info.id, game.used(s, pack).map(Variety::key))
         running = Running(game, s, settings, players.map { it.id })
         changed()
         return null

@@ -72,6 +72,8 @@ object MostLikely : Game<MostLikelyState> {
         settings = listOf(Setting("rounds", "Perguntas", ROUNDS.map { "$it" }, default = 1)),
     )
 
+    override fun used(state: MostLikelyState, pack: List<String>) = pack.filter { it in state.questions }
+
     override fun setup(ctx: Setup): MostLikelyState {
         val n = ROUNDS[(ctx.settings["rounds"] ?: info.settings[0].default).coerceIn(0, ROUNDS.lastIndex)]
         val pack = ctx.content.ifEmpty { listOf("Quem é mais provável de chegar atrasado?") }

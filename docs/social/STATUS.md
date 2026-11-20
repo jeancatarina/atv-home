@@ -30,6 +30,27 @@ Atualizado em 2026-11-09. O plano está em [PLANO.md](PLANO.md); a revisão que 
 - Os testes de interface (`tools/*.js`) foram atualizados com os textos novos e passam: `social-phone-premium.js`, `social-phone-e2e.js`, `social-phone-fuzz.js`.
 - Ainda não foi para a TV: tudo desta rodada foi provado só localmente.
 
+## Quantas partidas cada jogo aguenta sem repetir (2026-11-10)
+
+Medido por `YearTest` (opções padrão, o conteúdo que o app leva). A primeira versão chegava a 365 em quase todos, mas revisei o conteúdo lendo amostras e muita coisa gerada por combinação era ruim ("fazer uma pergunta gigante num café"). Cortei o que não lia como gente falando; o resultado é menos conteúdo, melhor.
+
+| Jogo | Partidas sem repetir | Conteúdo |
+|---|---|---|
+| Infiltrados, Quem Sabia?, Lugar Secreto | 370 (um ano) | 841 pares, 407 palavras, 380 locais |
+| Psicólogo | 331 | 331 regras (20 com personagem e exemplos escritos à mão) |
+| Tribunal dos Amigos | 251 | 251 casos (álibis sorteados a cada partida) |
+| Quem é Mais Provável? | 191 | 1.918 perguntas |
+| Sintonia de Casal | 66 | 813 perguntas |
+| Frequência | 61 | 433 espectros |
+| Duas Verdades e Uma Mentira | 54 | 281 temas |
+| Missões Secretas | 27 | 410 missões (jogo longo, de 30 min) |
+| Mistério Sim ou Não | 20 | 20 histórias escritas à mão |
+| Máfia, Bomba, Filme | sem pacote para esgotar | gerados na hora ou buscados na internet |
+
+- Quando um jogo esgota o conteúdo, ele recomeça do zero em vez de travar. Em Frequência e Duas Verdades quem repete pouco incomoda, porque a graça está na dica e no que a pessoa conta, não na pergunta.
+- O conteúdo grande sai de geradores em `tools/content/` (`python3 tools/content/build_all.py`; rodar duas vezes não muda nada), partindo dos pacotes escritos à mão. Os blocos de Quem é Mais Provável foram escolhidos lendo amostras de cada um, o Frequência combina cada categoria só com os eixos que fazem sentido nela (com concordância de gênero) e a Sintonia só junta situação com traço de temperamento.
+- Chegar a um ano em todos exige escrever mais à mão, principalmente Mistério, Missões, Sintonia, Frequência e Duas Verdades.
+
 ## Provado sem a TV
 
 | O quê | Prova |
