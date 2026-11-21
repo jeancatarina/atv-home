@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.text.TextUtils
 import android.util.Log
 import android.util.TypedValue
 import android.view.Gravity
@@ -22,13 +24,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
- * The week's weather over the TV's own screensaver (Sony's "Decoração do Ambiente", the monstera
- * leaves in the water): it writes the time over its film but has no weather for Brazil. Written straight
- * on the film, no panel, a little see-through ([OPACITY]), in the bottom-left corner clear of the TV's
- * right-side clock; a soft shadow keeps it readable.
- *
- * Shown by [dev.jean.atvhome.casa.HouseKeyService] while the system dreams, in an accessibility
- * overlay window (above the dream, never focusable or touchable: any key still wakes the TV).
+ * The week's weather over the TV's own screensaver (Sony's "Decoração do Ambiente", Rain Forest
+ * Clock): laid out as a compact two-tier block in the 235dp bottom-center pocket between Sony's
+ * lower-left and lower-right clock corners and below its center clock, so it stays completely clear
+ * of all 7 rotating Sony clock positions.
  */
 class WeatherStrip(private val context: Context) {
 
@@ -43,17 +42,10 @@ class WeatherStrip(private val context: Context) {
 
     fun show() {
         if (view != null) return
-        val row = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.BOTTOM
-            clipChildren = false
-            clipToPadding = false
-            setPadding(dp(4f), dp(4f), dp(4f), dp(4f))
-            // Nothing until the forecast is here: no empty frame over the film
-            visibility = View.INVISIBLE
-        }
-        val baseX = dp(46f)
-        val baseY = dp(40f)
+        val row = createContainer()
+        // Centered in the 235dp pocket between Sony's lower_left (<=330dp) and lower_right (>=565dp) clocks
+        val baseX = dp(-32f)
+        val baseY = dp(22f)
         val layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -62,7 +54,7 @@ class WeatherStrip(private val context: Context) {
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.BOTTOM or Gravity.START
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             x = baseX
             y = baseY
         }
@@ -83,9 +75,9 @@ class WeatherStrip(private val context: Context) {
                 }
             }
         }
-        // Subtle pixel shift every 2 minutes to prevent OLED/LCD retention on long screensavers
+        // Subtle pixel shift every 2 minutes within the clock-free corridor to prevent screen retention
         driftJob = scope.launch {
-            val offsets = listOf(0 to 0, 3 to 2, 1 to 3, -2 to 2)
+            val offsets = listOf(0 to 0, 2 to 1, -2 to 2, 1 to -1)
             var step = 0
             while (isActive) {
                 delay(120_000L)
@@ -107,71 +99,89 @@ class WeatherStrip(private val context: Context) {
         params = null
     }
 
+    internal fun createContainer(): LinearLayout = LinearLayout(context).apply {
+        orientation = LinearLayout.VERTICAL
+        gravity = Gravity.CENTER_HORIZONTAL
+        clipChildren = false
+        clipToPadding = false
+        setPadding(dp(4f), dp(6f), dp(4f), dp(6f))
+        background = GradientDrawable().apply {
+            gradientType = GradientDrawable.RADIAL_GRADIENT
+            gradientRadius = dp(130f).toFloat()
+            colors = intArrayOf(0x38000000, Color.TRANSPARENT)
+        }
+        // Nothing until the forecast is here: no empty frame over the film
+        visibility = View.INVISIBLE
+    }
+
     private fun fill(row: LinearLayout, f: Forecast) {
         val first = row.visibility != View.VISIBLE
         row.removeAllViews()
 
-        // Current temperature + whispered city name
-        val nowCol = LinearLayout(context).apply {
-            orientation = LinearLayout.VERTICAL
-            gravity = Gravity.START
+        // Tier 1: current temperature + whispered city
+        val nowRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
             clipChildren = false
             clipToPadding = false
-            layoutParams = LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT,
-            )
-            setPadding(0, 0, dp(20f), dp(2f))
         }
-        nowCol.addView(text(34f, interBold, Color.WHITE).apply {
+        nowRow.addView(text(24f, interBold, Color.WHITE).apply {
             text = listOfNotNull(f.nowIcon, f.now?.let { "$it°" }).joinToString(" ")
             fontFeatureSettings = "tnum"
         })
         f.city?.takeIf { it.isNotBlank() }?.let { city ->
-            nowCol.addView(text(10f, inter, MUTED).apply {
+            nowRow.addView(text(11f, inter, MUTED).apply {
+                text = "  ·  "
+            })
+            nowRow.addView(text(9.5f, inter, SOFT).apply {
                 text = city.uppercase()
                 letterSpacing = 0.12f
-                setPadding(dp(2f), dp(2f), 0, 0)
+                maxWidth = dp(120f)
+                ellipsize = TextUtils.TruncateAt.END
             })
         }
-        row.addView(nowCol)
+        row.addView(nowRow)
 
-        // Delicate hairline separating now from the week ahead
+        // Delicate hairline separating now from the 6-day outlook
         row.addView(View(context).apply {
             setBackgroundColor(DIVIDER)
-            layoutParams = LinearLayout.LayoutParams(dp(1f).coerceAtLeast(1), dp(36f)).apply {
-                gravity = Gravity.CENTER_VERTICAL
-                setMargins(0, 0, dp(10f), dp(4f))
+            layoutParams = LinearLayout.LayoutParams(dp(156f), dp(1f).coerceAtLeast(1)).apply {
+                gravity = Gravity.CENTER_HORIZONTAL
+                setMargins(0, dp(5f), 0, dp(7f))
             }
         })
 
+        // Tier 2: compact 6-day row (6 * 34dp = 204dp, clear of both lower-corner clocks)
+        val daysRow = LinearLayout(context).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            clipChildren = false
+            clipToPadding = false
+        }
         f.days.drop(1).take(6).forEach { d ->
             val col = LinearLayout(context).apply {
                 orientation = LinearLayout.VERTICAL
                 gravity = Gravity.CENTER_HORIZONTAL
                 clipChildren = false
                 clipToPadding = false
-                layoutParams = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                )
-                setPadding(dp(11f), 0, dp(11f), 0)
+                layoutParams = LinearLayout.LayoutParams(dp(34f), LinearLayout.LayoutParams.WRAP_CONTENT)
             }
-            col.addView(text(12.5f, inter, SOFT).apply { text = d.label })
-            col.addView(text(21f, inter, Color.WHITE).apply {
+            col.addView(text(10.5f, inter, SOFT).apply { text = d.label })
+            col.addView(text(16f, inter, Color.WHITE).apply {
                 text = d.icon
-                setPadding(0, dp(2f), 0, dp(2f))
+                setPadding(0, dp(1f), 0, dp(1f))
             })
-            col.addView(text(15.5f, interBold, Color.WHITE).apply {
+            col.addView(text(13f, interBold, Color.WHITE).apply {
                 text = "${d.max}°"
                 fontFeatureSettings = "tnum"
             })
-            col.addView(text(12.5f, inter, MUTED).apply {
+            col.addView(text(10.5f, inter, MUTED).apply {
                 text = "${d.min}°"
                 fontFeatureSettings = "tnum"
             })
-            row.addView(col)
+            daysRow.addView(col)
         }
+        row.addView(daysRow)
         row.visibility = View.VISIBLE
         row.requestLayout()
         params?.let { p -> if (row.isAttachedToWindow) runCatching { wm.updateViewLayout(row, p) } }

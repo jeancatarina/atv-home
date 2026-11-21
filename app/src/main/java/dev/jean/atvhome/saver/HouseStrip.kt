@@ -72,9 +72,9 @@ data class HouseSummary(val floors: List<FloorStatus>, val totalLit: Int) {
 }
 
 /**
- * Architectural floor-by-floor light status shown in the top-left of Sony's screensaver while the
- * system dreams: a connected isometric elevation of the floors that glows warm amber where lights
- * are on, whispers the lit rooms beneath each active floor, and ripples when any switch toggles.
+ * Architectural floor-by-floor light status shown in the top-center pocket of Sony's screensaver
+ * while the system dreams: stays strictly inside the narrow zone clear of all 7 rotating Sony clock
+ * positions, glows warm amber where lights are on, whispers lit rooms, and ripples on toggles.
  * Uses a single hardware-accelerated custom [View] with zero Compose overhead in `:casa`.
  */
 class HouseStrip(private val context: Context) {
@@ -91,8 +91,9 @@ class HouseStrip(private val context: Context) {
         val strip = FloorLightsView(context).apply {
             visibility = View.INVISIBLE
         }
-        val baseX = dp(46f)
-        val baseY = dp(38f)
+        // Centered in the 235dp pocket between Sony's upper_left (<=330dp) and upper_right (>=565dp) clocks
+        val baseX = dp(-32f)
+        val baseY = dp(12f)
         val layoutParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
@@ -101,7 +102,7 @@ class HouseStrip(private val context: Context) {
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
             PixelFormat.TRANSLUCENT,
         ).apply {
-            gravity = Gravity.TOP or Gravity.START
+            gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
             x = baseX
             y = baseY
         }
@@ -123,9 +124,9 @@ class HouseStrip(private val context: Context) {
                 layoutParams.let { p -> if (strip.isAttachedToWindow) runCatching { wm.updateViewLayout(strip, p) } }
             }
         }
-        // Subtle pixel shift every 2 minutes to prevent OLED/LCD retention on long screensavers
+        // Subtle pixel shift every 2 minutes within the clock-free corridor to prevent screen retention
         driftJob = scope.launch {
-            val offsets = listOf(0 to 0, 3 to 2, 2 to 4, -2 to 3)
+            val offsets = listOf(0 to 0, 2 to 1, -2 to 2, 1 to -1)
             var step = 0
             while (isActive) {
                 delay(120_000L)
@@ -167,27 +168,27 @@ internal class FloorLightsView(context: Context) : View(context) {
     private val interSemiBold = ResourcesCompat.getFont(context, R.font.inter_semibold) ?: Typeface.DEFAULT_BOLD
 
     private val eyebrowPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = sp(10.5f)
+        textSize = sp(9.5f)
         typeface = interMedium
-        letterSpacing = 0.14f
-        setShadowLayer(dp(5f), 0f, dp(1f), SHADOW)
+        letterSpacing = 0.12f
+        setShadowLayer(dp(4f), 0f, dp(1f), SHADOW)
     }
     private val floorPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = sp(14.5f)
-        typeface = interMedium
-        setShadowLayer(dp(6f), 0f, dp(1f), SHADOW)
-    }
-    private val roomPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = sp(11f)
+        textSize = sp(12.5f)
         typeface = interMedium
         setShadowLayer(dp(5f), 0f, dp(1f), SHADOW)
     }
+    private val roomPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
+        textSize = sp(9.5f)
+        typeface = interMedium
+        setShadowLayer(dp(4f), 0f, dp(1f), SHADOW)
+    }
     private val countPaint = TextPaint(Paint.ANTI_ALIAS_FLAG).apply {
-        textSize = sp(15f)
+        textSize = sp(13f)
         typeface = interSemiBold
         fontFeatureSettings = "tnum"
         textAlign = Paint.Align.RIGHT
-        setShadowLayer(dp(6f), 0f, dp(1f), SHADOW)
+        setShadowLayer(dp(5f), 0f, dp(1f), SHADOW)
     }
     private val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL }
     private val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -202,37 +203,39 @@ internal class FloorLightsView(context: Context) : View(context) {
     private val scrimPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val ripplePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
-        strokeWidth = dp(1.4f)
+        strokeWidth = dp(1.2f)
     }
 
-    private val slabW = dp(28f)
-    private val slabH = dp(16f)
-    private val glowR = dp(26f)
+    private val slabW = dp(20f)
+    private val slabH = dp(12f)
+    private val glowR = dp(18f)
     private val glowShader = RadialGradient(
         0f, 0f, glowR,
         intArrayOf(0x6BFFB040, 0x24FFA62B, Color.TRANSPARENT),
         floatArrayOf(0f, 0.45f, 1f),
         Shader.TileMode.CLAMP,
     )
-    private val padX = dp(18f) // extra margin around slabs so radial glow never clips
-    private val padY = dp(14f)
-    private val rowBaseH = dp(26f)
-    private val roomSubGap = dp(3f)
-    private val rowGap = dp(9f)
-    private val eyebrowGap = dp(13f)
-    private val slabNameGap = dp(13f)
-    private val nameDotsGap = dp(18f)
-    private val dotR = dp(2.1f)
-    private val dotGap = dp(6f)
-    private val dotsCountGap = dp(8f)
-    private val eyebrowDotR = dp(2.6f)
-    private val eyebrowDotGap = dp(7f)
+    private val padX = dp(10f)
+    private val padY = dp(8f)
+    private val rowBaseH = dp(19f)
+    private val roomSubGap = dp(1.5f)
+    private val rowGap = dp(5f)
+    private val eyebrowGap = dp(7f)
+    private val slabNameGap = dp(8f)
+    private val nameDotsGap = dp(8f)
+    private val dotR = dp(1.7f)
+    private val dotGap = dp(4f)
+    private val dotsCountGap = dp(5f)
+    private val eyebrowDotR = dp(2.2f)
+    private val eyebrowDotGap = dp(5.5f)
+    private val maxLabelCap = dp(106f)
 
     private val topPath = Path()
     private val sidePath = Path()
     private val rimPath = Path()
 
     private var summary = HouseSummary(emptyList(), 0)
+    private var floorNames: List<String> = emptyList()
     private var roomHints: List<String?> = emptyList()
     private var eyebrowText = ""
     private var maxLabelW = 0f
@@ -297,17 +300,20 @@ internal class FloorLightsView(context: Context) : View(context) {
             prev.floors.indices.all { prev.floors[it].name == next.floors[it].name }
         val prevHints = roomHints
         summary = next
-        roomHints = next.floors.map { it.roomHint() }
+        floorNames = next.floors.map { fitText(it.name, floorPaint, maxLabelCap) }
+        roomHints = next.floors.map { floor ->
+            floor.roomHint()?.let { fitText(it, roomPaint, maxLabelCap) }
+        }
         eyebrowText = when (next.totalLit) {
-            0 -> "CASA  ·  TUDO APAGADO"
-            1 -> "CASA  ·  1 LUZ ACESA"
-            else -> "CASA  ·  ${next.totalLit} LUZES ACESAS"
+            0 -> "CASA · TUDO APAGADO"
+            1 -> "CASA · 1 LUZ ACESA"
+            else -> "CASA · ${next.totalLit} LUZES ACESAS"
         }
         val dotOffset = if (next.totalLit > 0) eyebrowDotR * 2f + eyebrowDotGap else 0f
         eyebrowW = dotOffset + eyebrowPaint.measureText(eyebrowText)
 
         maxLabelW = next.floors.indices.maxOfOrNull { i ->
-            val floorW = floorPaint.measureText(next.floors[i].name)
+            val floorW = floorPaint.measureText(floorNames[i])
             val hintW = roomHints[i]?.let { roomPaint.measureText(it) } ?: 0f
             maxOf(floorW, hintW)
         } ?: 0f
@@ -384,6 +390,13 @@ internal class FloorLightsView(context: Context) : View(context) {
         heatAnim = null
         rippleAnims.forEach { it.cancel() }
         rippleAnims.clear()
+    }
+
+    private fun fitText(text: String, paint: TextPaint, maxW: Float): String {
+        if (paint.measureText(text) <= maxW) return text
+        var end = text.length
+        while (end > 0 && paint.measureText(text.substring(0, end) + "…") > maxW) end--
+        return if (end == 0) "…" else text.substring(0, end) + "…"
     }
 
     private fun rowHeight(index: Int): Float =
@@ -505,7 +518,7 @@ internal class FloorLightsView(context: Context) : View(context) {
 
             // Floor name + optional whispered lit room names underneath
             floorPaint.color = lerpColor(TEXT_OFF, TEXT_ON, heat, quietScale)
-            canvas.drawText(floor.name, nameX, cy + floorTextOffset, floorPaint)
+            canvas.drawText(floorNames.getOrElse(i) { floor.name }, nameX, cy + floorTextOffset, floorPaint)
             roomHints.getOrNull(i)?.let { hint ->
                 roomPaint.color = withAlpha(ROOM_HINT, maxOf(0.55f, heat))
                 val hintBaseline = rowTops[i] + rowBaseH + roomSubGap + roomAscent
@@ -543,7 +556,7 @@ internal class FloorLightsView(context: Context) : View(context) {
         Color.argb((Color.alpha(color) * scale).roundToInt().coerceIn(0, 255), Color.red(color), Color.green(color), Color.blue(color))
 
     private companion object {
-        const val MAX_DOTS = 4
+        const val MAX_DOTS = 3
         const val SHADOW = 0x80000000.toInt()
         const val AMBER = 0xFFFFA62B.toInt()
         const val AMBER_SOFT = 0xFFFFBE5C.toInt()

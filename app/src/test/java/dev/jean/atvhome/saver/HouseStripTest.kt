@@ -19,7 +19,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(sdk = [34], application = Application::class, qualifiers = "w960dp-h540dp-xhdpi")
 class HouseStripTest {
 
     private val context get() = ApplicationProvider.getApplicationContext<Context>()
@@ -78,8 +78,13 @@ class HouseStripTest {
             View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.AT_MOST),
             View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.AT_MOST),
         )
-        assertTrue(view.measuredWidth > 100)
-        assertTrue(view.measuredHeight > 60)
+        val density = context.resources.displayMetrics.density
+        // Robolectric's stub Paint.measureText returns 1px/char, so width still exceeds padding+gaps (~72dp)
+        assertTrue("width ${view.measuredWidth / density}dp too narrow", view.measuredWidth > (75f * density).toInt())
+        assertTrue("height ${view.measuredHeight / density}dp too short", view.measuredHeight > (60f * density).toInt())
+        // Must fit cleanly inside the 235dp x 146dp top-center corridor clear of all 7 Sony clock layouts
+        assertTrue("width ${view.measuredWidth / density}dp exceeds 225dp", view.measuredWidth <= (225f * density).toInt())
+        assertTrue("height ${view.measuredHeight / density}dp exceeds 142dp", view.measuredHeight <= (142f * density).toInt())
         view.layout(0, 0, view.measuredWidth, view.measuredHeight)
 
         val bmp = Bitmap.createBitmap(view.measuredWidth, view.measuredHeight, Bitmap.Config.ARGB_8888)

@@ -20,7 +20,7 @@ import org.robolectric.annotation.Config
 import java.io.File
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
+@Config(sdk = [34], application = Application::class, qualifiers = "w960dp-h540dp-xhdpi")
 class WeatherTest {
 
     private val context get() = ApplicationProvider.getApplicationContext<Context>()
@@ -121,7 +121,7 @@ class WeatherTest {
                 Day("Qui", "⛈️", 27, 17),
             ),
         )
-        val row = LinearLayout(context)
+        val row = strip.createContainer()
         val fillMethod = WeatherStrip::class.java.getDeclaredMethod("fill", LinearLayout::class.java, Forecast::class.java)
         fillMethod.isAccessible = true
         fillMethod.invoke(strip, row, forecast)
@@ -129,13 +129,20 @@ class WeatherTest {
         val texts = collectTextViews(row)
         assertTrue(texts.isNotEmpty())
         assertTrue(texts.all { it.maxLines == 1 })
+        row.measure(
+            View.MeasureSpec.makeMeasureSpec(1920, View.MeasureSpec.AT_MOST),
+            View.MeasureSpec.makeMeasureSpec(1080, View.MeasureSpec.AT_MOST),
+        )
+        val density = context.resources.displayMetrics.density
+        assertTrue("weather width ${row.measuredWidth / density}dp exceeds 225dp", row.measuredWidth <= (225f * density).toInt())
+        assertTrue("weather height ${row.measuredHeight / density}dp exceeds 145dp", row.measuredHeight <= (145f * density).toInt())
 
-        // Also verify show() places the overlay at BOTTOM | START (away from Sony's right-side clock)
+        // Also verify show() centers horizontally at bottom inside the clock-free corridor
         strip.show()
         val paramsField = WeatherStrip::class.java.getDeclaredField("params")
         paramsField.isAccessible = true
         val params = paramsField.get(strip) as WindowManager.LayoutParams
-        assertEquals(Gravity.BOTTOM or Gravity.START, params.gravity)
+        assertEquals(Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL, params.gravity)
         strip.hide()
     }
 
